@@ -1,0 +1,9 @@
+# Local credentials
+.env
+.env.*
+!.env.example
+.aws/
+
+# Serena local caches
+.serena/cache/
+.serena/logs/
