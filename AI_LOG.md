@@ -619,3 +619,46 @@ Committed backend implementation/tests and phase 1 docs/memories as separate gro
 ### Validation and outcome
 
 Reviewed staged changes; git diff --check and serena memories check passed. Existing phase 1 tests remain the validation record; no code changed or tests reran in this request. SSH push succeeded; GitHub connector returned 404 and gh pr create could not resolve the repository for account CodeZobac. Browser fallback failed with “Unknown flag --ozone-platform for command: skills get”. PR text is saved in /tmp/resource-center-phase1-pr.md; no PR or merge occurred.
+
+## 029 — 2026-11-01 — Fix async-trait Clippy failure
+
+### Exact input prompt
+
+```text
+Ive got this lint issue:
+
+
+
+The job failed in the backend lint step, not in the app logic itself.
+
+Root cause:
+
+- CI ran the lint target and hit Clippy errors:&#x20;
+  - `make: *** [Makefile:12: backend-lint] Error 101`
+- The actual errors are in `backend/crates/notifications-worker/src/application.rs`:&#x20;
+  - `error: this function has a #[must_use] attribute with no message, but returns a type already considered as #[must_use]`
+  - The offending location is the `#[async_trait]` annotation on the trait methods near line 37 and line 61
+
+This is a Clippy warning being treated as a hard failure because CI is using `-D warnings` (or equivalent), so any Clippy lint is fatal. In this case the lint is `clippy::double_must_use`, which is triggered by the generated methods from `async_trait` being marked `#[must_use]` while returning a type that is already `#[must_use]` (such as `Result`).
+
+The relevant section is:
+
+- `#[async_trait]`
+- `pub trait NotificationJobStorePort: Send + Sync { ... }`
+- `#[async_trait]`
+- `pub trait EmailDeliveryPort: Send + Sync { ... }`
+
+So the job failed because the repo’s lint configuration treats that Clippy issue as an error, and the `async_trait`-generated methods in that file trigger it.
+
+
+
+Fix it and push the changes pls
+```
+
+### Change summary
+
+Added a documented clippy::double_must_use exception only to the two async-trait port traits in notifications-worker/src/application.rs. Simplified duplicate-role checks in loan-service/src/infrastructure.rs to fix the additional collapsible_match error found with Rust 1.95; delivery and role behaviour stay the same.
+
+### Validation and outcome
+
+make backend-fmt, backend-lint and backend-test passed on Rust 1.94 (13 tests; separate PostgreSQL suite ignored). Full-workspace cargo +1.95.0 clippy --all-targets with -D warnings and git diff --check also passed. Rust 1.95 initially reproduced the separate role-match lint; the reported macro lint did not independently reproduce locally. No live CI result or deployment is claimed.

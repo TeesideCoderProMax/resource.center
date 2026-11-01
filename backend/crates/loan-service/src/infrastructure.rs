@@ -999,15 +999,11 @@ impl Auth0JwtVerifier {
                 for item in arr {
                     if let Some(r) = item.as_str() {
                         match r.to_ascii_lowercase().as_str() {
-                            "student" => {
-                                if !roles.contains(&Role::Student) {
-                                    roles.push(Role::Student);
-                                }
+                            "student" if !roles.contains(&Role::Student) => {
+                                roles.push(Role::Student);
                             }
-                            "staff" => {
-                                if !roles.contains(&Role::Staff) {
-                                    roles.push(Role::Staff);
-                                }
+                            "staff" if !roles.contains(&Role::Staff) => {
+                                roles.push(Role::Staff);
                             }
                             _ => {}
                         }

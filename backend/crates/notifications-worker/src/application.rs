@@ -34,6 +34,10 @@ pub enum JobStoreError {
     Storage(String),
 }
 
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to methods returning must-use futures"
+)]
 #[async_trait]
 pub trait NotificationJobStorePort: Send + Sync {
     async fn create_job(
@@ -58,6 +62,10 @@ pub struct EmailDeliveryResult {
     pub delivery_mode: String,
 }
 
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to methods returning must-use futures"
+)]
 #[async_trait]
 pub trait EmailDeliveryPort: Send + Sync {
     fn configured_mode(&self) -> &str;
