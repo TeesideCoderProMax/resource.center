@@ -47,3 +47,7 @@ infra-init infra-plan infra-apply:
 .PHONY: backend-test-postgres
 backend-test-postgres:
 	./backend/scripts/test-postgres.sh
+
+.PHONY: backend-test-cosmos
+backend-test-cosmos:
+	cargo test --manifest-path backend/Cargo.toml -p notifications-worker real_cosmos_claim_renew_finalize_conflicts -- --ignored --nocapture

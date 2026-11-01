@@ -85,6 +85,8 @@ pub enum MessageDisposition {
         duplicate_skipped: bool,
         final_status: JobStatus,
     },
+    /// Keep the broker lock and retry locally; durable timing remains in Cosmos.
+    Wait { event_id: String, seconds: u64 },
     /// Abandon/unlock the message on the queue (`PUT` lock URI) for retry or because another worker holds the ETag.
     Abandon { event_id: String, reason: String },
 }
@@ -104,7 +106,23 @@ where
         Self {
             store,
             email_sender,
-            max_attempts: max_attempts.max(1),
+            max_attempts: max_attempts.clamp(1, 10),
+        }
+    }
+
+    /// Retry transient store failures and durable waits on the same broker delivery.
+    pub async fn process_until_settled(&self, body: &str) -> MessageDisposition {
+        loop {
+            match self.process_raw_message(body).await {
+                Ok(MessageDisposition::Wait { seconds, .. }) => {
+                    tokio::time::sleep(std::time::Duration::from_secs(seconds)).await;
+                }
+                Ok(outcome) => return outcome,
+                Err(_) => {
+                    warn!("job store unavailable; holding broker lock before retry");
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                }
+            }
         }
     }
 
@@ -114,11 +132,11 @@ where
     ) -> Result<MessageDisposition, JobStoreError> {
         let req: NotificationRequestV1 = match serde_json::from_str(raw_body) {
             Ok(parsed) => parsed,
-            Err(err) => {
-                warn!(error = %err, "received malformed notification message payload; abandoning for dead-letter exhaustion");
+            Err(_) => {
+                warn!("received malformed notification message payload; abandoning for dead-letter exhaustion");
                 return Ok(MessageDisposition::Abandon {
                     event_id: "invalid-json".to_string(),
-                    reason: format!("malformed JSON payload: {err}"),
+                    reason: "malformed JSON payload".to_string(),
                 });
             }
         };
@@ -185,6 +203,32 @@ where
                     });
                 }
 
+                let available = existing.document.available_at();
+                if available > Utc::now() {
+                    return Ok(MessageDisposition::Wait {
+                        event_id: req.event_id.clone(),
+                        seconds: (available - Utc::now()).num_seconds().clamp(1, 10) as u64,
+                    });
+                }
+                if existing.document.attempt_count >= self.max_attempts {
+                    let mut exhausted = existing.document;
+                    exhausted.mark_failure(
+                        "attempt budget exhausted after lease expiry".into(),
+                        self.max_attempts,
+                        Utc::now(),
+                    );
+                    return match self.store.replace_job(&exhausted, &existing.etag).await? {
+                        ReplaceJobOutcome::Replaced(_) => Ok(MessageDisposition::Complete {
+                            event_id: req.event_id.clone(),
+                            duplicate_skipped: false,
+                            final_status: JobStatus::TerminalFailure,
+                        }),
+                        ReplaceJobOutcome::PreconditionFailed => Ok(MessageDisposition::Wait {
+                            event_id: req.event_id.clone(),
+                            seconds: 1,
+                        }),
+                    };
+                }
                 let mut reclaimed = existing.document;
                 reclaimed.mark_reclaimed(Utc::now());
                 match self.store.replace_job(&reclaimed, &existing.etag).await? {
@@ -203,9 +247,9 @@ where
                             correlation_id = %req.correlation_id,
                             "ETag precondition failed while reclaiming job; another worker updated the record"
                         );
-                        return Ok(MessageDisposition::Abandon {
+                        return Ok(MessageDisposition::Wait {
                             event_id: req.event_id.clone(),
-                            reason: "cosmos ETag precondition failed on reclaim".to_string(),
+                            seconds: 1,
                         });
                     }
                 }
@@ -213,9 +257,43 @@ where
         };
 
         let mut doc = claimed_versioned.document;
-        let current_etag = claimed_versioned.etag;
-
-        match self.email_sender.send_notification(req).await {
+        let mut current_etag = claimed_versioned.etag;
+        let token = doc.claim_token.clone().unwrap_or_default();
+        if !doc.owns(&token, Utc::now()) {
+            return Ok(MessageDisposition::Wait {
+                event_id: req.event_id.clone(),
+                seconds: 1,
+            });
+        }
+        let send = tokio::time::timeout(
+            std::time::Duration::from_secs(crate::domain::EMAIL_TIMEOUT_SECONDS),
+            self.email_sender.send_notification(req),
+        );
+        tokio::pin!(send);
+        let mut renewal = tokio::time::interval(std::time::Duration::from_secs(10));
+        renewal.tick().await;
+        let outcome = loop {
+            tokio::select! {
+                result = &mut send => break result.unwrap_or_else(|_| Err(DeliveryError::Transient("email timeout; outcome unknown".into()))),
+                _ = renewal.tick() => {
+                    if !doc.owns(&token, Utc::now()) {
+                        return Ok(MessageDisposition::Wait { event_id: req.event_id.clone(), seconds: 1 });
+                    }
+                    doc.lease_until = Some(Utc::now() + chrono::Duration::seconds(crate::domain::LEASE_SECONDS));
+                    match self.store.replace_job(&doc, &current_etag).await? {
+                        ReplaceJobOutcome::Replaced(updated) => current_etag = updated.etag,
+                        ReplaceJobOutcome::PreconditionFailed => return Ok(MessageDisposition::Wait { event_id: req.event_id.clone(), seconds: 1 }),
+                    }
+                }
+            }
+        };
+        if !doc.owns(&token, Utc::now()) {
+            return Ok(MessageDisposition::Wait {
+                event_id: req.event_id.clone(),
+                seconds: 1,
+            });
+        }
+        match outcome {
             Ok(delivery) => {
                 doc.mark_delivered(
                     delivery.provider_message_id.clone(),
@@ -244,10 +322,9 @@ where
                             correlation_id = %req.correlation_id,
                             "ETag precondition failed when persisting Delivered state"
                         );
-                        Ok(MessageDisposition::Abandon {
+                        Ok(MessageDisposition::Wait {
                             event_id: req.event_id.clone(),
-                            reason: "cosmos ETag precondition failed on Delivered update"
-                                .to_string(),
+                            seconds: 1,
                         })
                     }
                 }
@@ -278,17 +355,17 @@ where
                                 correlation_id = %req.correlation_id,
                                 error = %err,
                                 attempt_count = doc.attempt_count,
-                                "notification failed transiently; abandoning message for retry"
+                                "notification failed transiently; waiting until durable retry time"
                             );
-                            Ok(MessageDisposition::Abandon {
+                            Ok(MessageDisposition::Wait {
                                 event_id: req.event_id.clone(),
-                                reason: err.to_string(),
+                                seconds: 10,
                             })
                         }
                     }
-                    ReplaceJobOutcome::PreconditionFailed => Ok(MessageDisposition::Abandon {
+                    ReplaceJobOutcome::PreconditionFailed => Ok(MessageDisposition::Wait {
                         event_id: req.event_id.clone(),
-                        reason: "cosmos ETag precondition failed on failure update".to_string(),
+                        seconds: 1,
                     }),
                 }
             }
@@ -504,7 +581,7 @@ mod tests {
             .process_request(&req)
             .await
             .expect("first attempt");
-        assert!(matches!(first, MessageDisposition::Abandon { .. }));
+        assert!(matches!(first, MessageDisposition::Wait { .. }));
 
         let after_first = store
             .get_job("evt-retry-001")
@@ -514,6 +591,19 @@ mod tests {
         assert_eq!(after_first.document.status, JobStatus::RetryableFailure);
         assert_eq!(after_first.document.attempt_count, 1);
 
+        assert!(matches!(
+            processor.process_request(&req).await.unwrap(),
+            MessageDisposition::Wait { .. }
+        ));
+        assert_eq!(sender.calls.load(Ordering::SeqCst), 1);
+        store
+            .docs
+            .lock()
+            .unwrap()
+            .get_mut(&req.event_id)
+            .unwrap()
+            .document
+            .next_retry_at = Some(Utc::now() - chrono::Duration::seconds(1));
         let second = processor
             .process_request(&req)
             .await
@@ -535,5 +625,288 @@ mod tests {
         assert_eq!(after_second.document.status, JobStatus::Delivered);
         assert_eq!(after_second.document.attempt_count, 2);
         assert_eq!(after_second.document.attempts.len(), 2);
+    }
+    struct PausedSender {
+        started: tokio::sync::Notify,
+        release: tokio::sync::Notify,
+        calls: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl EmailDeliveryPort for &PausedSender {
+        fn configured_mode(&self) -> &str {
+            "fake"
+        }
+        async fn send_notification(
+            &self,
+            req: &NotificationRequestV1,
+        ) -> Result<EmailDeliveryResult, DeliveryError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.started.notify_one();
+            self.release.notified().await;
+            Ok(EmailDeliveryResult {
+                provider_message_id: req.event_id.clone(),
+                delivery_mode: "fake".into(),
+            })
+        }
+    }
+
+    fn paused_sender() -> PausedSender {
+        PausedSender {
+            started: tokio::sync::Notify::new(),
+            release: tokio::sync::Notify::new(),
+            calls: AtomicUsize::new(0),
+        }
+    }
+
+    #[tokio::test]
+    async fn two_workers_cannot_send_under_a_live_lease() {
+        let store = InMemoryCosmosStore::new();
+        let sender = paused_sender();
+        let first = NotificationProcessor::new(&store, &sender, 3);
+        let second = NotificationProcessor::new(&store, &sender, 3);
+        let req = sample_request("compete");
+        let (outcome, ()) = tokio::join!(first.process_request(&req), async {
+            sender.started.notified().await;
+            assert!(matches!(
+                second.process_request(&req).await.unwrap(),
+                MessageDisposition::Wait { .. }
+            ));
+            assert_eq!(sender.calls.load(Ordering::SeqCst), 1);
+            sender.release.notify_one();
+        });
+        assert!(matches!(
+            outcome.unwrap(),
+            MessageDisposition::Complete { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn expired_claim_recovers_and_rejects_stale_completion() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let req = sample_request("expired");
+        let old = NotificationJobDocument::new_claimed(
+            &req,
+            "fake",
+            Utc::now() - chrono::Duration::seconds(120),
+        );
+        let CreateJobOutcome::Created(stale) = store.create_job(&old).await.unwrap() else {
+            panic!()
+        };
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        assert!(matches!(
+            processor.process_request(&req).await.unwrap(),
+            MessageDisposition::Complete { .. }
+        ));
+        let mut stale_doc = stale.document;
+        stale_doc.mark_delivered("old".into(), "fake", Utc::now());
+        assert_eq!(
+            store.replace_job(&stale_doc, &stale.etag).await.unwrap(),
+            ReplaceJobOutcome::PreconditionFailed
+        );
+        assert_eq!(sender.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn lost_cosmos_renewal_cancels_send() {
+        let store = InMemoryCosmosStore::new();
+        let sender = paused_sender();
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        let req = sample_request("lost-renewal");
+        let (outcome, ()) = tokio::join!(processor.process_request(&req), async {
+            sender.started.notified().await;
+            let mut current = store.get_job(&req.event_id).await.unwrap().unwrap();
+            current.document.claim_token = Some("other-owner".into());
+            store
+                .replace_job(&current.document, &current.etag)
+                .await
+                .unwrap();
+            tokio::time::advance(std::time::Duration::from_secs(11)).await;
+        });
+        assert!(matches!(outcome.unwrap(), MessageDisposition::Wait { .. }));
+        assert_eq!(
+            store
+                .get_job(&req.event_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .document
+                .status,
+            JobStatus::Claimed
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn timeout_is_durable_and_budget_is_bounded() {
+        let store = InMemoryCosmosStore::new();
+        let sender = paused_sender();
+        let processor = NotificationProcessor::new(&store, &sender, 1);
+        let req = sample_request("timeout");
+        let result = processor.process_request(&req).await.unwrap();
+        assert!(matches!(
+            result,
+            MessageDisposition::Complete {
+                final_status: JobStatus::TerminalFailure,
+                ..
+            }
+        ));
+        assert!(matches!(
+            processor.process_request(&req).await.unwrap(),
+            MessageDisposition::Complete {
+                duplicate_skipped: true,
+                ..
+            }
+        ));
+        assert_eq!(sender.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn crash_budget_does_not_allow_an_extra_send() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let req = sample_request("crash-budget");
+        store
+            .create_job(&NotificationJobDocument::new_claimed(
+                &req,
+                "fake",
+                Utc::now() - chrono::Duration::seconds(120),
+            ))
+            .await
+            .unwrap();
+        let processor = NotificationProcessor::new(&store, &sender, 1);
+        assert!(matches!(
+            processor.process_request(&req).await.unwrap(),
+            MessageDisposition::Complete {
+                final_status: JobStatus::TerminalFailure,
+                ..
+            }
+        ));
+        assert_eq!(sender.calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn malformed_and_unsupported_messages_do_not_send() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        let mut req = sample_request("unsupported");
+        req.version = 999;
+        for body in ["not json".into(), serde_json::to_string(&req).unwrap()] {
+            assert!(matches!(
+                processor.process_raw_message(&body).await.unwrap(),
+                MessageDisposition::Abandon { .. }
+            ));
+        }
+        assert_eq!(sender.calls.load(Ordering::SeqCst), 0);
+        assert!(store.docs.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn legacy_terminal_documents_remain_deduplicated() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let req = sample_request("legacy");
+        let mut doc = NotificationJobDocument::new_claimed(&req, "fake", Utc::now());
+        doc.mark_delivered("old".into(), "fake", Utc::now());
+        let mut json = serde_json::to_value(doc).unwrap();
+        for field in ["claimToken", "leaseUntil", "nextRetryAt"] {
+            json.as_object_mut().unwrap().remove(field);
+        }
+        store
+            .create_job(&serde_json::from_value(json).unwrap())
+            .await
+            .unwrap();
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        assert!(matches!(
+            processor.process_request(&req).await.unwrap(),
+            MessageDisposition::Complete {
+                duplicate_skipped: true,
+                ..
+            }
+        ));
+        assert_eq!(sender.calls.load(Ordering::SeqCst), 0);
+    }
+    #[tokio::test]
+    async fn cancellation_after_send_starts_retains_recoverable_claim() {
+        let store = InMemoryCosmosStore::new();
+        let sender = paused_sender();
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        let req = sample_request("cancelled");
+        {
+            let processing = processor.process_request(&req);
+            tokio::pin!(processing);
+            tokio::select! {
+                _ = sender.started.notified() => {}
+                _ = &mut processing => panic!("send should pause"),
+            }
+        }
+        let job = store.get_job(&req.event_id).await.unwrap().unwrap();
+        assert_eq!(job.document.status, JobStatus::Claimed);
+        assert!(job.document.lease_until.is_some());
+        assert!(matches!(
+            processor.process_request(&req).await.unwrap(),
+            MessageDisposition::Wait { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn all_event_types_and_subscribers_drain_after_worker_outage() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let mut retained = Vec::new();
+        for (i, kind) in [
+            rc_shared::EVENT_TYPE_COLLECTION_RECORDED,
+            rc_shared::EVENT_TYPE_RETURN_RECORDED,
+            EVENT_TYPE_AVAILABILITY_REQUESTED,
+            EVENT_TYPE_AVAILABILITY_REQUESTED,
+        ]
+        .iter()
+        .enumerate()
+        {
+            let mut req = sample_request(&format!("backlog-{i}"));
+            req.event_type = (*kind).into();
+            req.recipient = format!("subscriber-{i}@example.invalid");
+            retained.push(serde_json::to_string(&req).unwrap());
+        }
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        for body in &retained {
+            assert!(matches!(
+                processor.process_raw_message(body).await.unwrap(),
+                MessageDisposition::Complete {
+                    duplicate_skipped: false,
+                    ..
+                }
+            ));
+        }
+        for body in &retained {
+            assert!(matches!(
+                processor.process_raw_message(body).await.unwrap(),
+                MessageDisposition::Complete {
+                    duplicate_skipped: true,
+                    ..
+                }
+            ));
+        }
+        assert_eq!(sender.calls.load(Ordering::SeqCst), 4);
+    }
+
+    #[tokio::test]
+    async fn send_success_without_record_can_send_again_after_expiry() {
+        // Models the crash gap after external acceptance but before durable finish.
+        // This test deliberately proves the residual duplicate risk, not exactly-once.
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let req = sample_request("uncertain-send");
+        let old = NotificationJobDocument::new_claimed(
+            &req,
+            "fake",
+            Utc::now() - chrono::Duration::seconds(120),
+        );
+        store.create_job(&old).await.unwrap();
+        (&sender).send_notification(&req).await.unwrap();
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        processor.process_request(&req).await.unwrap();
+        assert_eq!(sender.calls.load(Ordering::SeqCst), 2);
     }
 }

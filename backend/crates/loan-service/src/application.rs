@@ -220,13 +220,27 @@ where
     P: QueuePublisherPort,
 {
     let started = std::time::Instant::now();
+    let batch_size = batch_size.clamp(1, 100);
+    // Sequential sends each have a 35s deadline. Cover the entire batch so
+    // later rows are not reclaimed while this publisher still owns the batch.
+    let lease_seconds = lease_seconds.clamp(60, 3600).max(batch_size * 35 + 60);
     let claimed = store.claim_pending_batch(batch_size, lease_seconds).await?;
     let claimed_count = claimed.len();
     let mut published_count = 0usize;
     let mut failed_count = 0usize;
 
     for item in claimed {
-        match publisher.publish_request(item.payload.clone()).await {
+        let publication = tokio::time::timeout(
+            std::time::Duration::from_secs(35),
+            publisher.publish_request(item.payload.clone()),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            Err(ApplicationError::Broker(
+                "publish timeout; acknowledgement unknown".into(),
+            ))
+        });
+        match publication {
             Ok(()) => {
                 store.mark_published(item.event_id.clone()).await?;
                 published_count += 1;

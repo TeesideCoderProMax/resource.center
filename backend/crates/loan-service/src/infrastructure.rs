@@ -864,9 +864,8 @@ impl QueuePublisherPort for ServiceBusRestPublisher {
 
             let status = resp.status();
             if status.as_u16() != 201 && !status.is_success() {
-                let text = resp.text().await.unwrap_or_default();
                 return Err(ApplicationError::Broker(format!(
-                    "servicebus rejected send ({status}): {text}"
+                    "servicebus rejected send ({status})"
                 )));
             }
             Ok(())
