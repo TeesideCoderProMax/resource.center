@@ -7,3 +7,25 @@
 # Serena local caches
 .serena/cache/
 .serena/logs/
+
+# Terraform local state, credentials, saved plans and environment overrides
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+*.backend.hcl
+!*.backend.hcl.example
+crash.log
+infra/bootstrap/backend.tf
+infra/outputs/
+
+# Rust & Next.js build outputs (lockfiles Cargo.lock and package-lock.json are tracked)
+backend/target/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+*.tsbuildinfo
