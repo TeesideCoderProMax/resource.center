@@ -1,0 +1,25 @@
+[package]
+name = "notifications-worker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "notifications-worker"
+path = "src/main.rs"
+
+[dependencies]
+rc-shared = { path = "../rc-shared" }
+async-trait.workspace = true
+chrono.workspace = true
+native-tls.workspace = true
+postgres-native-tls.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-postgres.workspace = true
+tracing.workspace = true
+urlencoding.workspace = true
+uuid.workspace = true
