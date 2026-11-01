@@ -1,0 +1,108 @@
+{
+  "checked_at": "2026-10-31T12:06:00Z",
+  "environment": "test",
+  "location": "francecentral",
+  "resource_group": "rc-test-0330980f-workloads-rg",
+  "images": {
+    "backend": "rctest0330980facr.azurecr.io/rc-backend@sha256:3e0e9dbafe7026695e90c696512da9f05666b4f25bc811f6ead5ee2700a0510a",
+    "web": "rctest0330980facr.azurecr.io/rc-web@sha256:c01bb79aff68d6268812083430f6091d37614f65a764e8b17c51b8d4bc9fdee0"
+  },
+  "workloads": {
+    "loan_api": {
+      "name": "rc-test-0330980f-loan-api",
+      "url": "https://rc-test-0330980f-loan-api.livelywave-2cc0564d.francecentral.azurecontainerapps.io",
+      "identity": "rc-test-0330980f-loan",
+      "min_replicas": 0,
+      "max_replicas": 3,
+      "ready_check": {
+        "status_code": 200,
+        "status": "ready",
+        "database": "reachable",
+        "version": "0.1.0-phase2",
+        "auth0_configured": false
+      },
+      "catalogue_check": {
+        "status_code": 200,
+        "seeded_models_returned": 4
+      },
+      "protected_route_check": {
+        "endpoint": "POST /api/v1/reservations",
+        "status_code": 503,
+        "error": "AuthNotConfigured",
+        "cors_allow_origin": "https://rc-test-0330980f-web.livelywave-2cc0564d.francecentral.azurecontainerapps.io"
+      }
+    },
+    "web": {
+      "name": "rc-test-0330980f-web",
+      "url": "https://rc-test-0330980f-web.livelywave-2cc0564d.francecentral.azurecontainerapps.io",
+      "hosting_decision": "Azure Container App in France Central (Microsoft.Web/staticSites disallowed in France Central by subscription policy sys.regionrestriction)",
+      "min_replicas": 0,
+      "max_replicas": 3,
+      "health_check": {
+        "status_code": 200,
+        "status": "ok"
+      },
+      "ssr_catalogue_rendered": true
+    },
+    "loan_migrations": {
+      "name": "rc-test-0330980f-migrations",
+      "trigger": "Manual",
+      "identity": "rc-test-0330980f-migrations",
+      "execution_name": "rc-test-0330980f-migrations-r8veoqm",
+      "status": "Succeeded",
+      "applied_migrations": [
+        "0001_initial_loan_schema"
+      ],
+      "demo_seed_applied": true,
+      "publisher_outbox_grant_applied": true
+    },
+    "loan_publisher": {
+      "name": "rc-test-0330980f-loan-publisher",
+      "trigger": "Schedule (*/1 * * * *)",
+      "identity": "rc-test-0330980f-publisher",
+      "execution_name": "rc-test-0330980f-loan-publisher-29890802",
+      "status": "Succeeded",
+      "synthetic_probe_published": {
+        "event_id": "evt-phase2-e2e-probe-001",
+        "correlation_id": "corr-phase2-e2e-probe-001",
+        "claimed_count": 1,
+        "published_count": 1,
+        "failed_count": 0
+      }
+    },
+    "notifications_worker": {
+      "name": "rc-test-0330980f-notifications",
+      "ingress": "none",
+      "identity": "rc-test-0330980f-notifications",
+      "min_replicas": 0,
+      "max_replicas": 3,
+      "keda_scale_rule": {
+        "type": "azure-servicebus",
+        "queue": "notification-requests-v1",
+        "scale_from_zero_verified": true,
+        "system_log_reason": "KEDAScaleTargetActivated"
+      },
+      "synthetic_probe_delivery": {
+        "event_id": "evt-phase2-e2e-probe-001",
+        "correlation_id": "corr-phase2-e2e-probe-001",
+        "cosmos_status": "Delivered",
+        "delivery_mode": "fake",
+        "provider_message_id": "fake-msg-evt-phase2-e2e-probe-001",
+        "attempt_count": 1,
+        "live_emails_sent": 0,
+        "queue_settled": true
+      },
+      "isolation_verification": {
+        "command": "notifications-worker verify-isolation",
+        "keyvault_check": "404_not_found_rbac_allowed",
+        "cosmos_etag_conflict_check": "passed_and_cleaned",
+        "postgres_access_denied": "db error: FATAL: password authentication failed for user \"rc-test-0330980f-notifications\""
+      }
+    }
+  },
+  "terraform_no_drift": {
+    "bootstrap": "0 to add, 0 to change, 0 to destroy",
+    "platform": "0 to add, 0 to change, 0 to destroy",
+    "workloads": "0 to add, 0 to change, 0 to destroy"
+  }
+}

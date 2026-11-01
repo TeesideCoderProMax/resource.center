@@ -1,0 +1,64 @@
+environment         = "test"
+subscription_id     = "0330980f-85ea-4b38-8b9e-c871432c9d4f"
+tenant_id           = "43d2115b-a55e-46b6-9df7-b03388ecfc60"
+location            = "francecentral"
+name_prefix         = "rc-test-0330980f"
+backend_image            = "rctest0330980facr.azurecr.io/rc-backend@sha256:28ae9ffebf54b256c0ebe12a03700ae6a204c1763b702b5763278a3f311ab09a"
+web_image                = "rctest0330980facr.azurecr.io/rc-web@sha256:c01bb79aff68d6268812083430f6091d37614f65a764e8b17c51b8d4bc9fdee0"
+service_version          = "0.1.0-phase3"
+seed_demo_data           = true
+email_delivery_mode      = "fake"
+alert_notification_email = "G6605870@live.tees.ac.uk"
+auth0_domain             = ""
+auth0_audience           = ""
+auth0_client_id          = ""
+
+# Direct copy of docs/cloud/test-foundation-outputs.json:
+handoff = {
+  container_app_environment_id = "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.App/managedEnvironments/rc-test-0330980f-apps"
+  cosmos_capacity_mode         = "free_tier"
+  cosmos_container             = "jobs"
+  cosmos_database              = "notifications"
+  cosmos_endpoint              = "https://rc-test-0330980f-notifications.documents.azure.com:443/"
+  environment                  = "test"
+  github_client_id             = "b8dba55f-9eb5-4d3f-9f5d-cfe913b62104"
+  identities = {
+    loan = {
+      client_id    = "43b555a6-c33d-4a3d-9f06-169a31307f49"
+      id           = "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-loan"
+      name         = "rc-test-0330980f-loan"
+      principal_id = "9ecf13c8-82a7-4f3c-a646-f4fc3ad32b50"
+    }
+    migrations = {
+      client_id    = "c6b4b9a7-e15a-4f17-8b3a-3c8f3cf5c3db"
+      id           = "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-migrations"
+      name         = "rc-test-0330980f-migrations"
+      principal_id = "82caf993-cd67-4037-9d29-d3e359f63bf1"
+    }
+    notifications = {
+      client_id    = "9d2ca270-ebc1-4cb6-a498-f7cb0bc2d16b"
+      id           = "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-notifications"
+      name         = "rc-test-0330980f-notifications"
+      principal_id = "b855eb0a-3d5d-4d43-aebd-5adb2ce33cf0"
+    }
+    publisher = {
+      client_id    = "06917d48-9475-40c8-95be-47c0c2376130"
+      id           = "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-publisher"
+      name         = "rc-test-0330980f-publisher"
+      principal_id = "16f78a70-a167-4406-b612-686764a101eb"
+    }
+  }
+  location                = "francecentral"
+  notifications_vault_uri = "https://rctest0330980fnkv.vault.azure.net/"
+  platform_resource_group = "rc-test-0330980f-platform-rg"
+  postgres_database       = "loan"
+  postgres_host           = "rc-test-0330980f-loan-pg.postgres.database.azure.com"
+  registry_id             = "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ContainerRegistry/registries/rctest0330980facr"
+  registry_login_server   = "rctest0330980facr.azurecr.io"
+  registry_sku            = "Standard"
+  servicebus_namespace    = "rc-test-0330980f-bus.servicebus.windows.net"
+  servicebus_queue        = "notification-requests-v1"
+  subscription_id         = "0330980f-85ea-4b38-8b9e-c871432c9d4f"
+  tenant_id               = "43d2115b-a55e-46b6-9df7-b03388ecfc60"
+  workload_resource_group = "rc-test-0330980f-workloads-rg"
+}

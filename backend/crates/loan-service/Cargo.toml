@@ -1,0 +1,28 @@
+[package]
+name = "loan-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "loan-service"
+path = "src/main.rs"
+
+[dependencies]
+axum.workspace = true
+chrono.workspace = true
+jsonwebtoken.workspace = true
+native-tls.workspace = true
+postgres-native-tls.workspace = true
+rc-shared = { path = "../rc-shared" }
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-postgres.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
