@@ -1,10 +1,8 @@
-# Acceptance evidence
-- Source: `docs/architecture/2026-10-25-resource-center-handoff.md`, user-approved design dated 2026-10-25; implementation unverified.
-- Pure domain/use-case tests with fake ports and deterministic clocks/IDs where relevant.
-- Real PostgreSQL: concurrent reservations, allocation invariants, rollback, outbox atomicity.
-- Publisher: broker outages, duplicate publication, restart recovery.
-- Notifications: duplicate messages/concurrent consumers, crash windows, transient failure, exhausted retries, unsupported versions.
-- Cosmos integration: chosen partitioning, conditional updates and concurrent job state transitions.
-- Contract tests and full return-to-notification flow; prove loan operations survive Notifications/Resend outage and backlog resumes afterward.
-- Verify separate deployment/configuration boundaries, least privilege, correlation logging and backlog/failure monitoring.
-- No executable test suite exists yet; these are required design acceptance checks, not completed tests or confirmed rubric criteria.
+# Tests and evidence
+Reviewed 2026-11-01; source files and stored results, not a fresh test run.
+- make backend-test runs Cargo tests; HTTP tests use fake repositories/token validation, worker tests use fake Cosmos/email ports. CI YAML invokes tests, but successful GitHub runs need separate evidence.
+- docs/cloud/test-phase3-checks.json records 10 passing Rust tests, real PostgreSQL 5-way last-unit contention, publisher lease recovery, three event types through Service Bus/Cosmos with fake email, rollback and 40/40 catalogue HTTP 200 responses. docs/cloud/test-workloads-checks.json records worker scale-from-zero.
+- Do not call fake-auth rejection a live Auth0 HTTP 403, fake delivery a received email, or a burst of HTTP 200s a full scale-out/performance study.
+- Required next evidence: reservation-time due date; full JWT/role failures and valid flows; multi-subscriber return; rollback after partial DB work; concurrent worker duplicates; email-send/crash and queue lock expiry; broker/email outage plus backlog recovery; malformed/unsupported messages; explicit load targets/results.
+- Test business rules through ports; use real PostgreSQL for contention/transactions and real Cosmos for ETag/partition behaviour. Fake ports do not prove vendor integration.
+- Assessment targets: `mem:assessment/cloud_module_criteria`. Deployment checks and limitations: `mem:cloud/phase_3_result`.

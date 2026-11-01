@@ -1,4 +1,5 @@
-# Completion
-- No application check suite exists as of 2026-10-25; do not invent commands or claim tests passed.
-- Once stack is established, record exact build/lint/type/test commands and run meaningful checks for changes.
-- Verify Serena configuration via reactivation and memory references via CLI or direct target checks.
+# Completion checks
+- For application/infrastructure changes, run appropriate Makefile checks; make check runs the full local suite. Documentation-only edits need reference/config/whitespace checks, not cloud deployment.
+- For authorized deployed changes, check intended environment drift and smoke tests; do not treat an old success as a fresh check.
+- Reconcile affected memories under `mem:memory_maintenance`: replace stale claims and delete obsolete context, retaining unresolved work and evidence links. Run serena memories check.
+- Finish the current AI_LOG.md entry with actual changes, checks and limits.

@@ -1,0 +1,254 @@
+name: Deploy & Promote
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Target environment for deployment or gated promotion"
+        required: true
+        default: "test"
+        type: choice
+        options:
+          - test
+          - staging
+          - production
+      backend_image_digest:
+        description: "Immutable backend image reference (repo@sha256:...) required when promoting to staging/production"
+        required: false
+        type: string
+      web_image_digest:
+        description: "Immutable web image reference (repo@sha256:...) required when promoting to staging/production"
+        required: false
+        type: string
+      service_version:
+        description: "Release version tag (defaults to 0.1.0-<short_sha>)"
+        required: false
+        type: string
+      approval_confirmation:
+        description: "Type PROMOTE-STAGING or PROMOTE-PRODUCTION to authorize gated promotion"
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.target_environment || 'test' }}
+  cancel-in-progress: false
+
+env:
+  AZURE_TENANT_ID: "43d2115b-a55e-46b6-9df7-b03388ecfc60"
+  AZURE_SUBSCRIPTION_ID: "0330980f-85ea-4b38-8b9e-c871432c9d4f"
+  AZURE_CLIENT_ID_TEST: "b8dba55f-9eb5-4d3f-9f5d-cfe913b62104"
+
+jobs:
+  verify:
+    name: Pre-deploy Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.3"
+
+      - name: Run full verification suite
+        run: make check
+
+  deploy-test:
+    name: Automated Deploy to Test
+    needs: [verify]
+    if: ${{ github.event_name == 'push' || inputs.target_environment == 'test' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: test
+      url: https://rc-test-0330980f-web.livelywave-2cc0564d.francecentral.azurecontainerapps.io
+    outputs:
+      backend_image: ${{ steps.images.outputs.backend_image }}
+      web_image: ${{ steps.images.outputs.web_image }}
+      service_version: ${{ steps.images.outputs.service_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.3"
+          terraform_wrapper: false
+
+      - name: Azure Login via Federated OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID || env.AZURE_CLIENT_ID_TEST }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID || env.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID || env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push immutable images to ACR
+        id: images
+        run: |
+          set -euo pipefail
+          ACR_NAME="rctest0330980facr"
+          ACR_SERVER="${ACR_NAME}.azurecr.io"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          VERSION="${{ inputs.service_version }}"
+          if [[ -z "${VERSION}" ]]; then
+            VERSION="0.1.0-${SHORT_SHA}"
+          fi
+
+          az acr login --name "${ACR_NAME}"
+
+          docker build -t "${ACR_SERVER}/rc-backend:${VERSION}" backend
+          docker push "${ACR_SERVER}/rc-backend:${VERSION}"
+          BACKEND_DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "${ACR_SERVER}/rc-backend:${VERSION}")"
+
+          docker build -t "${ACR_SERVER}/rc-web:${VERSION}" frontend
+          docker push "${ACR_SERVER}/rc-web:${VERSION}"
+          WEB_DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "${ACR_SERVER}/rc-web:${VERSION}")"
+
+          echo "backend_image=${BACKEND_DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "web_image=${WEB_DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "service_version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare Test Terraform configuration with immutable digests
+        run: |
+          set -euo pipefail
+          cp infra/environments/test/workloads.backend.hcl.example infra/environments/test/workloads.backend.hcl
+          cp infra/environments/test/workloads.tfvars.example infra/environments/test/workloads.tfvars
+          sed -i "s|^backend_image[[:space:]]*=.*|backend_image            = \"${{ steps.images.outputs.backend_image }}\"|" infra/environments/test/workloads.tfvars
+          sed -i "s|^web_image[[:space:]]*=.*|web_image                = \"${{ steps.images.outputs.web_image }}\"|" infra/environments/test/workloads.tfvars
+          sed -i "s|^service_version[[:space:]]*=.*|service_version          = \"${{ steps.images.outputs.service_version }}\"|" infra/environments/test/workloads.tfvars
+
+      - name: Apply Test workloads via Terraform (Immutable Digest Rollout)
+        run: |
+          set -euo pipefail
+          export ARM_USE_OIDC=true
+          export ARM_CLIENT_ID="${{ vars.AZURE_CLIENT_ID || env.AZURE_CLIENT_ID_TEST }}"
+          export ARM_TENANT_ID="${{ vars.AZURE_TENANT_ID || env.AZURE_TENANT_ID }}"
+          export ARM_SUBSCRIPTION_ID="${{ vars.AZURE_SUBSCRIPTION_ID || env.AZURE_SUBSCRIPTION_ID }}"
+          make infra-init ENV=test ROOT=workloads
+          make infra-plan ENV=test ROOT=workloads
+          make infra-apply ENV=test ROOT=workloads
+
+      - name: Execute PostgreSQL migrations job and block until Succeeded
+        run: |
+          set -euo pipefail
+          EXEC_NAME="$(az containerapp job start \
+            --resource-group rc-test-0330980f-workloads-rg \
+            --name rc-test-0330980f-migrations \
+            --query name -o tsv)"
+          echo "Started migration execution: ${EXEC_NAME}"
+          for attempt in $(seq 1 30); do
+            STATUS="$(az containerapp job execution show \
+              --resource-group rc-test-0330980f-workloads-rg \
+              --name rc-test-0330980f-migrations \
+              --job-execution-name "${EXEC_NAME}" \
+              --query properties.status -o tsv)"
+            echo "Attempt ${attempt}: status=${STATUS}"
+            if [[ "${STATUS}" == "Succeeded" ]]; then
+              break
+            elif [[ "${STATUS}" == "Failed" || "${STATUS}" == "Canceled" ]]; then
+              echo "Migration job failed with status ${STATUS}" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          if [[ "${STATUS}" != "Succeeded" ]]; then
+            echo "Timed out waiting for migration execution ${EXEC_NAME}" >&2
+            exit 1
+          fi
+
+      - name: Run post-deploy smoke tests
+        env:
+          EXPECTED_VERSION: ${{ steps.images.outputs.service_version }}
+        run: make smoke-test
+
+  promote:
+    name: Gated Promotion to ${{ inputs.target_environment }}
+    needs: [verify]
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.target_environment == 'staging' || inputs.target_environment == 'production') }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.target_environment }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify approval gate and immutable image digests
+        run: |
+          set -euo pipefail
+          TARGET_ENV="${{ inputs.target_environment }}"
+          EXPECTED_TOKEN="PROMOTE-$(echo "${TARGET_ENV}" | tr '[:lower:]' '[:upper:]')"
+          if [[ "${{ inputs.approval_confirmation }}" != "${EXPECTED_TOKEN}" ]]; then
+            echo "Promotion blocked: approval_confirmation must equal ${EXPECTED_TOKEN}" >&2
+            exit 1
+          fi
+          if [[ ! "${{ inputs.backend_image_digest }}" =~ @sha256:[0-9a-f]{64}$ ]]; then
+            echo "Promotion blocked: backend_image_digest must be an immutable @sha256:... reference" >&2
+            exit 1
+          fi
+          if [[ ! "${{ inputs.web_image_digest }}" =~ @sha256:[0-9a-f]{64}$ ]]; then
+            echo "Promotion blocked: web_image_digest must be an immutable @sha256:... reference" >&2
+            exit 1
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.3"
+          terraform_wrapper: false
+
+      - name: Azure Login via Federated OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID || env.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID || env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Prepare target environment Terraform configuration
+        run: |
+          set -euo pipefail
+          TARGET_ENV="${{ inputs.target_environment }}"
+          PROMOTED_VERSION="${{ inputs.service_version || '0.1.0-promoted' }}"
+          cp "infra/environments/${TARGET_ENV}/workloads.backend.hcl.example" "infra/environments/${TARGET_ENV}/workloads.backend.hcl"
+          cp "infra/environments/${TARGET_ENV}/workloads.tfvars.example" "infra/environments/${TARGET_ENV}/workloads.tfvars"
+          sed -i "s|^backend_image[[:space:]]*=.*|backend_image            = \"${{ inputs.backend_image_digest }}\"|" "infra/environments/${TARGET_ENV}/workloads.tfvars"
+          sed -i "s|^web_image[[:space:]]*=.*|web_image                = \"${{ inputs.web_image_digest }}\"|" "infra/environments/${TARGET_ENV}/workloads.tfvars"
+          sed -i "s|^service_version[[:space:]]*=.*|service_version          = \"${PROMOTED_VERSION}\"|" "infra/environments/${TARGET_ENV}/workloads.tfvars"
+
+      - name: Plan and apply promoted immutable digests via Terraform
+        run: |
+          set -euo pipefail
+          TARGET_ENV="${{ inputs.target_environment }}"
+          export ARM_USE_OIDC=true
+          export ARM_CLIENT_ID="${{ vars.AZURE_CLIENT_ID }}"
+          export ARM_TENANT_ID="${{ vars.AZURE_TENANT_ID || env.AZURE_TENANT_ID }}"
+          export ARM_SUBSCRIPTION_ID="${{ vars.AZURE_SUBSCRIPTION_ID || env.AZURE_SUBSCRIPTION_ID }}"
+          make infra-init ENV="${TARGET_ENV}" ROOT=workloads
+          make infra-plan ENV="${TARGET_ENV}" ROOT=workloads
+          make infra-apply ENV="${TARGET_ENV}" ROOT=workloads

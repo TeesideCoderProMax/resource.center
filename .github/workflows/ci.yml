@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Rust Backend (fmt, clippy, test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Format check
+        run: make backend-fmt
+
+      - name: Clippy lint check
+        run: make backend-lint
+
+      - name: Unit and integration tests
+        run: make backend-test
+
+  frontend:
+    name: Next.js Frontend (typecheck, build, audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm --prefix frontend ci
+
+      - name: TypeScript typecheck
+        run: make frontend-typecheck
+
+      - name: Production build check
+        run: make frontend-build
+
+      - name: Dependency vulnerability audit
+        run: make frontend-audit
+
+  terraform:
+    name: Terraform (fmt, validate test/staging/production)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.3"
+
+      - name: Terraform format check
+        run: make infra-fmt
+
+      - name: Validate Test roots
+        run: make infra-validate ENV=test
+
+      - name: Validate Staging roots
+        run: make infra-validate ENV=staging
+
+      - name: Validate Production roots
+        run: make infra-validate ENV=production
+
+  containers:
+    name: Multi-stage Container Builds (no push)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend and frontend images
+        run: make docker-build

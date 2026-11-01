@@ -1,0 +1,7 @@
+resource_group_name  = "rc-staging-0330980f-state-rg"
+storage_account_name = "rcstaging0330980fstate"
+container_name       = "platform"
+key                  = "staging/platform.tfstate"
+subscription_id      = "0330980f-85ea-4b38-8b9e-c871432c9d4f"
+tenant_id            = "43d2115b-a55e-46b6-9df7-b03388ecfc60"
+use_azuread_auth     = true

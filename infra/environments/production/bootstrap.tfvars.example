@@ -1,0 +1,6 @@
+subscription_id    = "0330980f-85ea-4b38-8b9e-c871432c9d4f"
+tenant_id          = "43d2115b-a55e-46b6-9df7-b03388ecfc60"
+location           = "francecentral"
+environment        = "production"
+name_suffix        = "0330980f"
+operator_object_id = "80f9f7d7-5157-4edd-a0af-6487e3f7019d"

@@ -1,8 +1,8 @@
-# Stack
-- Source: `docs/architecture/2026-10-25-resource-center-handoff.md`, user-approved design dated 2026-10-25; implementation unverified.
-- Next.js frontend; frontend JavaScript versus TypeScript and versions/package manager not specified. Serena typescript backend supports both.
-- Python/FastAPI/asyncio Loan API, private PostgreSQL; independent Python Notifications worker with private Azure Cosmos DB for NoSQL; Resend delivery adapter.
-- Nginx HTTPS ingress, Let's Encrypt certificates; private HTTP/JSON forwarding is design intent pending network/TLS review.
-- Auth0 OIDC + PKCE frontend sign-in; JWT API validation and student/staff authorization.
-- Durable queue accepted; Azure Service Bus proposed default pending availability/budget/hosting/SKU decisions.
-- No application dependencies or executable commands installed/selected. Python and typescript Serena languages configured in anticipation of sources.
+# Stack and tool sources
+Reviewed 2026-11-01.
+- Backend: Rust + Tokio + Axum; workspace backend/ with rc-shared, loan-service and notifications-worker. Publisher is a Loan command, not a separate business boundary. Versions/toolchain: Cargo.toml, Cargo.lock and rust-toolchain.toml.
+- Frontend: Next.js + TypeScript, standalone container; package.json/package-lock.json own versions. Auth0 OIDC/PKCE remains required but browser login is not implemented.
+- Data/integration: PostgreSQL via tokio-postgres; Cosmos, Service Bus and Resend adapters; Auth0 JWT validation. Domain/application code should not depend on vendor SDKs.
+- Azure Container Apps managed HTTPS; Terraform roots bootstrap/platform/workloads; GitHub Actions and Makefile. Persistent PostgreSQL and Test Cosmos are not scale-to-zero.
+- Python scripts are operator diagnostics, not a second backend stack. Exact versions/audit results belong in manifests and dated evidence, not duplicated memory.
+- Accepted topology: `mem:architecture/selected_baseline`; commands: `mem:suggested_commands`.

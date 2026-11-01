@@ -1,5 +1,5 @@
 # Ownership
-- Source: `docs/architecture/2026-10-25-resource-center-handoff.md`, user-approved design dated 2026-10-25; implementation unverified.
+- Source: `docs/architecture/2026-10-25-resource-center-handoff.md`, user-approved design dated 2026-10-25; accepted ownership rules, reviewed against current source 2026-11-01.
 - Loan owns catalogue/devices/availability, reservations/two-day loans/collections/returns, subscription/waitlist eligibility, recipient selection, authoritative PostgreSQL state, transactional outbox and publisher progress.
 - Notifications owns jobs/templates/message preparation, delivery attempts/status, retry schedules/failed deliveries, processed event IDs, required delivery recipient data, Cosmos storage and Resend integration.
 - Notifications neither queries PostgreSQL nor calls Loan API to reconstruct ordinary requests. Loan API neither reads nor writes notification Cosmos records.

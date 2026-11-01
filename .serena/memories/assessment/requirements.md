@@ -1,6 +1,8 @@
-# Assessment evidence
-- Source: `docs/architecture/2026-10-25-resource-center-handoff.md`, user-approved design dated 2026-10-25; implementation unverified.
-- Actual brief/rubric and lecture PDFs absent; no assessment compliance verified and no rubric conflict established.
-- Handoff attributes capability ownership/loose coupling/events guidance to Architectures pp. 8–18 and ports/adapters/DI/testing/persistence to Persistence pp. 7–13; this attribution has not been checked directly.
-- Independent Notifications addresses prior shared-database coupling; this alone does not establish compliance.
-- Map actual brief requirements to implementation/submission evidence when supplied. Do not migrate accepted stack to lecture examples.
+# CIS3039-N assessment
+Source corrected by user and read directly 2026-11-01: /home/cabozzz/Downloads/cnd-cis3039-assessment-spec.docx. CIS3040-N handbook is not this task's assessment.
+- Full scenario, coding rubric and submission details: `mem:assessment/cloud_module_criteria`.
+- Current review: docs/assessment/2026-11-01-cloud-backend-alignment.md. Backend design broadly fits; full compliance/grade is not established.
+- Priority gaps: reservation-time return date; functional browser Auth0/student/staff flows; real auth/403 and email evidence or explicit tutor-approved fake scope; Stage 2 annotated diagram/approval; actual GitHub deploy/gate evidence; safe promotion checks and demo seeding; final report/media ZIP.
+- Existing docs/cloud/assessment-evidence.md contains diagrams and mappings but its broad verification claims need the current review's qualifications. Stored diagnostics do not prove live sign-in, email receipt or GitHub protection.
+- Planned resolution in four isolated sessions: `mem:backend/plan`; no implementation or assessment pass follows from the plan itself.
+- Tests/remaining resilience checks: `mem:architecture/testing`; deployment evidence: `mem:cloud/plan`.
