@@ -1,6 +1,6 @@
 # Phase 2 — Reliable notification processing
 
-Status: **planned**. One isolated implementation chat after phase 1. Follow `docs/backend/README.md`.
+Status: **implemented locally; real-service checks blocked/remaining**. See [phase 2 handoff](phase-2-handoff.md) and [recovery rules](notification-recovery.md). Follow `docs/backend/README.md`.
 
 ## Goal and entry context
 

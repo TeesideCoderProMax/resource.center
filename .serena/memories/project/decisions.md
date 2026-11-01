@@ -6,4 +6,4 @@ Reviewed 2026-11-01; accepted design is not proof of full implementation.
 - User corrected assessment to CIS3039-N on 2026-11-01. Source criteria: `mem:assessment/cloud_module_criteria`; gaps: docs/assessment/2026-11-01-cloud-backend-alignment.md.
 - ADR 0004 proceeds in four isolated sequential chats. Current phase results, handoffs and next work: `mem:backend/plan`; do not infer deployment from local checks.
 - Open: implement browser sign-in/actions; configure/verify Auth0 and live email as required by approved MVP; confirm tutor approval status for the prepared Stage 2 diagram; prove commit-driven Test deployment and actual promotion gates; finish report/media.
-- Other design risks: concurrent notification claims need tests; define retention/replay and provider idempotency. No exactly-once email claim.
+- Notification recovery and retention/replay rules: docs/backend/notification-recovery.md. Local concurrency tests pass; real Cosmos and deployed recovery checks remain open. No exactly-once email claim.
