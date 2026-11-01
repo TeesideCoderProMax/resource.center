@@ -222,3 +222,9 @@ async fn shutdown_signal() {
         _ = terminate => tracing::info!("received SIGTERM, initiating graceful shutdown"),
     }
 }
+
+#[cfg(test)]
+mod test_support;
+
+#[cfg(test)]
+mod postgres_tests;

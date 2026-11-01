@@ -556,3 +556,109 @@ Organized all repository changes into logical commit groups across three phase b
 Because `gh` CLI is signed into `CodeZobac` while `origin` (`git@github.com:TeesideCoderProMax/resource.center.git`) is authenticated via `.git/ssh/id_ed25519`, confirmed with the user and executed the 3-phase branch push + `git merge --no-ff` workflow to `origin/main`. Verified `git status` is clean, all 3 phase branches and `main` are pushed to `origin`, and `serena memories check` and `git diff --check` pass.
 
 
+## 025 — 2026-11-01 — Backend phase 1
+
+### Exact input prompt
+
+```text
+Use serena MCP and implement phase 1 of the backend implementation plan
+```
+
+### Change summary
+
+Implemented Loan phase 1: application/domain rules, transaction ports, reservation due dates, owner/staff reads and migration 0002. Added shared-fake, signed-JWT route and real PostgreSQL tests, plus API contracts, Stage 2 diagrams and the phase handoff; updated current Serena guidance.
+
+### Validation and outcome
+
+Backend format/lint checks and 13 unit/route/worker/contract tests passed; the separate real PostgreSQL suite passed migration, contention and partial-write rollback checks. Memory/reference/shell/whitespace checks passed. No deployment, live Auth0/email checks or tutor approval; migration 0002 requires old API writers to drain before rollout.
+
+## 026 — 2026-11-01 — Continue backend phase 1
+
+### Exact input prompt
+
+```text
+go ahead
+```
+
+### Change summary
+
+Continued and completed the phase 1 request recorded in entry 025. Final results and rollout limits are in docs/backend/phase-1-handoff.md; current memories now point to phase 2 as the next work.
+
+### Validation and outcome
+
+Validated phase 1 code with backend format/lint/tests and isolated PostgreSQL, then checked document/memory references and whitespace. Tutor approval and deployment remain pending; phase 2 was not started. Mermaid source was reviewed but not rendered.
+
+## 027 — 2026-11-01 — Clarify tutor approval
+
+### Exact input prompt
+
+```text
+WHat tutor aproval are you talking about?
+```
+
+### Change summary
+
+Clarified that the assessment brief asks for tutor approval of final Stage 2 MVP choices. This is an assessment note, not a block on backend work; no project files changed apart from the log.
+
+### Validation and outcome
+
+Checked the original cnd-cis3039-assessment-spec.docx text: “Tutor approval required on your final choices.” Approval status is not known; the earlier “pending” wording was too strong.
+
+## 028 — 2026-11-01 — Commit phase 1 and open a PR
+
+### Exact input prompt
+
+```text
+Great, commit the changes and open a PR
+```
+
+### Change summary
+
+Committed backend implementation/tests and phase 1 docs/memories as separate groups on codex/backend-phase-1-loan-core, then pushed the branch. Corrected tutor approval wording to unknown and prepared the PR title/body; PR creation remains blocked by repository access.
+
+### Validation and outcome
+
+Reviewed staged changes; git diff --check and serena memories check passed. Existing phase 1 tests remain the validation record; no code changed or tests reran in this request. SSH push succeeded; GitHub connector returned 404 and gh pr create could not resolve the repository for account CodeZobac. Browser fallback failed with “Unknown flag --ozone-platform for command: skills get”. PR text is saved in /tmp/resource-center-phase1-pr.md; no PR or merge occurred.
+
+## 029 — 2026-11-01 — Fix async-trait Clippy failure
+
+### Exact input prompt
+
+```text
+Ive got this lint issue:
+
+
+
+The job failed in the backend lint step, not in the app logic itself.
+
+Root cause:
+
+- CI ran the lint target and hit Clippy errors:&#x20;
+  - `make: *** [Makefile:12: backend-lint] Error 101`
+- The actual errors are in `backend/crates/notifications-worker/src/application.rs`:&#x20;
+  - `error: this function has a #[must_use] attribute with no message, but returns a type already considered as #[must_use]`
+  - The offending location is the `#[async_trait]` annotation on the trait methods near line 37 and line 61
+
+This is a Clippy warning being treated as a hard failure because CI is using `-D warnings` (or equivalent), so any Clippy lint is fatal. In this case the lint is `clippy::double_must_use`, which is triggered by the generated methods from `async_trait` being marked `#[must_use]` while returning a type that is already `#[must_use]` (such as `Result`).
+
+The relevant section is:
+
+- `#[async_trait]`
+- `pub trait NotificationJobStorePort: Send + Sync { ... }`
+- `#[async_trait]`
+- `pub trait EmailDeliveryPort: Send + Sync { ... }`
+
+So the job failed because the repo’s lint configuration treats that Clippy issue as an error, and the `async_trait`-generated methods in that file trigger it.
+
+
+
+Fix it and push the changes pls
+```
+
+### Change summary
+
+Added a documented clippy::double_must_use exception only to the two async-trait port traits in notifications-worker/src/application.rs. Simplified duplicate-role checks in loan-service/src/infrastructure.rs to fix the additional collapsible_match error found with Rust 1.95; delivery and role behaviour stay the same.
+
+### Validation and outcome
+
+make backend-fmt, backend-lint and backend-test passed on Rust 1.94 (13 tests; separate PostgreSQL suite ignored). Full-workspace cargo +1.95.0 clippy --all-targets with -D warnings and git diff --check also passed. Rust 1.95 initially reproduced the separate role-match lint; the reported macro lint did not independently reproduce locally. No live CI result or deployment is claimed.

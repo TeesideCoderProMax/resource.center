@@ -62,7 +62,10 @@ pub fn build_router(state: AppState, allowed_origins: &[String]) -> Router {
         .route("/health/live", get(health_live))
         .route("/health/ready", get(health_ready))
         .route("/api/v1/catalogue", get(list_catalogue))
-        .route("/api/v1/reservations", post(create_reservation))
+        .route(
+            "/api/v1/reservations",
+            post(create_reservation).get(list_reservations),
+        )
         .route("/api/v1/reservations/{id}/collect", post(record_collection))
         .route("/api/v1/reservations/{id}/return", post(record_return))
         .route("/api/v1/subscriptions", post(create_subscription))
@@ -207,6 +210,18 @@ async fn list_catalogue(State(state): State<AppState>, headers: HeaderMap) -> im
             .into_response()
         }
         Err(err) => map_app_error(err, &correlation_id).into_response(),
+    }
+}
+
+async fn list_reservations(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    let correlation_id = extract_correlation_id(&headers);
+    let actor = match authenticate_request(&state.auth, &headers).await {
+        Ok(actor) => actor,
+        Err(error) => return map_auth_error(error, &correlation_id).into_response(),
+    };
+    match state.repo.list_reservations(actor).await {
+        Ok(rows) => with_correlation_header(StatusCode::OK, &correlation_id, rows).into_response(),
+        Err(error) => map_app_error(error, &correlation_id).into_response(),
     }
 }
 
@@ -406,175 +421,15 @@ fn map_app_error(err: ApplicationError, correlation_id: &str) -> impl IntoRespon
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::{
-        build_collection_outbox_event, build_return_outbox_events, BoxFuture, CollectionReceipt,
-        ReservationReceipt, ReturnReceipt, SubscriptionReceipt,
-    };
-    use crate::domain::{
-        compute_two_day_due_at, ensure_staff, ensure_student_or_staff, AuthenticatedActor,
-        DeviceModelSummary, DomainError,
-    };
+    use crate::test_support::FakeStore;
     use axum::body::Body;
     use axum::http::Request;
-    use chrono::Utc;
-    use std::sync::Mutex;
     use tower::ServiceExt;
-
-    #[derive(Default)]
-    struct StatefulFakeLoanRepo {
-        available_units: Mutex<i32>,
-        subscriptions: Mutex<Vec<String>>,
-        outbox_events: Mutex<Vec<rc_shared::NotificationRequestV1>>,
-    }
-
-    impl StatefulFakeLoanRepo {
-        fn with_units(units: i32) -> Self {
-            Self {
-                available_units: Mutex::new(units),
-                subscriptions: Mutex::new(Vec::new()),
-                outbox_events: Mutex::new(Vec::new()),
-            }
-        }
-    }
-
-    impl LoanRepositoryPort for StatefulFakeLoanRepo {
-        fn check_readiness(&self) -> BoxFuture<'_, Result<(), ApplicationError>> {
-            Box::pin(async { Ok(()) })
-        }
-
-        fn list_catalogue(
-            &self,
-        ) -> BoxFuture<'_, Result<Vec<DeviceModelSummary>, ApplicationError>> {
-            let avail = *self.available_units.lock().unwrap();
-            Box::pin(async move {
-                Ok(vec![DeviceModelSummary {
-                    id: "dell-latitude-7440".into(),
-                    name: "Dell Latitude 7440".into(),
-                    category: "Laptop".into(),
-                    description: "2-day loan laptop".into(),
-                    loan_duration_days: 2,
-                    total_units: 2,
-                    available_units: avail,
-                }])
-            })
-        }
-
-        fn reserve_device(
-            &self,
-            actor: AuthenticatedActor,
-            model_id: String,
-            correlation_id: String,
-        ) -> BoxFuture<'_, Result<ReservationReceipt, ApplicationError>> {
-            Box::pin(async move {
-                ensure_student_or_staff(&actor)?;
-                let mut avail = self.available_units.lock().unwrap();
-                if *avail <= 0 {
-                    return Err(ApplicationError::Domain(DomainError::NoAvailableUnits(
-                        model_id,
-                    )));
-                }
-                *avail -= 1;
-                Ok(ReservationReceipt {
-                    reservation_id: Uuid::new_v4(),
-                    model_id,
-                    unit_id: "unit-lat-001".into(),
-                    status: "RESERVED".into(),
-                    reserved_at: Utc::now(),
-                    correlation_id,
-                })
-            })
-        }
-
-        fn subscribe_availability(
-            &self,
-            actor: AuthenticatedActor,
-            model_id: String,
-        ) -> BoxFuture<'_, Result<SubscriptionReceipt, ApplicationError>> {
-            Box::pin(async move {
-                ensure_student_or_staff(&actor)?;
-                let avail = *self.available_units.lock().unwrap();
-                if avail > 0 {
-                    return Err(ApplicationError::Domain(
-                        DomainError::UnitsCurrentlyAvailable(model_id),
-                    ));
-                }
-                self.subscriptions.lock().unwrap().push(actor.email);
-                Ok(SubscriptionReceipt {
-                    subscription_id: Uuid::new_v4(),
-                    model_id,
-                    status: "ACTIVE".into(),
-                    created_at: Utc::now(),
-                })
-            })
-        }
-
-        fn record_collection(
-            &self,
-            actor: AuthenticatedActor,
-            reservation_id: Uuid,
-            correlation_id: String,
-        ) -> BoxFuture<'_, Result<CollectionReceipt, ApplicationError>> {
-            Box::pin(async move {
-                ensure_staff(&actor)?;
-                let now = Utc::now();
-                let due_at = compute_two_day_due_at(now);
-                let evt = build_collection_outbox_event(
-                    reservation_id,
-                    "borrower@tees.ac.uk",
-                    "Dell Latitude 7440",
-                    now,
-                    &correlation_id,
-                );
-                let evt_id = evt.event_id.clone();
-                self.outbox_events.lock().unwrap().push(evt);
-                Ok(CollectionReceipt {
-                    reservation_id,
-                    unit_id: "unit-lat-001".into(),
-                    status: "COLLECTED".into(),
-                    collected_at: now,
-                    due_at,
-                    outbox_event_id: evt_id,
-                })
-            })
-        }
-
-        fn record_return(
-            &self,
-            actor: AuthenticatedActor,
-            reservation_id: Uuid,
-            correlation_id: String,
-        ) -> BoxFuture<'_, Result<ReturnReceipt, ApplicationError>> {
-            Box::pin(async move {
-                ensure_staff(&actor)?;
-                let now = Utc::now();
-                *self.available_units.lock().unwrap() += 1;
-                let subs: Vec<String> = self.subscriptions.lock().unwrap().drain(..).collect();
-                let evts = build_return_outbox_events(
-                    reservation_id,
-                    "borrower@tees.ac.uk",
-                    &subs,
-                    "Dell Latitude 7440",
-                    now,
-                    &correlation_id,
-                );
-                let ids: Vec<String> = evts.iter().map(|e| e.event_id.clone()).collect();
-                self.outbox_events.lock().unwrap().extend(evts);
-                Ok(ReturnReceipt {
-                    reservation_id,
-                    unit_id: "unit-lat-001".into(),
-                    model_id: "dell-latitude-7440".into(),
-                    status: "RETURNED".into(),
-                    returned_at: now,
-                    outbox_event_ids: ids,
-                })
-            })
-        }
-    }
 
     #[tokio::test]
     async fn health_and_catalogue_endpoints_respond_with_correlation_id() {
         let state = AppState {
-            repo: Arc::new(StatefulFakeLoanRepo::with_units(2)),
+            repo: Arc::new(FakeStore::with_units(2)),
             auth: Auth0JwtVerifier::from_env(),
             environment: "test".into(),
             service_version: "0.1.0-test".into(),
@@ -624,89 +479,169 @@ mod tests {
             .unwrap();
         assert_eq!(res_resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
+}
 
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+    use crate::test_support::FakeStore;
+    use axum::body::{to_bytes, Body};
+    use axum::http::Request;
+    use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+    use serde_json::{json, Value};
+    use tower::ServiceExt;
+
+    fn token(subject: &str, role: &str) -> String {
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some("phase1-test".into());
+        encode(&header, &json!({"sub":subject,"email":format!("{subject}@example.invalid"),"roles":[role],"iss":"https://issuer.example.invalid/","aud":"loan-test","exp":chrono::Utc::now().timestamp()+600}), &EncodingKey::from_rsa_pem(include_bytes!("../tests/fixtures/test-only-rsa.pem")).unwrap()).unwrap()
+    }
+    async fn request(
+        app: &Router,
+        method: &str,
+        path: &str,
+        bearer: Option<&str>,
+        body: Value,
+    ) -> (StatusCode, Value) {
+        let mut request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header("content-type", "application/json")
+            .header("x-correlation-id", "contract-test");
+        if let Some(token) = bearer {
+            request = request.header("authorization", format!("Bearer {token}"));
+        }
+        let response = app
+            .clone()
+            .oneshot(request.body(Body::from(body.to_string())).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.headers()["x-correlation-id"], "contract-test");
+        let status = response.status();
+        let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+        (status, serde_json::from_slice(&body).unwrap())
+    }
     #[tokio::test]
-    async fn concurrent_last_unit_reservation_and_three_notification_flows_work() {
-        let repo = Arc::new(StatefulFakeLoanRepo::with_units(1));
-
-        // 5 concurrent reservation contenders for the 1 available unit
-        let mut handles = Vec::new();
-        for i in 0..5 {
-            let r = Arc::clone(&repo);
-            handles.push(tokio::spawn(async move {
-                let actor = AuthenticatedActor {
-                    subject: format!("auth0|student-{i}"),
-                    email: format!("student{i}@tees.ac.uk"),
-                    roles: vec![crate::domain::Role::Student],
-                };
-                r.reserve_device(actor, "dell-latitude-7440".into(), format!("corr-{i}"))
-                    .await
-            }));
-        }
-
-        let mut winners = Vec::new();
-        let mut conflicts = 0usize;
-        for h in handles {
-            match h.await.unwrap() {
-                Ok(receipt) => winners.push(receipt),
-                Err(ApplicationError::Domain(DomainError::NoAvailableUnits(_))) => conflicts += 1,
-                Err(other) => panic!("unexpected error: {other}"),
-            }
-        }
-        assert_eq!(winners.len(), 1);
-        assert_eq!(conflicts, 4);
-
-        let res_id = winners[0].reservation_id;
-
-        // Subscribe waitlisted student while 0 units available
-        let waiter = AuthenticatedActor {
-            subject: "auth0|waiter".into(),
-            email: "waiter@tees.ac.uk".into(),
-            roles: vec![crate::domain::Role::Student],
-        };
-        let sub = repo
-            .subscribe_availability(waiter.clone(), "dell-latitude-7440".into())
-            .await
-            .unwrap();
-        assert_eq!(sub.status, "ACTIVE");
-
-        // Student attempting staff collection is rejected with ForbiddenRole("staff") -> 403
-        let forbidden = repo
-            .record_collection(waiter, res_id, "corr-forbidden".into())
-            .await
-            .unwrap_err();
-        let forbidden_resp = map_app_error(forbidden, "corr-forbidden").into_response();
-        assert_eq!(forbidden_resp.status(), StatusCode::FORBIDDEN);
-
-        // Staff records collection -> 2-day due date + collection_recorded outbox event
-        let staff = AuthenticatedActor {
-            subject: "auth0|staff-1".into(),
-            email: "staff@tees.ac.uk".into(),
-            roles: vec![crate::domain::Role::Staff],
-        };
-        let collected = repo
-            .record_collection(staff.clone(), res_id, "corr-collect".into())
-            .await
-            .unwrap();
-        assert_eq!((collected.due_at - collected.collected_at).num_hours(), 48);
-
-        // Staff records return -> restores availability + emits return_recorded & availability_notification_requested
-        let returned = repo
-            .record_return(staff, res_id, "corr-return".into())
-            .await
-            .unwrap();
-        assert_eq!(returned.outbox_event_ids.len(), 2);
-
-        let outbox = repo.outbox_events.lock().unwrap();
-        assert_eq!(outbox.len(), 3);
-        assert_eq!(
-            outbox[0].event_type,
-            rc_shared::EVENT_TYPE_COLLECTION_RECORDED
+    async fn authenticated_routes_due_date_errors_and_owner_reads() {
+        let store = Arc::new(FakeStore::with_units(1));
+        let app = build_router(
+            AppState {
+                repo: store.clone(),
+                auth: Auth0JwtVerifier::with_test_jwks(),
+                environment: "test".into(),
+                service_version: "test".into(),
+            },
+            &[],
         );
-        assert_eq!(outbox[1].event_type, rc_shared::EVENT_TYPE_RETURN_RECORDED);
+        let owner = token("owner", "student");
+        let staff = token("staff", "staff");
+        let other = token("other", "student");
+        let route = "/api/v1/reservations";
         assert_eq!(
-            outbox[2].event_type,
-            rc_shared::EVENT_TYPE_AVAILABILITY_REQUESTED
+            request(&app, "POST", route, None, json!({"modelId":"model"}))
+                .await
+                .0,
+            StatusCode::UNAUTHORIZED
+        );
+        let (status, body) =
+            request(&app, "POST", route, Some(&owner), json!({"modelId":""})).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["error"], "InvalidInput");
+        let (status, body) = request(
+            &app,
+            "POST",
+            route,
+            Some(&owner),
+            json!({"modelId":"missing"}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["error"], "NotFound");
+        let (status, reservation) = request(
+            &app,
+            "POST",
+            route,
+            Some(&owner),
+            json!({"modelId":"model"}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let reserved: chrono::DateTime<chrono::Utc> =
+            reservation["reservedAt"].as_str().unwrap().parse().unwrap();
+        let due: chrono::DateTime<chrono::Utc> =
+            reservation["dueAt"].as_str().unwrap().parse().unwrap();
+        assert_eq!(due - reserved, chrono::Duration::days(2));
+        let id = reservation["reservationId"].as_str().unwrap();
+        let collect = format!("{route}/{id}/collect");
+        let ret = format!("{route}/{id}/return");
+        let (status, body) = request(&app, "POST", &collect, Some(&owner), json!({})).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["error"], "ForbiddenRole");
+        let (status, body) = request(&app, "POST", &ret, Some(&staff), json!({})).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "InvalidTransition");
+        let (status, body) = request(
+            &app,
+            "POST",
+            route,
+            Some(&other),
+            json!({"modelId":"model"}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "NoAvailableUnits");
+        let (status, sub) = request(
+            &app,
+            "POST",
+            "/api/v1/subscriptions",
+            Some(&other),
+            json!({"modelId":"model"}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let (_, duplicate) = request(
+            &app,
+            "POST",
+            "/api/v1/subscriptions",
+            Some(&other),
+            json!({"modelId":"model"}),
+        )
+        .await;
+        assert_eq!(sub["subscriptionId"], duplicate["subscriptionId"]);
+        assert_eq!(
+            request(&app, "GET", route, Some(&other), json!(null))
+                .await
+                .1,
+            json!([])
+        );
+        assert_eq!(
+            request(&app, "GET", route, Some(&owner), json!(null))
+                .await
+                .1
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            request(&app, "GET", route, Some(&staff), json!(null))
+                .await
+                .1
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        *store.clock.lock().unwrap() += chrono::Duration::hours(6);
+        let (status, collected) = request(&app, "POST", &collect, Some(&staff), json!({})).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(collected["dueAt"], reservation["dueAt"]);
+        let (status, returned) = request(&app, "POST", &ret, Some(&staff), json!({})).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(returned["outboxEventIds"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            request(&app, "POST", &ret, Some(&staff), json!({})).await.0,
+            StatusCode::CONFLICT
         );
     }
 }

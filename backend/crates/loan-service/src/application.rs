@@ -11,8 +11,9 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::domain::{
-    compute_two_day_due_at, deterministic_event_id, ensure_staff, ensure_student_or_staff,
-    AuthenticatedActor, DeviceModelSummary, DomainError,
+    compute_two_day_due_at, deterministic_event_id, ensure_can_reserve, ensure_can_subscribe,
+    ensure_staff, ensure_student_or_staff, AuthenticatedActor, DeviceModelSummary, DomainError,
+    LockedModel, Reservation, Role,
 };
 
 #[derive(Debug, Error)]
@@ -35,6 +36,7 @@ pub struct ReservationReceipt {
     pub unit_id: String,
     pub status: String,
     pub reserved_at: DateTime<Utc>,
+    pub due_at: DateTime<Utc>,
     pub correlation_id: String,
 }
 
@@ -92,6 +94,10 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub trait LoanRepositoryPort: Send + Sync {
     fn check_readiness(&self) -> BoxFuture<'_, Result<(), ApplicationError>>;
     fn list_catalogue(&self) -> BoxFuture<'_, Result<Vec<DeviceModelSummary>, ApplicationError>>;
+    fn list_reservations(
+        &self,
+        actor: AuthenticatedActor,
+    ) -> BoxFuture<'_, Result<Vec<Reservation>, ApplicationError>>;
     fn reserve_device(
         &self,
         actor: AuthenticatedActor,
@@ -182,7 +188,8 @@ pub fn build_return_outbox_events(
         device_model: device_model.to_string(),
         synthetic_probe: None,
     });
-    for subscriber in waiting_subscriber_emails {
+    let recipients: std::collections::BTreeSet<_> = waiting_subscriber_emails.iter().collect();
+    for subscriber in recipients {
         events.push(NotificationRequestV1 {
             event_id: deterministic_event_id(&format!("availability:{reservation_id}"), subscriber),
             event_type: EVENT_TYPE_AVAILABILITY_REQUESTED.to_string(),
@@ -265,9 +272,245 @@ pub fn validate_reserve_request(
     Ok(())
 }
 
-pub fn validate_staff_action(actor: &AuthenticatedActor) -> Result<DateTime<Utc>, DomainError> {
-    ensure_staff(actor)?;
-    Ok(compute_two_day_due_at(Utc::now()))
+pub fn validate_staff_action(actor: &AuthenticatedActor) -> Result<(), DomainError> {
+    ensure_staff(actor)
+}
+
+/// One application-owned atomic scope. The adapter commits only an Ok result;
+/// errors, cancellation and panic must roll back all writes in the scope.
+pub type TransactionAction<T> = Box<
+    dyn for<'tx> FnOnce(
+            &'tx mut dyn LoanTransactionPort,
+        ) -> BoxFuture<'tx, Result<T, ApplicationError>>
+        + Send,
+>;
+
+pub trait LoanStorePort: Send + Sync {
+    fn readiness(&self) -> BoxFuture<'_, Result<(), ApplicationError>>;
+    fn catalogue(&self) -> BoxFuture<'_, Result<Vec<DeviceModelSummary>, ApplicationError>>;
+    /// None is staff scope; Some(subject) MUST filter in storage, before returning rows.
+    fn reservations(
+        &self,
+        subject: Option<String>,
+    ) -> BoxFuture<'_, Result<Vec<Reservation>, ApplicationError>>;
+    fn transact<T: Send + 'static>(
+        &self,
+        action: TransactionAction<T>,
+    ) -> BoxFuture<'_, Result<T, ApplicationError>>;
+    fn now(&self) -> DateTime<Utc> {
+        DateTime::from_timestamp_micros(Utc::now().timestamp_micros())
+            .expect("current UTC timestamp")
+    }
+    fn new_id(&self) -> Uuid {
+        Uuid::new_v4()
+    }
+}
+
+/// Storage operations only. Lock order: model -> reservation/unit -> subscriptions -> outbox.
+/// lock_reservation must lock its immutable model first, then reload the reservation.
+pub trait LoanTransactionPort: Send {
+    fn lock_model(&mut self, id: String) -> BoxFuture<'_, Result<LockedModel, ApplicationError>>;
+    fn available_unit(
+        &mut self,
+        model: String,
+    ) -> BoxFuture<'_, Result<Option<String>, ApplicationError>>;
+    fn lock_reservation(
+        &mut self,
+        id: Uuid,
+    ) -> BoxFuture<'_, Result<(LockedModel, Reservation), ApplicationError>>;
+    fn insert_reservation(
+        &mut self,
+        reservation: Reservation,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>>;
+    fn upsert_subscription(
+        &mut self,
+        actor: AuthenticatedActor,
+        receipt: SubscriptionReceipt,
+    ) -> BoxFuture<'_, Result<SubscriptionReceipt, ApplicationError>>;
+    fn save_collection(
+        &mut self,
+        reservation: Reservation,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>>;
+    fn active_subscribers(
+        &mut self,
+        model: String,
+    ) -> BoxFuture<'_, Result<Vec<String>, ApplicationError>>;
+    fn save_return(
+        &mut self,
+        reservation: Reservation,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>>;
+    fn append_outbox(
+        &mut self,
+        events: Vec<NotificationRequestV1>,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>>;
+}
+
+// Both PostgreSQL and the transactional fake run these exact use cases.
+impl<S: LoanStorePort> LoanRepositoryPort for S {
+    fn check_readiness(&self) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        self.readiness()
+    }
+    fn list_catalogue(&self) -> BoxFuture<'_, Result<Vec<DeviceModelSummary>, ApplicationError>> {
+        self.catalogue()
+    }
+    fn list_reservations(
+        &self,
+        actor: AuthenticatedActor,
+    ) -> BoxFuture<'_, Result<Vec<Reservation>, ApplicationError>> {
+        Box::pin(async move {
+            ensure_student_or_staff(&actor)?;
+            let subject = if actor.has_role(&Role::Staff) {
+                None
+            } else {
+                Some(actor.subject)
+            };
+            self.reservations(subject).await
+        })
+    }
+    fn reserve_device(
+        &self,
+        actor: AuthenticatedActor,
+        model_id: String,
+        correlation_id: String,
+    ) -> BoxFuture<'_, Result<ReservationReceipt, ApplicationError>> {
+        Box::pin(async move {
+            validate_reserve_request(&actor, &model_id)?;
+            let now = self.now();
+            let id = self.new_id();
+            self.transact(Box::new(move |tx| {
+                Box::pin(async move {
+                    let model = tx.lock_model(model_id.clone()).await?;
+                    ensure_can_reserve(&model)?;
+                    let unit_id = tx
+                        .available_unit(model_id.clone())
+                        .await?
+                        .ok_or_else(|| DomainError::NoAvailableUnits(model_id.clone()))?;
+                    let due_at = compute_two_day_due_at(now);
+                    tx.insert_reservation(Reservation {
+                        reservation_id: id,
+                        model_id: model_id.clone(),
+                        unit_id: unit_id.clone(),
+                        student_sub: actor.subject,
+                        student_email: actor.email,
+                        status: "RESERVED".into(),
+                        reserved_at: now,
+                        due_at,
+                        collected_at: None,
+                        returned_at: None,
+                        correlation_id: correlation_id.clone(),
+                    })
+                    .await?;
+                    Ok(ReservationReceipt {
+                        reservation_id: id,
+                        model_id,
+                        unit_id,
+                        status: "RESERVED".into(),
+                        reserved_at: now,
+                        due_at,
+                        correlation_id,
+                    })
+                })
+            }))
+            .await
+        })
+    }
+    fn subscribe_availability(
+        &self,
+        actor: AuthenticatedActor,
+        model_id: String,
+    ) -> BoxFuture<'_, Result<SubscriptionReceipt, ApplicationError>> {
+        Box::pin(async move {
+            validate_reserve_request(&actor, &model_id)?;
+            let receipt = SubscriptionReceipt {
+                subscription_id: self.new_id(),
+                model_id: model_id.clone(),
+                status: "ACTIVE".into(),
+                created_at: self.now(),
+            };
+            self.transact(Box::new(move |tx| {
+                Box::pin(async move {
+                    let model = tx.lock_model(model_id).await?;
+                    ensure_can_subscribe(&model)?;
+                    tx.upsert_subscription(actor, receipt).await
+                })
+            }))
+            .await
+        })
+    }
+    fn record_collection(
+        &self,
+        actor: AuthenticatedActor,
+        reservation_id: Uuid,
+        correlation_id: String,
+    ) -> BoxFuture<'_, Result<CollectionReceipt, ApplicationError>> {
+        Box::pin(async move {
+            ensure_staff(&actor)?;
+            let now = self.now();
+            self.transact(Box::new(move |tx| {
+                Box::pin(async move {
+                    let (model, mut reservation) = tx.lock_reservation(reservation_id).await?;
+                    reservation.collect(now)?;
+                    let event = build_collection_outbox_event(
+                        reservation_id,
+                        &reservation.student_email,
+                        &model.name,
+                        now,
+                        &correlation_id,
+                    );
+                    let receipt = CollectionReceipt {
+                        reservation_id,
+                        unit_id: reservation.unit_id.clone(),
+                        status: reservation.status.clone(),
+                        collected_at: now,
+                        due_at: reservation.due_at,
+                        outbox_event_id: event.event_id.clone(),
+                    };
+                    tx.save_collection(reservation).await?;
+                    tx.append_outbox(vec![event]).await?;
+                    Ok(receipt)
+                })
+            }))
+            .await
+        })
+    }
+    fn record_return(
+        &self,
+        actor: AuthenticatedActor,
+        reservation_id: Uuid,
+        correlation_id: String,
+    ) -> BoxFuture<'_, Result<ReturnReceipt, ApplicationError>> {
+        Box::pin(async move {
+            ensure_staff(&actor)?;
+            let now = self.now();
+            self.transact(Box::new(move |tx| {
+                Box::pin(async move {
+                    let (model, mut reservation) = tx.lock_reservation(reservation_id).await?;
+                    reservation.return_device(now)?;
+                    let subscribers = tx.active_subscribers(model.id).await?;
+                    let events = build_return_outbox_events(
+                        reservation_id,
+                        &reservation.student_email,
+                        &subscribers,
+                        &model.name,
+                        now,
+                        &correlation_id,
+                    );
+                    let receipt = ReturnReceipt {
+                        reservation_id,
+                        model_id: reservation.model_id.clone(),
+                        unit_id: reservation.unit_id.clone(),
+                        status: reservation.status.clone(),
+                        returned_at: now,
+                        outbox_event_ids: events.iter().map(|e| e.event_id.clone()).collect(),
+                    };
+                    tx.save_return(reservation).await?;
+                    tx.append_outbox(events).await?;
+                    Ok(receipt)
+                })
+            }))
+            .await
+        })
+    }
 }
 
 #[cfg(test)]

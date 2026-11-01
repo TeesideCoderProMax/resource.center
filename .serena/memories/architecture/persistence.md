@@ -1,8 +1,7 @@
 # Persistence
-Source: backend migrations/adapters, infra/platform/data.tf and ADR 0003; reviewed 2026-11-01.
-- Loan alone owns PostgreSQL. Reservation allocation uses a transaction and row locks; collection/return transitions and notification outbox rows commit together. Notifications has no PostgreSQL credentials.
-- Current due_at is nullable at reservation and set at collection; the cloud brief requires a return date on reservation. See `mem:assessment/requirements`.
-- Notifications alone owns Cosmos jobs: /eventId partition, id = stable single-recipient eventId, conditional ETag updates and duplicate-create handling. These do not alone prove exclusive sending under concurrent duplicate requests.
-- Test Cosmos uses free-tier shared manual 400 RU/s; PostgreSQL is provisioned managed compute. Neither is scale-to-zero. Retention/TTL and replay windows still need explicit policy.
-- Queue and email lie outside PostgreSQL transactions. No distributed ACID or exactly-once email claim.
-- Stored integration evidence: `mem:cloud/phase_3_result`; test gaps: `mem:architecture/testing`.
+- Loan alone owns PostgreSQL. Application-owned transaction scopes lock model → reservation/unit → subscriptions → outbox; commit state and notification requests together. No remote calls in a SQL transaction.
+- Phase 1 schema/date/subscription rules and rollout limits: docs/backend/contracts.md. Migration 0002 preserves valid recorded dates, backfills null dates from reservation time, validates due dates and enforces only ACTIVE subscription uniqueness. It requires the matching API; old writers must drain before migration.
+- Local real PostgreSQL migration/contention/partial-write rollback tests passed: docs/backend/phase-1-handoff.md. Not deployed by this phase.
+- Notifications alone owns Cosmos jobs: /eventId partition, stable single-recipient event ID and conditional ETag writes. Exclusive concurrent sending is not yet proved; phase 2 owns leases/recovery.
+- Queue/email lie outside PostgreSQL transactions. No distributed ACID or exactly-once email. Retention/replay remains open.
+- Deployed infrastructure/evidence: `mem:cloud/plan`; test limits: `mem:architecture/testing`.

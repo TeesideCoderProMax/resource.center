@@ -13,13 +13,12 @@ use tokio_postgres::Client;
 use uuid::Uuid;
 
 use crate::application::{
-    build_collection_outbox_event, build_return_outbox_events, ApplicationError, BoxFuture,
-    ClaimedOutboxItem, CollectionReceipt, LoanRepositoryPort, OutboxStorePort, QueuePublisherPort,
-    ReservationReceipt, ReturnReceipt, SubscriptionReceipt,
+    ApplicationError, BoxFuture, ClaimedOutboxItem, LoanRepositoryPort, LoanStorePort,
+    LoanTransactionPort, OutboxStorePort, QueuePublisherPort, SubscriptionReceipt,
+    TransactionAction,
 };
 use crate::domain::{
-    compute_two_day_due_at, ensure_staff, ensure_student_or_staff, AuthenticatedActor,
-    DeviceModelSummary, DomainError, Role,
+    AuthenticatedActor, DeviceModelSummary, DomainError, LockedModel, Reservation, Role,
 };
 
 const PG_ENTRA_RESOURCE: &str = "https://ossrdbms-aad.database.windows.net";
@@ -120,6 +119,11 @@ impl PostgresAdapter {
             .await
             .map_err(|e| ApplicationError::Persistence(format!("begin migration tx: {e}")))?;
 
+        tx.batch_execute(
+            "SELECT pg_advisory_xact_lock(73102401); CREATE SCHEMA IF NOT EXISTS loan;",
+        )
+        .await
+        .map_err(pg_error)?;
         tx.batch_execute(MIGRATION_0001_SQL)
             .await
             .map_err(|e| ApplicationError::Persistence(format!("migration 0001 failed: {e}")))?;
@@ -130,6 +134,11 @@ impl PostgresAdapter {
         )
         .await
         .map_err(|e| ApplicationError::Persistence(format!("record migration version: {e}")))?;
+
+        if tx.query_opt("SELECT version FROM loan.schema_migrations WHERE version = '0002_reservation_due_dates'", &[]).await.map_err(pg_error)?.is_none() {
+            tx.batch_execute(include_str!("../migrations/0002_reservation_due_dates.sql")).await.map_err(pg_error)?;
+            tx.execute("INSERT INTO loan.schema_migrations(version) VALUES ('0002_reservation_due_dates')", &[]).await.map_err(pg_error)?;
+        }
 
         if let Some(ref pub_role) = self.cfg.publisher_role_name {
             let escaped_ident = pub_role.replace('"', "\"\"");
@@ -199,7 +208,7 @@ impl PostgresAdapter {
     ///    1 `RESERVED`, 4 `NoAvailableUnits`, `available_units == 0`).
     /// 2. Availability subscription while `available_units == 0` -> `ACTIVE` subscription.
     /// 3. Role-based access control rejection (`ForbiddenRole("staff")` when a student attempts collection).
-    /// 4. Staff collection -> 2-day due date (`due_at - collected_at == 48h`) + atomic `loan.collection_recorded`
+    /// 4. Staff collection -> 2-day due date (`due_at - reserved_at == 48h`) + atomic `loan.collection_recorded`
     ///    outbox event (`syntheticProbe: true`).
     /// 5. Publisher crash-window lease expiry recovery on `loan.outbox_events` (`claimed_until` expiry
     ///    re-claimed cleanly with incremented `attempt_count`).
@@ -321,7 +330,7 @@ impl PostgresAdapter {
             )
             .await?;
 
-        let loan_hours = (collection.due_at - collection.collected_at).num_hours();
+        let loan_hours = (collection.due_at - winning_reservation.reserved_at).num_hours();
         if loan_hours != 48 {
             return Err(ApplicationError::Persistence(format!(
                 "expected 48h loan duration, got {loan_hours}h"
@@ -449,8 +458,8 @@ impl PostgresAdapter {
     }
 }
 
-impl LoanRepositoryPort for PostgresAdapter {
-    fn check_readiness(&self) -> BoxFuture<'_, Result<(), ApplicationError>> {
+impl LoanStorePort for PostgresAdapter {
+    fn readiness(&self) -> BoxFuture<'_, Result<(), ApplicationError>> {
         Box::pin(async move {
             let (client, _permit) = self.connect_client().await?;
             let row = client
@@ -472,7 +481,7 @@ impl LoanRepositoryPort for PostgresAdapter {
         })
     }
 
-    fn list_catalogue(&self) -> BoxFuture<'_, Result<Vec<DeviceModelSummary>, ApplicationError>> {
+    fn catalogue(&self) -> BoxFuture<'_, Result<Vec<DeviceModelSummary>, ApplicationError>> {
         Box::pin(async move {
             let (client, _permit) = self.connect_client().await?;
             let rows = client
@@ -501,411 +510,179 @@ impl LoanRepositoryPort for PostgresAdapter {
         })
     }
 
-    fn reserve_device(
+    fn reservations(
         &self,
-        actor: AuthenticatedActor,
-        model_id: String,
-        correlation_id: String,
-    ) -> BoxFuture<'_, Result<ReservationReceipt, ApplicationError>> {
+        subject: Option<String>,
+    ) -> BoxFuture<'_, Result<Vec<Reservation>, ApplicationError>> {
         Box::pin(async move {
-            ensure_student_or_staff(&actor)?;
+            let (client, _permit) = self.connect_client().await?;
+            let rows = client.query("SELECT * FROM loan.reservations WHERE ($1::text IS NULL OR student_sub = $1) ORDER BY reserved_at DESC, reservation_id LIMIT 200", &[&subject]).await.map_err(pg_error)?;
+            Ok(rows.iter().map(reservation_from_row).collect())
+        })
+    }
+    fn transact<T: Send + 'static>(
+        &self,
+        action: TransactionAction<T>,
+    ) -> BoxFuture<'_, Result<T, ApplicationError>> {
+        Box::pin(async move {
             let (mut client, _permit) = self.connect_client().await?;
-            let tx = client
-                .transaction()
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("begin reserve tx: {e}")))?;
+            let tx = client.transaction().await.map_err(pg_error)?;
+            let mut scope = PostgresLoanTransaction { tx };
+            let result = action(&mut scope).await?;
+            scope.tx.commit().await.map_err(pg_error)?;
+            Ok(result)
+        })
+    }
+}
 
-            // Lock model row for atomic allocation check
-            let model_row = tx
+fn pg_error(error: tokio_postgres::Error) -> ApplicationError {
+    ApplicationError::Persistence(error.to_string())
+}
+
+fn reservation_from_row(row: &tokio_postgres::Row) -> Reservation {
+    Reservation {
+        reservation_id: row.get("reservation_id"),
+        model_id: row.get("model_id"),
+        unit_id: row.get("unit_id"),
+        student_sub: row.get("student_sub"),
+        student_email: row.get("student_email"),
+        status: row.get("status"),
+        reserved_at: row.get("reserved_at"),
+        due_at: row.get("due_at"),
+        collected_at: row.get("collected_at"),
+        returned_at: row.get("returned_at"),
+        correlation_id: row.get("correlation_id"),
+    }
+}
+
+struct PostgresLoanTransaction<'a> {
+    tx: tokio_postgres::Transaction<'a>,
+}
+
+impl LoanTransactionPort for PostgresLoanTransaction<'_> {
+    fn lock_model(&mut self, id: String) -> BoxFuture<'_, Result<LockedModel, ApplicationError>> {
+        Box::pin(async move {
+            let row = self
+                .tx
                 .query_opt(
-                    "SELECT available_units FROM loan.device_models WHERE id = $1 FOR UPDATE",
-                    &[&model_id],
+                    "SELECT name, available_units FROM loan.device_models WHERE id = $1 FOR UPDATE",
+                    &[&id],
                 )
                 .await
-                .map_err(|e| ApplicationError::Persistence(format!("lock model row: {e}")))?;
-
-            let Some(model_row) = model_row else {
-                return Err(ApplicationError::NotFound(format!(
-                    "device model {model_id}"
-                )));
-            };
-            let available: i32 = model_row.get(0);
-            if available <= 0 {
-                return Err(ApplicationError::Domain(DomainError::NoAvailableUnits(
-                    model_id,
-                )));
-            }
-
-            let unit_row = tx
-                .query_opt(
-                    "SELECT unit_id FROM loan.device_units
-                     WHERE model_id = $1 AND status = 'AVAILABLE'
-                     ORDER BY unit_id ASC
-                     LIMIT 1
-                     FOR UPDATE SKIP LOCKED",
-                    &[&model_id],
-                )
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("lock unit row: {e}")))?;
-
-            let Some(unit_row) = unit_row else {
-                return Err(ApplicationError::Domain(DomainError::NoAvailableUnits(
-                    model_id,
-                )));
-            };
-            let unit_id: String = unit_row.get(0);
-            let reservation_id = Uuid::new_v4();
-            let reserved_at = Utc::now();
-
-            tx.execute(
-                "UPDATE loan.device_units SET status = 'RESERVED', updated_at = $2 WHERE unit_id = $1",
-                &[&unit_id, &reserved_at],
-            )
-            .await
-            .map_err(|e| ApplicationError::Persistence(format!("update unit status: {e}")))?;
-
-            tx.execute(
-                "UPDATE loan.device_models SET available_units = available_units - 1, updated_at = $2 WHERE id = $1",
-                &[&model_id, &reserved_at],
-            )
-            .await
-            .map_err(|e| ApplicationError::Persistence(format!("decrement available_units: {e}")))?;
-
-            tx.execute(
-                "INSERT INTO loan.reservations (reservation_id, model_id, unit_id, student_sub, student_email, status, reserved_at, correlation_id)
-                 VALUES ($1, $2, $3, $4, $5, 'RESERVED', $6, $7)",
-                &[
-                    &reservation_id,
-                    &model_id,
-                    &unit_id,
-                    &actor.subject,
-                    &actor.email,
-                    &reserved_at,
-                    &correlation_id,
-                ],
-            )
-            .await
-            .map_err(|e| ApplicationError::Persistence(format!("insert reservation: {e}")))?;
-
-            tx.commit()
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("commit reserve tx: {e}")))?;
-
-            Ok(ReservationReceipt {
-                reservation_id,
-                model_id,
-                unit_id,
-                status: "RESERVED".to_string(),
-                reserved_at,
-                correlation_id,
+                .map_err(pg_error)?
+                .ok_or_else(|| ApplicationError::NotFound(format!("device model {id}")))?;
+            Ok(LockedModel {
+                id,
+                name: row.get(0),
+                available_units: row.get(1),
             })
         })
     }
-
-    fn subscribe_availability(
-        &self,
+    fn available_unit(
+        &mut self,
+        model: String,
+    ) -> BoxFuture<'_, Result<Option<String>, ApplicationError>> {
+        Box::pin(async move {
+            Ok(self.tx.query_opt("SELECT unit_id FROM loan.device_units WHERE model_id = $1 AND status = 'AVAILABLE' ORDER BY unit_id LIMIT 1 FOR UPDATE", &[&model]).await.map_err(pg_error)?.map(|r| r.get(0)))
+        })
+    }
+    fn lock_reservation(
+        &mut self,
+        id: Uuid,
+    ) -> BoxFuture<'_, Result<(LockedModel, Reservation), ApplicationError>> {
+        Box::pin(async move {
+            // The model reference is immutable. No decision uses this unlocked read.
+            let row = self
+                .tx
+                .query_opt(
+                    "SELECT model_id FROM loan.reservations WHERE reservation_id = $1",
+                    &[&id],
+                )
+                .await
+                .map_err(pg_error)?
+                .ok_or_else(|| ApplicationError::NotFound(format!("reservation {id}")))?;
+            let model = self.lock_model(row.get(0)).await?;
+            let row = self
+                .tx
+                .query_opt(
+                    "SELECT * FROM loan.reservations WHERE reservation_id = $1 FOR UPDATE",
+                    &[&id],
+                )
+                .await
+                .map_err(pg_error)?
+                .ok_or_else(|| ApplicationError::NotFound(format!("reservation {id}")))?;
+            let unit: String = row.get("unit_id");
+            self.tx
+                .query_one(
+                    "SELECT unit_id FROM loan.device_units WHERE unit_id=$1 FOR UPDATE",
+                    &[&unit],
+                )
+                .await
+                .map_err(pg_error)?;
+            Ok((model, reservation_from_row(&row)))
+        })
+    }
+    fn insert_reservation(
+        &mut self,
+        r: Reservation,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            self.tx.execute("UPDATE loan.device_units SET status = 'RESERVED', updated_at = $2 WHERE unit_id = $1", &[&r.unit_id, &r.reserved_at]).await.map_err(pg_error)?;
+            self.tx.execute("UPDATE loan.device_models SET available_units = available_units - 1, updated_at = $2 WHERE id = $1", &[&r.model_id, &r.reserved_at]).await.map_err(pg_error)?;
+            self.tx.execute("INSERT INTO loan.reservations (reservation_id, model_id, unit_id, student_sub, student_email, status, reserved_at, due_at, correlation_id) VALUES ($1,$2,$3,$4,$5,'RESERVED',$6,$7,$8)", &[&r.reservation_id, &r.model_id, &r.unit_id, &r.student_sub, &r.student_email, &r.reserved_at, &r.due_at, &r.correlation_id]).await.map_err(pg_error)?;
+            Ok(())
+        })
+    }
+    fn upsert_subscription(
+        &mut self,
         actor: AuthenticatedActor,
-        model_id: String,
+        receipt: SubscriptionReceipt,
     ) -> BoxFuture<'_, Result<SubscriptionReceipt, ApplicationError>> {
         Box::pin(async move {
-            ensure_student_or_staff(&actor)?;
-            let (mut client, _permit) = self.connect_client().await?;
-            let tx = client
-                .transaction()
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("begin subscribe tx: {e}")))?;
-
-            let model_row = tx
-                .query_opt(
-                    "SELECT available_units FROM loan.device_models WHERE id = $1",
-                    &[&model_id],
-                )
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("lookup model: {e}")))?;
-
-            let Some(model_row) = model_row else {
-                return Err(ApplicationError::NotFound(format!(
-                    "device model {model_id}"
-                )));
-            };
-            let available: i32 = model_row.get(0);
-            if available > 0 {
-                return Err(ApplicationError::Domain(
-                    DomainError::UnitsCurrentlyAvailable(model_id),
-                ));
-            }
-
-            let subscription_id = Uuid::new_v4();
-            let created_at = Utc::now();
-
-            let row = tx
-                .query_one(
-                    "INSERT INTO loan.availability_subscriptions (subscription_id, model_id, student_sub, student_email, status, created_at)
-                     VALUES ($1, $2, $3, $4, 'ACTIVE', $5)
-                     ON CONFLICT (model_id, student_sub, status)
-                     DO UPDATE SET student_email = EXCLUDED.student_email
-                     RETURNING subscription_id, created_at",
-                    &[
-                        &subscription_id,
-                        &model_id,
-                        &actor.subject,
-                        &actor.email,
-                        &created_at,
-                    ],
-                )
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("upsert subscription: {e}")))?;
-
-            tx.commit()
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("commit subscribe tx: {e}")))?;
-
+            let row = self.tx.query_one("INSERT INTO loan.availability_subscriptions (subscription_id, model_id, student_sub, student_email, status, created_at) VALUES ($1,$2,$3,$4,'ACTIVE',$5) ON CONFLICT (model_id, student_sub) WHERE status = 'ACTIVE' DO UPDATE SET student_email = EXCLUDED.student_email RETURNING subscription_id, created_at", &[&receipt.subscription_id, &receipt.model_id, &actor.subject, &actor.email, &receipt.created_at]).await.map_err(pg_error)?;
             Ok(SubscriptionReceipt {
                 subscription_id: row.get(0),
-                model_id,
-                status: "ACTIVE".to_string(),
                 created_at: row.get(1),
+                ..receipt
             })
         })
     }
-
-    fn record_collection(
-        &self,
-        actor: AuthenticatedActor,
-        reservation_id: Uuid,
-        correlation_id: String,
-    ) -> BoxFuture<'_, Result<CollectionReceipt, ApplicationError>> {
+    fn save_collection(&mut self, r: Reservation) -> BoxFuture<'_, Result<(), ApplicationError>> {
         Box::pin(async move {
-            ensure_staff(&actor)?;
-            let (mut client, _permit) = self.connect_client().await?;
-            let tx = client
-                .transaction()
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("begin collect tx: {e}")))?;
-
-            let res_row = tx
-                .query_opt(
-                    "SELECT r.model_id, r.unit_id, r.student_email, r.status, m.name
-                     FROM loan.reservations r
-                     JOIN loan.device_models m ON m.id = r.model_id
-                     WHERE r.reservation_id = $1
-                     FOR UPDATE OF r",
-                    &[&reservation_id],
-                )
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("lock reservation: {e}")))?;
-
-            let Some(res_row) = res_row else {
-                return Err(ApplicationError::NotFound(format!(
-                    "reservation {reservation_id}"
-                )));
-            };
-
-            let unit_id: String = res_row.get(1);
-            let student_email: String = res_row.get(2);
-            let current_status: String = res_row.get(3);
-            let model_name: String = res_row.get(4);
-
-            if current_status != "RESERVED" {
-                return Err(ApplicationError::Domain(DomainError::InvalidTransition {
-                    from: current_status,
-                    to: "COLLECTED".to_string(),
-                }));
-            }
-
-            let collected_at = Utc::now();
-            let due_at = compute_two_day_due_at(collected_at);
-
-            tx.execute(
-                "UPDATE loan.reservations
-                 SET status = 'COLLECTED', collected_at = $2, due_at = $3
-                 WHERE reservation_id = $1",
-                &[&reservation_id, &collected_at, &due_at],
-            )
-            .await
-            .map_err(|e| ApplicationError::Persistence(format!("update reservation: {e}")))?;
-
-            tx.execute(
-                "UPDATE loan.device_units SET status = 'COLLECTED', updated_at = $2 WHERE unit_id = $1",
-                &[&unit_id, &collected_at],
-            )
-            .await
-            .map_err(|e| ApplicationError::Persistence(format!("update unit collected: {e}")))?;
-
-            let outbox_evt = build_collection_outbox_event(
-                reservation_id,
-                &student_email,
-                &model_name,
-                collected_at,
-                &correlation_id,
-            );
-            let payload_json = serde_json::to_value(&outbox_evt)
-                .map_err(|e| ApplicationError::Persistence(e.to_string()))?;
-
-            tx.execute(
-                "INSERT INTO loan.outbox_events (event_id, event_type, contract_version, occurred_at, correlation_id, payload, status)
-                 VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')
-                 ON CONFLICT (event_id) DO NOTHING",
-                &[
-                    &outbox_evt.event_id,
-                    &outbox_evt.event_type,
-                    &(outbox_evt.version as i32),
-                    &outbox_evt.occurred_at,
-                    &outbox_evt.correlation_id,
-                    &payload_json,
-                ],
-            )
-            .await
-            .map_err(|e| ApplicationError::Persistence(format!("insert collection outbox: {e}")))?;
-
-            tx.commit()
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("commit collect tx: {e}")))?;
-
-            Ok(CollectionReceipt {
-                reservation_id,
-                unit_id,
-                status: "COLLECTED".to_string(),
-                collected_at,
-                due_at,
-                outbox_event_id: outbox_evt.event_id,
-            })
+            self.tx.execute("UPDATE loan.reservations SET status = $2, collected_at = $3 WHERE reservation_id = $1", &[&r.reservation_id, &r.status, &r.collected_at]).await.map_err(pg_error)?;
+            self.tx.execute("UPDATE loan.device_units SET status = 'COLLECTED', updated_at = $2 WHERE unit_id = $1", &[&r.unit_id, &r.collected_at]).await.map_err(pg_error)?;
+            Ok(())
         })
     }
-
-    fn record_return(
-        &self,
-        actor: AuthenticatedActor,
-        reservation_id: Uuid,
-        correlation_id: String,
-    ) -> BoxFuture<'_, Result<ReturnReceipt, ApplicationError>> {
+    fn active_subscribers(
+        &mut self,
+        model: String,
+    ) -> BoxFuture<'_, Result<Vec<String>, ApplicationError>> {
         Box::pin(async move {
-            ensure_staff(&actor)?;
-            let (mut client, _permit) = self.connect_client().await?;
-            let tx = client
-                .transaction()
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("begin return tx: {e}")))?;
-
-            let res_row = tx
-                .query_opt(
-                    "SELECT r.model_id, r.unit_id, r.student_email, r.status, m.name
-                     FROM loan.reservations r
-                     JOIN loan.device_models m ON m.id = r.model_id
-                     WHERE r.reservation_id = $1
-                     FOR UPDATE OF r",
-                    &[&reservation_id],
-                )
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("lock reservation: {e}")))?;
-
-            let Some(res_row) = res_row else {
-                return Err(ApplicationError::NotFound(format!(
-                    "reservation {reservation_id}"
-                )));
-            };
-
-            let model_id: String = res_row.get(0);
-            let unit_id: String = res_row.get(1);
-            let borrower_email: String = res_row.get(2);
-            let current_status: String = res_row.get(3);
-            let model_name: String = res_row.get(4);
-
-            if current_status != "COLLECTED" && current_status != "RESERVED" {
-                return Err(ApplicationError::Domain(DomainError::InvalidTransition {
-                    from: current_status,
-                    to: "RETURNED".to_string(),
-                }));
-            }
-
-            let returned_at = Utc::now();
-
-            tx.execute(
-                "UPDATE loan.reservations
-                 SET status = 'RETURNED', returned_at = $2
-                 WHERE reservation_id = $1",
-                &[&reservation_id, &returned_at],
-            )
-            .await
-            .map_err(|e| {
-                ApplicationError::Persistence(format!("update reservation return: {e}"))
-            })?;
-
-            tx.execute(
-                "UPDATE loan.device_units SET status = 'AVAILABLE', updated_at = $2 WHERE unit_id = $1",
-                &[&unit_id, &returned_at],
-            )
-            .await
-            .map_err(|e| ApplicationError::Persistence(format!("update unit available: {e}")))?;
-
-            tx.execute(
-                "UPDATE loan.device_models SET available_units = available_units + 1, updated_at = $2 WHERE id = $1",
-                &[&model_id, &returned_at],
-            )
-            .await
-            .map_err(|e| ApplicationError::Persistence(format!("increment available_units: {e}")))?;
-
-            // Select eligible waiting subscribers atomically in Loan
-            let sub_rows = tx
-                .query(
-                    "UPDATE loan.availability_subscriptions
-                     SET status = 'NOTIFIED', notified_at = $2
-                     WHERE subscription_id IN (
-                         SELECT subscription_id FROM loan.availability_subscriptions
-                         WHERE model_id = $1 AND status = 'ACTIVE'
-                         ORDER BY created_at ASC
-                         FOR UPDATE SKIP LOCKED
-                     )
-                     RETURNING student_email",
-                    &[&model_id, &returned_at],
-                )
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("claim subscriptions: {e}")))?;
-
-            let subscriber_emails: Vec<String> = sub_rows.into_iter().map(|r| r.get(0)).collect();
-            let outbox_events = build_return_outbox_events(
-                reservation_id,
-                &borrower_email,
-                &subscriber_emails,
-                &model_name,
-                returned_at,
-                &correlation_id,
-            );
-
-            let mut outbox_event_ids = Vec::with_capacity(outbox_events.len());
-            for evt in outbox_events {
-                let payload_json = serde_json::to_value(&evt)
+            let rows = self.tx.query("SELECT student_email FROM loan.availability_subscriptions WHERE model_id = $1 AND status = 'ACTIVE' ORDER BY subscription_id FOR UPDATE", &[&model]).await.map_err(pg_error)?;
+            Ok(rows.iter().map(|r| r.get(0)).collect())
+        })
+    }
+    fn save_return(&mut self, r: Reservation) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            self.tx.execute("UPDATE loan.reservations SET status = $2, returned_at = $3 WHERE reservation_id = $1", &[&r.reservation_id, &r.status, &r.returned_at]).await.map_err(pg_error)?;
+            self.tx.execute("UPDATE loan.device_units SET status = 'AVAILABLE', updated_at = $2 WHERE unit_id = $1", &[&r.unit_id, &r.returned_at]).await.map_err(pg_error)?;
+            self.tx.execute("UPDATE loan.device_models SET available_units = available_units + 1, updated_at = $2 WHERE id = $1", &[&r.model_id, &r.returned_at]).await.map_err(pg_error)?;
+            self.tx.execute("UPDATE loan.availability_subscriptions SET status = 'NOTIFIED', notified_at = $2 WHERE model_id = $1 AND status = 'ACTIVE'", &[&r.model_id, &r.returned_at]).await.map_err(pg_error)?;
+            Ok(())
+        })
+    }
+    fn append_outbox(
+        &mut self,
+        events: Vec<NotificationRequestV1>,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            for e in events {
+                let payload = serde_json::to_value(&e)
                     .map_err(|e| ApplicationError::Persistence(e.to_string()))?;
-                tx.execute(
-                    "INSERT INTO loan.outbox_events (event_id, event_type, contract_version, occurred_at, correlation_id, payload, status)
-                     VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')
-                     ON CONFLICT (event_id) DO NOTHING",
-                    &[
-                        &evt.event_id,
-                        &evt.event_type,
-                        &(evt.version as i32),
-                        &evt.occurred_at,
-                        &evt.correlation_id,
-                        &payload_json,
-                    ],
-                )
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("insert return outbox: {e}")))?;
-                outbox_event_ids.push(evt.event_id);
+                self.tx.execute("INSERT INTO loan.outbox_events (event_id,event_type,contract_version,occurred_at,correlation_id,payload) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (event_id) DO NOTHING", &[&e.event_id, &e.event_type, &(e.version as i32), &e.occurred_at, &e.correlation_id, &payload]).await.map_err(pg_error)?;
             }
-
-            tx.commit()
-                .await
-                .map_err(|e| ApplicationError::Persistence(format!("commit return tx: {e}")))?;
-
-            Ok(ReturnReceipt {
-                reservation_id,
-                unit_id,
-                model_id,
-                status: "RETURNED".to_string(),
-                returned_at,
-                outbox_event_ids,
-            })
+            Ok(())
         })
     }
 }
@@ -1129,6 +906,20 @@ pub enum AuthVerifyError {
 }
 
 impl Auth0JwtVerifier {
+    #[cfg(test)]
+    pub fn with_test_jwks() -> Self {
+        Self {
+            issuer: Some("https://issuer.example.invalid/".into()),
+            audience: Some("loan-test".into()),
+            role_claim: "roles".into(),
+            http: reqwest::Client::new(),
+            jwks_cache: Arc::new(RwLock::new(Some((
+                serde_json::from_str(include_str!("../tests/fixtures/jwks.json")).unwrap(),
+                Instant::now() + Duration::from_secs(600),
+            )))),
+        }
+    }
+
     pub fn from_env() -> Self {
         let issuer = std::env::var("AUTH0_ISSUER")
             .ok()
@@ -1208,15 +999,11 @@ impl Auth0JwtVerifier {
                 for item in arr {
                     if let Some(r) = item.as_str() {
                         match r.to_ascii_lowercase().as_str() {
-                            "student" => {
-                                if !roles.contains(&Role::Student) {
-                                    roles.push(Role::Student);
-                                }
+                            "student" if !roles.contains(&Role::Student) => {
+                                roles.push(Role::Student);
                             }
-                            "staff" => {
-                                if !roles.contains(&Role::Staff) {
-                                    roles.push(Role::Staff);
-                                }
+                            "staff" if !roles.contains(&Role::Staff) => {
+                                roles.push(Role::Staff);
                             }
                             _ => {}
                         }

@@ -1,6 +1,6 @@
 # Phase 1 — Loan rules and atomic transactions
 
-Status: **planned**. One isolated implementation chat. Follow the shared rules and handoff format in `docs/backend/README.md`.
+Status: **implemented and verified locally, 2026-11-01**. Tutor approval status is unknown; deployment remains pending. See [handoff](phase-1-handoff.md). Original work/check list follows. One isolated implementation chat. Follow the shared rules and handoff format in `docs/backend/README.md`.
 
 ## Goal and entry context
 

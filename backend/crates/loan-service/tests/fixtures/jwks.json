@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "kid": "phase1-test",
+      "use": "sig",
+      "alg": "RS256",
+      "n": "0GeK8rFv8KZ8Zf0GDqAoC7ZkVPsjkEnWP9tp6qdWKAu0WDWu75dYn2lf7JSvRr_QDXBd37RjrVlmfayMyFrX6Bs2e9WvlUeAaN5A6umm5K1oob44f9dy6c_BjEW6r-W-fisHEYkrZ0fO9OpI47LiYOeWmiQuMHtRi4Pls3P_wE5yMvzcceezJR_6SLOu-uO8S6i4s_Ojy_UUq2kOn6jMfqg1mBUt3oTUVdOmzEVh-v8H1joX2Vo6so8aJYcOO5-ebrP2bUynu77kMVKM6Nt999l26x0HmpUG6y3Z1ouffiD6tFyIxNhKaTdQGRNXNs0z5wB6aU8E-Fp5IF33EIlESw",
+      "e": "AQAB"
+    }
+  ]
+}
