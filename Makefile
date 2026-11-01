@@ -43,3 +43,7 @@ infra-init infra-plan infra-apply:
 	@test -n "$(ENV)" -a -n "$(ROOT)" || (echo 'Set ENV and ROOT=bootstrap|platform|workloads'; exit 2)
 	./infra/scripts/terraform.sh $(patsubst infra-%,%,$@) "$(ROOT)" "$(ENV)"
 
+
+.PHONY: backend-test-postgres
+backend-test-postgres:
+	./backend/scripts/test-postgres.sh

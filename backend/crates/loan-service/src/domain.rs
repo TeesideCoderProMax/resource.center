@@ -52,9 +52,9 @@ pub enum DomainError {
     InvalidInput(&'static str),
 }
 
-/// Computes the two-day return due timestamp when staff records a device collection.
-pub fn compute_two_day_due_at(collected_at: DateTime<Utc>) -> DateTime<Utc> {
-    collected_at + Duration::days(STANDARD_LOAN_DURATION_DAYS)
+/// Computes the two-day return due timestamp from the reservation timestamp.
+pub fn compute_two_day_due_at(reserved_at: DateTime<Utc>) -> DateTime<Utc> {
+    reserved_at + Duration::days(STANDARD_LOAN_DURATION_DAYS)
 }
 
 /// Validates that an actor is authorized to reserve a device or subscribe to alerts.
@@ -119,5 +119,68 @@ mod tests {
         let c = deterministic_event_id("return:res-1", "other@tees.ac.uk");
         assert_eq!(a, b);
         assert_ne!(a, c);
+    }
+}
+
+/// Snapshot loaded under the model lock. These values never come from HTTP callers.
+#[derive(Debug, Clone)]
+pub struct LockedModel {
+    pub id: String,
+    pub name: String,
+    pub available_units: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Reservation {
+    pub reservation_id: Uuid,
+    pub model_id: String,
+    pub unit_id: String,
+    pub student_sub: String,
+    pub student_email: String,
+    pub status: String,
+    pub reserved_at: DateTime<Utc>,
+    pub due_at: DateTime<Utc>,
+    pub collected_at: Option<DateTime<Utc>>,
+    pub returned_at: Option<DateTime<Utc>>,
+    pub correlation_id: String,
+}
+
+pub fn ensure_can_reserve(model: &LockedModel) -> Result<(), DomainError> {
+    if model.available_units <= 0 {
+        return Err(DomainError::NoAvailableUnits(model.id.clone()));
+    }
+    Ok(())
+}
+
+pub fn ensure_can_subscribe(model: &LockedModel) -> Result<(), DomainError> {
+    if model.available_units > 0 {
+        return Err(DomainError::UnitsCurrentlyAvailable(model.id.clone()));
+    }
+    Ok(())
+}
+
+impl Reservation {
+    pub fn collect(&mut self, now: DateTime<Utc>) -> Result<(), DomainError> {
+        self.transition("RESERVED", "COLLECTED")?;
+        self.collected_at = Some(now);
+        Ok(())
+    }
+
+    pub fn return_device(&mut self, now: DateTime<Utc>) -> Result<(), DomainError> {
+        self.transition("COLLECTED", "RETURNED")?;
+        self.returned_at = Some(now);
+        Ok(())
+    }
+
+    fn transition(&mut self, from: &str, to: &str) -> Result<(), DomainError> {
+        if self.status != from {
+            return Err(DomainError::InvalidTransition {
+                from: self.status.clone(),
+                to: to.into(),
+            });
+        }
+        self.status = to.into();
+        Ok(())
     }
 }
