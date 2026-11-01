@@ -1,0 +1,94 @@
+{
+  "backend_image": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rctest0330980facr.azurecr.io/rc-backend@sha256:28ae9ffebf54b256c0ebe12a03700ae6a204c1763b702b5763278a3f311ab09a"
+  },
+  "environment": {
+    "sensitive": false,
+    "type": "string",
+    "value": "test"
+  },
+  "loan_api_fqdn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rc-test-0330980f-loan-api.livelywave-2cc0564d.francecentral.azurecontainerapps.io"
+  },
+  "loan_api_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rc-test-0330980f-loan-api"
+  },
+  "loan_api_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://rc-test-0330980f-loan-api.livelywave-2cc0564d.francecentral.azurecontainerapps.io"
+  },
+  "loan_migrations_job_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rc-test-0330980f-migrations"
+  },
+  "loan_publisher_job_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rc-test-0330980f-loan-publisher"
+  },
+  "metric_alert_ids": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "job_failures": "string",
+        "loan_api_5xx": "string",
+        "postgres_health": "string",
+        "postgres_pressure": "string",
+        "servicebus_backlog": "string",
+        "servicebus_dlq": "string"
+      }
+    ],
+    "value": {
+      "job_failures": "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-workloads-rg/providers/Microsoft.Insights/metricAlerts/rc-test-0330980f-job-failures-alert",
+      "loan_api_5xx": "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-workloads-rg/providers/Microsoft.Insights/metricAlerts/rc-test-0330980f-loan-api-5xx-alert",
+      "postgres_health": "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-workloads-rg/providers/Microsoft.Insights/metricAlerts/rc-test-0330980f-postgres-health-alert",
+      "postgres_pressure": "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-workloads-rg/providers/Microsoft.Insights/metricAlerts/rc-test-0330980f-postgres-pressure-alert",
+      "servicebus_backlog": "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-workloads-rg/providers/Microsoft.Insights/metricAlerts/rc-test-0330980f-servicebus-backlog-alert",
+      "servicebus_dlq": "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-workloads-rg/providers/Microsoft.Insights/metricAlerts/rc-test-0330980f-servicebus-dlq-alert"
+    }
+  },
+  "notifications_worker_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rc-test-0330980f-notifications"
+  },
+  "ops_action_group_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-workloads-rg/providers/Microsoft.Insights/actionGroups/rc-test-0330980f-ops-ag"
+  },
+  "resource_group_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rc-test-0330980f-workloads-rg"
+  },
+  "web_app_fqdn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rc-test-0330980f-web.livelywave-2cc0564d.francecentral.azurecontainerapps.io"
+  },
+  "web_app_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rc-test-0330980f-web"
+  },
+  "web_app_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://rc-test-0330980f-web.livelywave-2cc0564d.francecentral.azurecontainerapps.io"
+  },
+  "web_image": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rctest0330980facr.azurecr.io/rc-web@sha256:c01bb79aff68d6268812083430f6091d37614f65a764e8b17c51b8d4bc9fdee0"
+  }
+}
