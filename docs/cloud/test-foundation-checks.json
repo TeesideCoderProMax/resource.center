@@ -1,0 +1,44 @@
+{
+  "bootstrap": [
+    {
+      "name": "rc-test-check-bootstrap-2s3kwgv",
+      "status": "Succeeded"
+    }
+  ],
+  "migrations": [
+    {
+      "name": "rc-test-check-migrations-kl8gwej",
+      "status": "Succeeded"
+    }
+  ],
+  "loan": [
+    {
+      "name": "rc-test-check-loan-e1gs40p",
+      "status": "Succeeded"
+    }
+  ],
+  "publisher": [
+    {
+      "name": "rc-test-check-publisher-8vy4m72",
+      "status": "Succeeded"
+    }
+  ],
+  "notifications": [
+    {
+      "name": "rc-test-check-notifications-thjeeso",
+      "status": "Succeeded"
+    }
+  ],
+  "deploy": [
+    {
+      "name": "rc-test-check-deploy-s3vvcg3",
+      "status": "Succeeded"
+    }
+  ],
+  "cleanup": [
+    {
+      "name": "rc-test-check-cleanup-y0jcqzp",
+      "status": "Succeeded"
+    }
+  ]
+}
