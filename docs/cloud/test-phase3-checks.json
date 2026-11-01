@@ -1,0 +1,135 @@
+{
+  "checkedAtUtc": "2026-11-01T12:09:13Z",
+  "environment": "test",
+  "location": "francecentral",
+  "subscriptionId": "0330980f-85ea-4b38-8b9e-c871432c9d4f",
+  "tenantId": "43d2115b-a55e-46b6-9df7-b03388ecfc60",
+  "ciCdAndPromotion": {
+    "ciWorkflow": ".github/workflows/ci.yml",
+    "deployWorkflow": ".github/workflows/deploy.yml",
+    "makefileTargetsVerified": [
+      "check",
+      "backend-fmt",
+      "backend-lint",
+      "backend-test",
+      "frontend-typecheck",
+      "frontend-build",
+      "frontend-audit",
+      "docker-build",
+      "smoke-test",
+      "infra-fmt",
+      "infra-validate"
+    ],
+    "localCheckResult": {
+      "rustTests": "10 passed (rc-shared: 1, loan-service: 5, notifications-worker: 4)",
+      "frontendBuildAndTypecheck": "passed (Next.js 16.4.3 standalone)",
+      "frontendAudit": "0 vulnerabilities",
+      "terraformValidate": "valid across test, staging, and production (bootstrap, platform, workloads)"
+    },
+    "environmentParameterization": {
+      "test": "infra/environments/test/*.example (deployed & verified)",
+      "staging": "infra/environments/staging/*.example (parameterized, Cosmos serverless, seed_demo_data=false, gated promotion via GitHub Environment + PROMOTE-STAGING confirmation)",
+      "production": "infra/environments/production/*.example (parameterized, Cosmos serverless, seed_demo_data=false, gated promotion via GitHub Environment + PROMOTE-PRODUCTION confirmation)"
+    }
+  },
+  "releaseAndRollbackCheck": {
+    "phase2BackendImage": "rctest0330980facr.azurecr.io/rc-backend@sha256:3e0e9dbafe7026695e90c696512da9f05666b4f25bc811f6ead5ee2700a0510a",
+    "phase3BackendImage": "rctest0330980facr.azurecr.io/rc-backend@sha256:28ae9ffebf54b256c0ebe12a03700ae6a204c1763b702b5763278a3f311ab09a",
+    "webImage": "rctest0330980facr.azurecr.io/rc-web@sha256:c01bb79aff68d6268812083430f6091d37614f65a764e8b17c51b8d4bc9fdee0",
+    "rollbackRevision": {
+      "name": "rc-test-0330980f-loan-api--0000004",
+      "version": "0.1.0-phase2",
+      "readyCheck": {
+        "status": "ready",
+        "database": "reachable",
+        "correlationId": "corr-807c252a-51b5-4ae9-9b60-39abdb40bda8"
+      }
+    },
+    "forwardRestoreRevision": {
+      "name": "rc-test-0330980f-loan-api--0000005",
+      "version": "0.1.0-phase3",
+      "readyCheck": {
+        "status": "ready",
+        "database": "reachable",
+        "correlationId": "corr-468e0366-995c-4fa6-9156-4cf48d045ed9"
+      }
+    }
+  },
+  "observabilityAndAlerts": {
+    "logAnalyticsWorkspace": "rc-test-0330980f-logs",
+    "savedSearches": [
+      "rc-correlation-trace",
+      "rc-outbox-publisher-metrics",
+      "rc-service-warnings-and-errors"
+    ],
+    "actionGroup": {
+      "name": "rc-test-0330980f-ops-ag",
+      "status": "Enabled",
+      "armRoleReceiver": "Owner (8e3af657-a8ff-443c-a75c-2fe8c4bcb635)",
+      "emailReceiver": "G6605870@live.tees.ac.uk",
+      "syntheticTestNotificationNote": "Azure blocks synthetic Action Group test-notifications API on Azure for Students free/trial subscriptions ((Conflict) Free subscription not supported); Action Group and all 6 metric alerts are provisioned and enabled."
+    },
+    "metricAlerts": [
+      "rc-test-0330980f-loan-api-5xx-alert",
+      "rc-test-0330980f-servicebus-dlq-alert",
+      "rc-test-0330980f-servicebus-backlog-alert",
+      "rc-test-0330980f-job-failures-alert",
+      "rc-test-0330980f-postgres-health-alert",
+      "rc-test-0330980f-postgres-pressure-alert"
+    ]
+  },
+  "liveResilienceAndScalingChecks": {
+    "resilienceJobExecution": "rc-test-0330980f-migrations-9111ssy",
+    "resilienceCompletedAtUtc": "2026-11-01T12:06:59.829721Z",
+    "concurrencyRaceOnSingleUnit": {
+      "concurrentContenders": 5,
+      "winners": 1,
+      "noAvailableUnitsConflicts": 4,
+      "standardLoanDurationSeconds": 172800
+    },
+    "publisherCrashWindowRecovery": {
+      "expiredLeaseEventId": "evt-b731901c-798f-5306-b615-d13717c64bf2",
+      "publisherExecution": "rc-test-0330980f-loan-publisher-mwjtz79",
+      "scanned": 3,
+      "published": 3
+    },
+    "threeNotificationEventsVerifiedEndToEnd": [
+      {
+        "eventId": "evt-b731901c-798f-5306-b615-d13717c64bf2",
+        "eventType": "DeviceCollectionConfirmationRequested",
+        "correlationId": "corr-phase3-suite-891d53f0-collect",
+        "cosmosStatus": "Delivered",
+        "providerMessageId": "fake-msg-evt-b731901c-798f-5306-b615-d13717c64bf2",
+        "deliveredAtUtc": "2026-11-01T12:07:20.698634Z"
+      },
+      {
+        "eventId": "evt-b4ea50c9-04fe-5637-9cb6-18808ab406e1",
+        "eventType": "DeviceReturnConfirmationRequested",
+        "correlationId": "corr-phase3-suite-891d53f0-return",
+        "cosmosStatus": "Delivered",
+        "providerMessageId": "fake-msg-evt-b4ea50c9-04fe-5637-9cb6-18808ab406e1",
+        "deliveredAtUtc": "2026-11-01T12:07:20.866447Z"
+      },
+      {
+        "eventId": "evt-eb69eb66-832b-5a7f-8a52-2390a806aa2a",
+        "eventType": "DeviceAvailabilityNotificationRequested",
+        "correlationId": "corr-phase3-suite-891d53f0-return",
+        "cosmosStatus": "Delivered",
+        "providerMessageId": "fake-msg-evt-eb69eb66-832b-5a7f-8a52-2390a806aa2a",
+        "deliveredAtUtc": "2026-11-01T12:07:20.974705Z"
+      }
+    ],
+    "serviceBusQueueAfterDrain": {
+      "activeMessageCount": 0,
+      "deadLetterMessageCount": 0,
+      "scheduledMessageCount": 0
+    },
+    "concurrentHttpLoadBurst": {
+      "endpoint": "https://rc-test-0330980f-loan-api.livelywave-2cc0564d.francecentral.azurecontainerapps.io/api/v1/catalogue",
+      "totalRequests": 40,
+      "concurrency": 20,
+      "http200Count": 40,
+      "http5xxCount": 0
+    }
+  }
+}
