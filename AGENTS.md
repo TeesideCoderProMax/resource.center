@@ -87,8 +87,9 @@ Review the changes before staging and preserve unrelated work.
   must not access notification Cosmos records.
 - The selected backend implementation direction is
   `docs/architecture/adr/0004-backend-use-cases-and-recovery.md`; its four-session
-  plan starts at `docs/backend/README.md` and `mem:backend/plan`. It is planned
-  work, not proof of implementation. Keep current status separate from the target.
+  plan starts at `docs/backend/README.md` and `mem:backend/plan`. Plans are not
+  proof of implementation; use dated phase handoffs for current results. Keep
+  current status separate from the target.
 - Keep domain and application logic independent of framework/vendor SDKs.
   Infrastructure implements ports; outer composition roots inject adapters.
 - Save loan transitions and their outbox requests atomically in PostgreSQL.

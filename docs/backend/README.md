@@ -1,6 +1,6 @@
 # Backend implementation: four isolated chat sessions
 
-Status: **planned, not executed**. Created 2026-11-01 from the user's request and the CIS3039 assessment review. Updated design: `docs/architecture/adr/0004-backend-use-cases-and-recovery.md`. Preserve the selected stack and existing data.
+Status: **phase 1 implemented and verified locally; phases 2–4 planned**. Tutor approval and phase 1 deployment remain pending. Created 2026-11-01 from the user's request and the CIS3039 assessment review. Updated design: `docs/architecture/adr/0004-backend-use-cases-and-recovery.md`. Preserve the selected stack and existing data.
 
 | Phase | Result | Depends on |
 | --- | --- | --- |
@@ -40,3 +40,7 @@ Create `docs/backend/phase-N-handoff.md` only after work occurs. Include:
 - Report 10%: record reasons/tradeoffs each session; phase 4 supplies a factual evidence pack and supports the student's own report.
 
 Tutor Stage 2 approval is an assessment prerequisite to record, not an approval this agent can grant. Finish the reviewable diagram/plan before requesting feedback; continue local work allowed by the user's instruction and accurately mark approval pending.
+
+## Current result
+
+Phase 1 code and local checks are complete: [handoff](phase-1-handoff.md). Tutor approval status is unknown; deployment remains pending. Phases 2–4 are not implemented by phase 1. Read the handoff, [contracts](contracts.md) and [Stage 2 plan](stage-2-plan.md) before phase 2.

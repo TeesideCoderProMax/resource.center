@@ -1,12 +1,7 @@
-# Backend implementation plan
-User requested updated design and four isolated implementation chats on 2026-11-01. Status: planned, not executed.
-- Selected direction: docs/architecture/adr/0004-backend-use-cases-and-recovery.md. Keep the stack; use application-owned transaction scopes, reservation-time due dates, explicit notification lease ownership and safe release ordering.
-- Canonical plan/session rules: docs/backend/README.md. Run phases sequentially; no reliance on chat history and no concurrent shared-state work.
-- Phase 1: docs/backend/phase-1-loan-core.md — Loan use cases, atomic transaction ports, due dates, migration/tests, API/event contract and Stage 2 annotated diagram.
-- Phase 2: docs/backend/phase-2-notifications.md — lease ownership, retry/recovery, concurrent duplicate handling and provider limits.
-- Phase 3: docs/backend/phase-3-secure-flows.md — Auth0/RBAC, minimal user/staff UI, live/fake notification evidence.
-- Phase 4: docs/backend/phase-4-delivery-evidence.md — migration-before-activation, safe promotion/seeding, real CI/gate/scaling evidence and submission support.
-- Each phase file has a starting prompt, inputs, work, checks and outputs. Read prior docs/backend/phase-N-handoff.md files; they do not exist until work occurs. A missing/partial handoff is not a completed dependency.
-- Future implementation needs the session's actual authority for external changes; this planning request performs none. Tutor approval, credentials, live recipients and CI access remain explicit evidence inputs.
-- Keep actual implementation status in architecture/evidence memories until a phase changes it. After completion, replace active launch guidance with concise result/next-work links under `mem:memory_maintenance`.
-- Rubric: `mem:assessment/cloud_module_criteria`; current gaps: `mem:assessment/requirements`; stored deployment evidence: `mem:cloud/plan`.
+# Backend implementation status
+- Phase 1 is implemented and verified locally (2026-11-01): docs/backend/phase-1-handoff.md. Contract: docs/backend/contracts.md. Stage 2 annotated diagram: docs/backend/stage-2-plan.md; tutor approval status unknown. No deployment in phase 1.
+- Phase 2 is next and ready for local work: docs/backend/phase-2-notifications.md. Preserve v1 events; implement owned leases, retry/recovery and concurrent duplicate tests. Do not treat existing ETags as exclusive send ownership.
+- Phase 3: docs/backend/phase-3-secure-flows.md — Auth0, student/staff screens and approved live/fake notification proof.
+- Phase 4: docs/backend/phase-4-delivery-evidence.md — safe migration/release, seeding, CI/gates, scaling and submission evidence. Migration 0002 is not write-compatible with old API revisions; follow the phase 1 rollout limits.
+- Run remaining phases sequentially in separate chats using docs/backend/README.md and prior handoffs. ADR 0004 is the selected direction; only handoffs establish implementation/check status.
+- Tutor approval, live credentials/recipients and actual CI/deployment evidence remain external inputs. Criteria: `mem:assessment/cloud_module_criteria`; ownership: `mem:architecture/service_boundaries`; upkeep: `mem:memory_maintenance`.

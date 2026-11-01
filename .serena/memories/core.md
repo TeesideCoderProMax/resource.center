@@ -3,6 +3,6 @@
 - Accepted stack/topology: `mem:architecture/selected_baseline`; implementation tools: `mem:tech_stack`; decisions and open issues: `mem:project/decisions`.
 - Ownership: `mem:architecture/service_boundaries`; layers: `mem:architecture/clean_architecture`; delivery: `mem:architecture/messaging`; transactions: `mem:architecture/persistence`; tests/evidence limits: `mem:architecture/testing`.
 - Rust backend, Next.js catalogue, Terraform and workflow files exist. Stored evidence records Test deployment and selected runtime checks; complete sign-in/user flows and GitHub execution/gates are not proved. Current work and phase evidence: `mem:cloud/plan`.
-- Four-session backend update (planned): `mem:backend/plan`; detailed design: ADR 0004.
+- Backend phase status and next session: `mem:backend/plan`; detailed design: ADR 0004.
 - Commands: `mem:suggested_commands`; checks: `mem:task_completion`; conventions: `mem:conventions`; upkeep: `mem:memory_maintenance`.
 - Use this repository, never the separate teeside lab. Historical evidence stays in docs and AI_LOG.md, not active memory status chains.

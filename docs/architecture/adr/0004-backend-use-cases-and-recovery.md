@@ -1,6 +1,6 @@
 # ADR 0004: Backend use cases, transactions and recovery
 
-Date: 2026-11-01. Status: **selected implementation direction for the requested plan; not implemented or verified**. User requested an updated backend design and four isolated implementation sessions after the CIS3039 review. Specific mechanics below are design choices to validate in implementation, not claims of tutor approval.
+Date: 2026-11-01. Status: **selected direction; Loan phase 1 implemented and verified locally, remaining phases planned**. See [phase 1 handoff](../../backend/phase-1-handoff.md). Not deployed by phase 1. User requested an updated backend design and four isolated implementation sessions after the CIS3039 review. Specific mechanics below are design choices to validate in implementation, not claims of tutor approval.
 
 ## Reason
 
@@ -56,4 +56,4 @@ flowchart LR
 
 This keeps the existing stack and avoids a rewrite. Transaction ports and lease rules add code, so keep them small and prove their failure behaviour. PostgreSQL and provisioned Test Cosmos remain fixed-capacity resources. A working fake is useful test evidence but does not prove live Auth0 or received email.
 
-Implementation order, session contracts and checks: `docs/backend/README.md`. Existing implementation remains as described in the dated assessment review until a phase supplies new evidence.
+Implementation order, session contracts and checks: `docs/backend/README.md`. The dated assessment review remains historical evidence; current Loan results are in the phase 1 handoff.

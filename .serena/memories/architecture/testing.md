@@ -1,8 +1,6 @@
 # Tests and evidence
-Reviewed 2026-11-01; source files and stored results, not a fresh test run.
-- make backend-test runs Cargo tests; HTTP tests use fake repositories/token validation, worker tests use fake Cosmos/email ports. CI YAML invokes tests, but successful GitHub runs need separate evidence.
-- docs/cloud/test-phase3-checks.json records 10 passing Rust tests, real PostgreSQL 5-way last-unit contention, publisher lease recovery, three event types through Service Bus/Cosmos with fake email, rollback and 40/40 catalogue HTTP 200 responses. docs/cloud/test-workloads-checks.json records worker scale-from-zero.
-- Do not call fake-auth rejection a live Auth0 HTTP 403, fake delivery a received email, or a burst of HTTP 200s a full scale-out/performance study.
-- Required next evidence: reservation-time due date; full JWT/role failures and valid flows; multi-subscriber return; rollback after partial DB work; concurrent worker duplicates; email-send/crash and queue lock expiry; broker/email outage plus backlog recovery; malformed/unsupported messages; explicit load targets/results.
-- Test business rules through ports; use real PostgreSQL for contention/transactions and real Cosmos for ETag/partition behaviour. Fake ports do not prove vendor integration.
-- Assessment targets: `mem:assessment/cloud_module_criteria`. Deployment checks and limitations: `mem:cloud/phase_3_result`.
+- Commands: make backend-fmt, backend-lint, backend-test; make backend-test-postgres starts and removes isolated local PostgreSQL with verified TLS. Script requires Docker, OpenSSL and local build tools.
+- Phase 1 local results and exact checks: docs/backend/phase-1-handoff.md. Domain/application/fake and signed-JWT route tests cover due dates, transitions, roles/ownership and duplicates. Real PostgreSQL covers fresh/existing migration, last-unit contention, double return, all subscribers, repeat subscription cycles and rollback after outbox insertion failure.
+- Local JWT fixtures are not live Auth0 evidence; fake storage is not SQL evidence. Real local PostgreSQL is not Azure deployment evidence. CI source is not a successful GitHub run.
+- Next: concurrent worker claims, send/crash and broker-lock expiry, retention/replay, outage/backlog recovery (phase 2); full live Auth0/browser/email flows and JWKS refresh/failure (phase 3); CI/gates/load and migration release order (phase 4).
+- Prior Test cloud checks remain dated evidence in docs/cloud/test-phase3-checks.json and test-workloads-checks.json. No live recheck in phase 1. Criteria: `mem:assessment/cloud_module_criteria`; cloud limits: `mem:cloud/plan`.
