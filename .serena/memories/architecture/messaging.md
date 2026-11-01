@@ -1,10 +1,8 @@
 # Delivery semantics
-- Source: `docs/architecture/2026-10-25-resource-center-handoff.md`, user-approved design dated 2026-10-25; implementation unverified.
-- Loan publisher polls/claims committed PostgreSQL outbox rows; database does not automatically push. Mark publication only after broker acknowledgement.
-- Initial return transaction also saves loan-selected notification requests. Later asynchronous fan-out needs explicit recovery/consistency design.
-- At-least-once: broker acceptance before publication mark and email send before success recording both create duplicate windows. Do not promise exactly-once email; verify provider idempotency capabilities before reliance.
-- Worker durably records/recognizes Cosmos job; delivers via Resend adapter; acknowledges message only after durable handling of outcome.
-- Proposed contract: eventId, type=DeviceAvailabilityNotificationRequested, version=1, occurredAt, correlationId, recipient, deviceModel. Notification request, not delivery fact. Finalize required fields/version compatibility/validation.
-- Message carries enough delivery data for no cross-service lookups; minimize PII, define retention/access/log redaction.
-- Pending: stable IDs and partition-aware deduplication, concurrent claims, lock renewal, bounded retries with explicit owner per failure category, poison handling/replay, terminal failures.
-- Email failure never rolls back committed loan operations. Broker outages retain recoverable outbox; define capacity/retention monitoring and recovery.
+Source: backend application/adapters and rc-shared contract; reviewed 2026-11-01.
+- Loan emits versioned NotificationRequestV1 for collection confirmation, return confirmation and availability. Include recipient/content and correlation identity so Notifications needs no Loan lookup. Loan owns eligibility and recipient selection.
+- Publisher claims committed outbox rows with recoverable leases; mark published only after broker acknowledgement. Failures retain retryable work. Current Test broker is Service Bus Basic.
+- At-least-once delivery: acknowledgement/write and email-send/outcome-record gaps can duplicate work. Stable event IDs and Cosmos ETags reduce duplicates but do not prove exactly-once sending.
+- Notifications records durable job outcomes before message completion; tests cover terminal duplicates and retry. Existing nonterminal jobs can be reclaimed without a time-based ownership check: verify concurrent consumers and send/crash windows before claiming strong idempotency.
+- Keep bounded retries, poison/dead-letter handling, lock expiry/recovery, retention/replay rules and PII redaction explicit. Loan commits must survive Notifications/Resend outages.
+- Current deployed evidence uses fake email. Live recipient delivery and full outage/backlog recovery are separate checks: `mem:architecture/testing`.

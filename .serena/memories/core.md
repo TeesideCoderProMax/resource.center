@@ -1,10 +1,8 @@
 # Resource Center
-- Source: `docs/architecture/2026-10-25-resource-center-handoff.md`, user-approved design dated 2026-10-25; implementation unverified.
-- Workspace `/home/cabozzz/dev/resource.center` is the project initialized in this conversation; separate `teeside` lab must not be changed. Handoff's repository-path unknown is resolved by this conversation context.
-- Campus Device Loan: public catalogue; students reserve devices/subscribe to alerts; staff record collections/returns; two-day loans.
-- Observed repository: Git/Serena and architecture documentation only, no application code/manifests/tests. Knowledge setup/planning authorized; implementation/deployment requires subsequent request.
-- Accepted stack and pending infrastructure: `mem:architecture/selected_baseline`; language details: `mem:tech_stack`.
-- Ownership rules: `mem:architecture/service_boundaries`; layer dependencies: `mem:architecture/clean_architecture`; outbox and delivery semantics: `mem:architecture/messaging`; transactions/partitioning: `mem:architecture/persistence`; acceptance evidence: `mem:architecture/testing`.
-- Decision status and first slice: `mem:project/decisions`; unverified rubric: `mem:assessment/requirements`.
-- Commands: `mem:suggested_commands`; conventions: `mem:conventions`; completion: `mem:task_completion`; memory maintenance: `mem:memory_maintenance`.
-- Prior notes and initial prompt retained under `docs/architecture/history/`; historical uncertainties do not override the accepted handoff.
+- Current scope: CIS3039-N Cloud Native DevOps, Campus Device Loan System; user corrected the assessment source on 2026-11-01. Criteria and submission rules: `mem:assessment/requirements`.
+- Accepted stack/topology: `mem:architecture/selected_baseline`; implementation tools: `mem:tech_stack`; decisions and open issues: `mem:project/decisions`.
+- Ownership: `mem:architecture/service_boundaries`; layers: `mem:architecture/clean_architecture`; delivery: `mem:architecture/messaging`; transactions: `mem:architecture/persistence`; tests/evidence limits: `mem:architecture/testing`.
+- Rust backend, Next.js catalogue, Terraform and workflow files exist. Stored evidence records Test deployment and selected runtime checks; complete sign-in/user flows and GitHub execution/gates are not proved. Current work and phase evidence: `mem:cloud/plan`.
+- Four-session backend update (planned): `mem:backend/plan`; detailed design: ADR 0004.
+- Commands: `mem:suggested_commands`; checks: `mem:task_completion`; conventions: `mem:conventions`; upkeep: `mem:memory_maintenance`.
+- Use this repository, never the separate teeside lab. Historical evidence stays in docs and AI_LOG.md, not active memory status chains.

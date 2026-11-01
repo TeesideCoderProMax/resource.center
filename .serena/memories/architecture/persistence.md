@@ -1,7 +1,8 @@
 # Persistence
-- Source: `docs/architecture/2026-10-25-resource-center-handoff.md`, user-approved design dated 2026-10-25; implementation unverified.
-- PostgreSQL private to Loan; Cosmos DB for NoSQL private to Notifications. No shared credentials or database access between capabilities.
-- Reservation allocation and outbox write share one PostgreSQL transaction; return transition and resulting requests also commit atomically.
-- Cosmos/email are outside this local transaction; no distributed ACID claim.
-- Pending PostgreSQL concurrency/locking strategy must enforce atomic allocation under contention.
-- Pending Cosmos capacity mode, partition key, conditional job updates and deduplication scope. IDs must not be assumed unique across arbitrary partitions. Assess serverless for intermittent workload.
+Source: backend migrations/adapters, infra/platform/data.tf and ADR 0003; reviewed 2026-11-01.
+- Loan alone owns PostgreSQL. Reservation allocation uses a transaction and row locks; collection/return transitions and notification outbox rows commit together. Notifications has no PostgreSQL credentials.
+- Current due_at is nullable at reservation and set at collection; the cloud brief requires a return date on reservation. See `mem:assessment/requirements`.
+- Notifications alone owns Cosmos jobs: /eventId partition, id = stable single-recipient eventId, conditional ETag updates and duplicate-create handling. These do not alone prove exclusive sending under concurrent duplicate requests.
+- Test Cosmos uses free-tier shared manual 400 RU/s; PostgreSQL is provisioned managed compute. Neither is scale-to-zero. Retention/TTL and replay windows still need explicit policy.
+- Queue and email lie outside PostgreSQL transactions. No distributed ACID or exactly-once email claim.
+- Stored integration evidence: `mem:cloud/phase_3_result`; test gaps: `mem:architecture/testing`.
