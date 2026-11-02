@@ -854,8 +854,8 @@ Create PR (desktop app "Create PR" action: commit, push and open a ready-for-rev
 
 ### Change summary
 
-Committed frontend phase 1 code and its docs/memory/log separately, pushed `codex/backend-phase-3-secure-flows`, and opened or reused the PR to `main`.
+Committed frontend phase 1 code and its docs/memory/log separately, and pushed `codex/backend-phase-3-secure-flows`. No PR opened: `gh` (account CodeZobac) cannot resolve `TeesideCoderProMax/resource.center`, as in entries 036–037.
 
 ### Validation and outcome
 
-Checks were those of entry 040; no new checks run. PR URL is reported in the reply.
+Checks were those of entry 040; no new checks run. Push succeeded; `gh pr list` failed with "Could not resolve to a Repository". The user must open the PR from the compare URL.
