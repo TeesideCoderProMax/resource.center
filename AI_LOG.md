@@ -758,3 +758,19 @@ Made three commits on `codex/backend-phase-3-secure-flows` and pushed them to or
 ### Validation and outcome
 
 Reused the checks from entry 034; no code changed after them. git diff --check passed. The push succeeded.
+
+## 036 — 2026-11-02 — Open phase 3 PR
+
+### Exact input prompt
+
+```text
+Open the PR and push it
+```
+
+### Change summary
+
+Did not open the PR: `gh` is logged in only as CodeZobac (repo returns 404), and no School GitHub connector tool is loaded in this session. The branch was already pushed; this log entry was committed and pushed. Gave the user the compare URL.
+
+### Validation and outcome
+
+`gh auth status` and `gh api repos/TeesideCoderProMax/resource.center` checked access (404). git push succeeded. No PR exists yet.
