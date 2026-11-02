@@ -20,6 +20,7 @@ output "handoff" {
     servicebus_namespace         = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
     servicebus_queue             = azurerm_servicebus_queue.notifications.name
     notifications_vault_uri      = azurerm_key_vault.notifications.vault_uri
+    web_vault_uri                = azurerm_key_vault.web.vault_uri
     github_client_id             = azurerm_user_assigned_identity.deploy.client_id
     identities = { for name, identity in azurerm_user_assigned_identity.workload : name => {
       id = identity.id, client_id = identity.client_id, principal_id = identity.principal_id, name = identity.name

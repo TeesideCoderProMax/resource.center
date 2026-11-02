@@ -1189,3 +1189,19 @@ Set `auth0_domain`, `auth0_audience` and `auth0_client_id` in `infra/environment
 ### Validation and outcome
 
 `gh variable set` succeeded. The audience ends in `.campu` (no `s`), matching `frontend/.env.local`; flagged to the user to confirm against the Auth0 API identifier. Secret values were not read or printed.
+
+## 059 — 2026-11-02 — Key Vault references for web Auth0 secrets
+
+### Exact input prompt
+
+```text
+Yes, use Key Vault. I confirm the audience ends in .campu
+```
+
+### Change summary
+
+Added a web-owned Key Vault (`<compact>wkv`), a `web` user-assigned identity with Key Vault Secrets User, an operator Secrets Officer assignment (`web_secrets_operator_object_id`, defaulting to the Postgres admin) and `web_vault_uri` in the platform handoff. The web Container App now uses the `web` identity and Key Vault references for `AUTH0_CLIENT_SECRET`/`AUTH0_SECRET` when `handoff.web_vault_uri` is set. Added `infra/scripts/set-web-secrets.sh`, updated the release runbook and `mem:cloud/phase_3_result`.
+
+### Validation and outcome
+
+`terraform validate` passed for platform and workloads. Platform init/import/plan/apply against Test state was blocked by the session permission guard, so nothing was applied and no secrets were written; the user must run the documented steps.

@@ -58,9 +58,13 @@ reservations, and does not recreate a removed unit. Tests cover this with a live
 local PostgreSQL database. A real institutional production service needs a separate
 approved seed policy; do not apply demo inventory to it by inference.
 
-The release requires configured Auth0 in API and web smoke responses. Web secrets
-must also be bound to container env vars, not merely stored as Container App
-secrets; phase 3 did not add those bindings. Set that up before live release.
+The release requires configured Auth0 in API and web smoke responses. Web secrets (`AUTH0_CLIENT_SECRET`, `AUTH0_SECRET`) live in the web-owned Key
+Vault (`handoff.web_vault_uri`) as `auth0-client-secret` and `auth0-secret`. The
+web Container App reads them through Key Vault references with its own `web`
+identity, so Terraform state and GitHub hold only the URIs. Apply the platform,
+write both values out of band (`az keyvault secret set --file`), add
+`web_vault_uri` and the `web` identity to the environment's `handoff`, then
+release. With `web_vault_uri` empty the web app runs without them.
 `ALLOW_UNCONFIGURED_AUTH=true` exists only for an explicitly approved local/fake
 smoke; the deployment workflow does not set it. Health config flags do not prove
 that an actual login, token, role or email works.

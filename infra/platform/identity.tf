@@ -7,7 +7,7 @@ variable "github_immutable_subject_prefix" {
 }
 variable "state_storage_account_id" { type = string }
 resource "azurerm_user_assigned_identity" "workload" {
-  for_each            = toset(["loan", "publisher", "notifications", "migrations"])
+  for_each            = toset(["loan", "publisher", "notifications", "migrations", "web"])
   name                = "${local.prefix}-${each.key}"
   resource_group_name = azurerm_resource_group.platform.name
   location            = var.location
@@ -35,6 +35,21 @@ resource "azurerm_cosmosdb_sql_role_assignment" "notifications" {
   role_definition_id  = "${azurerm_cosmosdb_account.notifications.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002"
   principal_id        = azurerm_user_assigned_identity.workload["notifications"].principal_id
   scope               = "${azurerm_cosmosdb_account.notifications.id}/dbs/${azurerm_cosmosdb_sql_database.notifications.name}/colls/${azurerm_cosmosdb_sql_container.jobs.name}"
+}
+resource "azurerm_role_assignment" "web_secrets" {
+  scope                = azurerm_key_vault.web.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.workload["web"].principal_id
+}
+# The operator writes the web secret values out of band (never Terraform), so they never enter state.
+variable "web_secrets_operator_object_id" {
+  type    = string
+  default = ""
+}
+resource "azurerm_role_assignment" "web_secrets_operator" {
+  scope                = azurerm_key_vault.web.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = coalesce(var.web_secrets_operator_object_id, var.postgres_admin_object_id)
 }
 resource "azurerm_role_assignment" "notification_secrets" {
   scope                = azurerm_key_vault.notifications.id
