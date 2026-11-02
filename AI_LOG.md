@@ -791,7 +791,92 @@ No. No GitHub integration tool is available in this session; only `gh` as CodeZo
 
 Searched the available tools for a GitHub integration; none found.
 
-## 038 — 2026-11-02 — Plan frontend phases
+## 038 — 2026-11-02 — Backend phase 4
+
+### Exact input prompt
+
+```text
+Hello, use serena and implement the phase 4 of the backend implementation plan.
+Start from main in a clean worktree. And create a new branch for this task
+```
+
+### Change summary
+
+Created a clean worktree from origin/main (7419d1a) and branch codex/backend-phase-4-delivery; used Serena. Added shared migration-first releases, verified-artifact promotion, CI/runtime/seed checks and submission tools; updated docs, memories and the phase 4 handoff.
+
+### Validation and outcome
+
+make check, real PostgreSQL suites, local image builds/smoke, release tests, actionlint and Serena checks passed; final focused image and link checks are recorded in the handoff. No commit, push, cloud deployment or email. Live Auth0/Cosmos/gates/recovery and final report/media remain open; the CLI environment-rules read returned 404.
+
+## 039 — 2026-11-02 — Continue phase 4
+
+### Exact input prompt
+
+```text
+go ahead and continue
+```
+
+### Change summary
+
+Finished phase 4 review and saved docs/backend/phase-4-checks.json. Fixed release retry draining in infra/scripts/release.py and added its test.
+
+### Validation and outcome
+
+Final 13 release tests passed after an approved rerun for the sandbox loopback restriction. Prior full suite, PostgreSQL and image checks passed; no cloud changes.
+
+## 040 — 2026-11-02 — Finish phase 4
+
+### Exact input prompt
+
+```text
+Finish up pls
+```
+
+### Change summary
+
+Completed the phase 4 handoff, saved final check results and finished the task log. Live acceptance and final submission remain partial.
+
+### Validation and outcome
+
+All 13 final Python tests passed; actionlint, Serena references and git diff --check passed. Earlier full checks, three PostgreSQL suites and final image smoke passed. No commit, push or deployment.
+
+## 041 — 2026-11-02 — Commit and push phase 4
+
+### Exact input prompt
+
+```text
+Great! Pls add and commit these changes. 
+
+Push it at the end and output a PR description here
+```
+
+### Change summary
+
+Created and pushed three logical phase 4 commits: 8687a95 (seed safety), b877d88 (release/check tools), and 88c1a9b (docs/memories). A final log-only commit records the result; the PR description is supplied in chat.
+
+### Validation and outcome
+
+Push to origin/codex/backend-phase-4-delivery succeeded. Automatic review first rejected the combined commit/push because destination trust was unverified; the School GitHub connector then confirmed the exact private repo and admin/push access, and the approved retry succeeded. Source diff checks passed; AI_LOG.md preserves the exact prompt including its trailing space. Reused the phase 4 validation because no code changed in this request.
+
+## 042 — 2026-11-02 — Check branch merge conflict
+
+### Exact input prompt
+
+```text
+It says the branch cant automatically merge, can you check it pls
+```
+
+### Change summary
+
+Merged main (716f863) into the phase 4 branch. Kept the frontend plan, both memory changes and all exact logged prompts; imported main entries use IDs 043–044 with their original IDs noted.
+
+### Validation and outcome
+
+Confirmed the only conflict was AI_LOG.md; no application code changed. Exact-prompt preservation, unique ordered log IDs, conflict-marker checks and Serena memory checks passed. Reused prior code tests because this merge changes docs/memories/logs only.
+
+## 043 — 2026-11-02 — Plan frontend phases
+
+Imported from main (`bd21388`), original entry 038; prompt and result preserved.
 
 ### Exact input prompt
 
@@ -810,7 +895,9 @@ Created a three-phase frontend plan in `docs/frontend/` (README plus phase 1 str
 
 `serena memories check` passed; `git diff --check` passed. Serena MCP tools were not available in this session, so memories were read as files. Plan only; no code changed.
 
-## 039 — 2026-11-02 — Commit frontend plan
+## 044 — 2026-11-02 — Commit frontend plan
+
+Imported from main (`bd21388`), original entry 039; prompt and result preserved.
 
 ### Exact input prompt
 

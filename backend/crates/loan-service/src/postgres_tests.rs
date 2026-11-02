@@ -241,3 +241,50 @@ async fn postgres_tests_migrations_transactions_contention_and_recovery() {
     );
     println!("PASS existing-row migration: invalid dates abort without backfill, valid dates preserved, null dates backfilled, NOT NULL enforced, all original rows retained");
 }
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_seed_preserves_live_inventory_and_reservations() {
+    let pg = database("phase4_seed").await;
+    pg.run_migrations(true).await.unwrap();
+    let receipt = pg
+        .reserve_device(
+            student("seed-user"),
+            "dell-latitude-7440".into(),
+            "seed-rerun".into(),
+        )
+        .await
+        .unwrap();
+    let (client, _permit) = pg.connect_client().await.unwrap();
+    client.batch_execute("UPDATE loan.device_models SET description='staff edit' WHERE id='dell-latitude-7440'; DELETE FROM loan.device_units WHERE unit_id='unit-ipad-001'; UPDATE loan.device_models SET total_units=0, available_units=0 WHERE id='ipad-air-m2'").await.unwrap();
+    let snapshot = "SELECT jsonb_build_object('models',(SELECT jsonb_agg(to_jsonb(m) ORDER BY id) FROM loan.device_models m),'units',(SELECT jsonb_agg(to_jsonb(u) ORDER BY unit_id) FROM loan.device_units u),'reservations',(SELECT jsonb_agg(to_jsonb(r) ORDER BY reservation_id) FROM loan.reservations r))::text";
+    let before: String = client.query_one(snapshot, &[]).await.unwrap().get(0);
+    pg.run_migrations(true).await.unwrap();
+    pg.run_migrations(true).await.unwrap();
+    let after: String = client.query_one(snapshot, &[]).await.unwrap().get(0);
+    assert_eq!(
+        before, after,
+        "seed must not reset edits, counts, units or loans"
+    );
+    assert_eq!(
+        pg.list_reservations(student("seed-user")).await.unwrap()[0].reservation_id,
+        receipt.reservation_id
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_seed_collision_rolls_back_new_models() {
+    let pg = database("phase4_seed_collision").await;
+    pg.run_migrations(false).await.unwrap();
+    seed(&pg).await;
+    let (client, _permit) = pg.connect_client().await.unwrap();
+    client
+        .batch_execute("UPDATE loan.device_units SET unit_id='unit-lat-001' WHERE unit_id='unit'")
+        .await
+        .unwrap();
+    assert!(pg.run_migrations(true).await.is_err());
+    let row = client.query_one("SELECT (SELECT count(*) FROM loan.device_models), (SELECT model_id FROM loan.device_units WHERE unit_id='unit-lat-001')", &[]).await.unwrap();
+    assert_eq!(row.get::<_, i64>(0), 1);
+    assert_eq!(row.get::<_, String>(1), "model");
+}

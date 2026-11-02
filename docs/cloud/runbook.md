@@ -15,12 +15,12 @@
 | **GitHub OIDC Identity** | `rc-test-0330980f-github-deploy` | `rc-test-0330980f-bootstrap-rg` | Passwordless federated credential (`repo:TeesideCoderProMax/resource.center:*`) |
 | **Container Registry** | `rctest0330980facr.azurecr.io` | `rc-test-0330980f-platform-rg` | Standard SKU (`admin_enabled = false`); stores immutable `rc-backend` and `rc-web` digests |
 | **PostgreSQL Flexible Server** | `rc-test-0330980f-loan-pg` (`db: loan`) | `rc-test-0330980f-platform-rg` | Authoritative Loan state + `outbox_events`; private VNet-delegated (`10.42.2.0/24`), Entra auth enabled |
-| **Service Bus Namespace** | `rc-test-0330980f-bus` (`notification-requests-v1`) | `rc-test-0330980f-platform-rg` | Standard tier queue (`max_delivery_count = 5`, `lock_duration = PT1M`, dead-lettering enabled) |
+| **Service Bus Namespace** | `rc-test-0330980f-bus` (`notification-requests-v1`) | `rc-test-0330980f-platform-rg` | Basic tier queue (`max_delivery_count = 5`, `lock_duration = PT1M`, dead-lettering enabled) |
 | **Cosmos DB for NoSQL** | `rc-test-0330980f-notifications` (`notifications`/`jobs`) | `rc-test-0330980f-platform-rg` | Notifications deduplication, delivery job state, and attempt audit records (`id = eventId`, `/eventId` partition key) |
 | **Key Vault** | `rctest0330980fnkv` | `rc-test-0330980f-platform-rg` | Notifications secret store (`resend-api-key` when live email mode is enabled) |
 | **Log Analytics Workspace** | `rc-test-0330980f-logs` | `rc-test-0330980f-platform-rg` | Central structured JSON logs, Container Apps system events, and saved KQL queries |
 | **Loan API Container App** | `rc-test-0330980f-loan-api` | `rc-test-0330980f-workloads-rg` | Public HTTPS ingress (`0..3` replicas, HTTP scale concurrency `20`) |
-| **Frontend Container App** | `rc-test-0330980f-web` | `rc-test-0330980f-workloads-rg` | Next.js standalone SSR portal (`0..2` replicas, HTTP scale concurrency `30`) |
+| **Frontend Container App** | `rc-test-0330980f-web` | `rc-test-0330980f-workloads-rg` | Next.js standalone SSR portal (`0..3` replicas, HTTP scale concurrency `20`) |
 | **Migrations Job** | `rc-test-0330980f-migrations` | `rc-test-0330980f-workloads-rg` | Manual trigger inside private VNet (`loan-service migrate`) |
 | **Outbox Publisher Job** | `rc-test-0330980f-loan-publisher` | `rc-test-0330980f-workloads-rg` | Cron trigger (`*/1 * * * *`) claiming `outbox_events` and publishing to Service Bus |
 | **Notifications Worker** | `rc-test-0330980f-notifications` | `rc-test-0330980f-workloads-rg` | Non-ingress worker (`0..3` replicas, KEDA `azure-servicebus` scale rule `messageCount = 5`) |
@@ -28,79 +28,16 @@
 
 ---
 
-## 2. Standard Deployment & Gated Promotion
+## 2. Safe release, promotion and recovery
 
-### 2.1 Local Developer & CI Verification
-Before pushing or deploying, run the unified check suite from the repository root:
+Use [the current backend release runbook](../backend/release-runbook.md). It replaces
+the older apply-before-migrate path and typed promotion confirmation. Phase 4
+implements and locally tests the release path; actual GitHub runs and gate settings
+remain unverified. Only Test has earlier deployment evidence.
 
-```bash
-make check
-```
-
-This runs:
-- `make backend-fmt` (`cargo fmt --all --check`)
-- `make backend-lint` (`cargo clippy --all-targets -- -D warnings`)
-- `make backend-test` (`cargo test` across `rc-shared`, `loan-service`, and `notifications-worker`)
-- `make frontend-typecheck`, `make frontend-build`, `make frontend-audit`
-- `make infra-fmt` and `make infra-validate ENV=test|staging|production`
-
-### 2.2 Automated Merge-to-Test Pipeline (`.github/workflows/deploy.yml`)
-Every push to `main` runs the `verify` job first. Only if all checks pass does `deploy-test` execute:
-1. Authenticates to Azure using federated OIDC (`azure/login@v2` with `rc-test-0330980f-github-deploy`).
-2. Builds `rc-backend` and `rc-web`, pushes them to `rctest0330980facr.azurecr.io`, and resolves their immutable `@sha256:...` digests.
-3. Injects the exact `@sha256:...` digests into `infra/environments/test/workloads.tfvars` so **Terraform remains the sole owner of workload image references** (preventing out-of-band CLI drift).
-4. Runs `make infra-init ENV=test ROOT=workloads`, `make infra-plan ENV=test ROOT=workloads`, and `make infra-apply ENV=test ROOT=workloads`.
-5. Starts `rc-test-0330980f-migrations` and polls execution status until `Succeeded` (failing the workflow if migrations fail).
-6. Runs `make smoke-test` (`infra/scripts/smoke-test.sh`) verifying `/health/live`, `/health/ready` (including exact `service_version` match and `"database":"reachable"`), `/api/v1/catalogue`, unauthenticated write rejection (`401`/`503`), and frontend `/api/health`.
-
-### 2.3 Gated Promotion to Staging & Production
-Staging and Production never rebuild container images; they promote the exact `@sha256:...` digests verified in Test.
-1. Trigger `.github/workflows/deploy.yml` via `workflow_dispatch`.
-2. Select `target_environment` (`staging` or `production`).
-3. Provide the verified `backend_image_digest` (`...@sha256:...`) and `web_image_digest` (`...@sha256:...`).
-4. Set `approval_confirmation` to `PROMOTE-STAGING` or `PROMOTE-PRODUCTION`.
-5. Both the GitHub Environment protection gate (`environment: staging` or `environment: production`) and the explicit confirmation token must pass before Terraform plans or applies `infra/workloads`.
-
----
-
-## 3. Rollback & Database Recovery Procedures
-
-### 3.1 Application Image Rollback (Terraform-Owned)
-Because Terraform owns `backend_image`, `web_image`, and `service_version`, rollbacks are performed by pinning the previous verified `@sha256:...` digest in `workloads.tfvars` and applying `infra/workloads`:
-
-```bash
-# 1. Pin previous verified digest and version in workloads.tfvars
-sed -i 's|^backend_image[[:space:]]*=.*|backend_image            = "rctest0330980facr.azurecr.io/rc-backend@sha256:3e0e9dbafe7026695e90c696512da9f05666b4f25bc811f6ead5ee2700a0510a"|' infra/environments/test/workloads.tfvars
-sed -i 's|^service_version[[:space:]]*=.*|service_version          = "0.1.0-phase2"|' infra/environments/test/workloads.tfvars
-
-# 2. Plan and apply
-make infra-plan ENV=test ROOT=workloads
-make infra-apply ENV=test ROOT=workloads
-
-# 3. Verify rollback via smoke test
-EXPECTED_VERSION="0.1.0-phase2" make smoke-test
-```
-
-### 3.2 Database Migration & Point-in-Time Restore Policy
-- **Container rollback does not undo database schema changes.**
-- **Expand/Contract Rule**: All SQL migrations in `backend/crates/loan-service/migrations/` must be additive/backward-compatible (add nullable columns, new tables, or indexes first) so that the N-1 container image continues to operate safely if rolled back.
-- **Failed Migration Recovery**:
-  - Each migration runs inside a PostgreSQL transaction (`BEGIN ... COMMIT` recorded in `schema_migrations`). If a DDL statement fails mid-flight, PostgreSQL rolls back that migration file automatically and `rc-test-0330980f-migrations` exits non-zero, blocking deployment.
-- **Catastrophic Data Corruption / Point-in-Time Restore (PITR)**:
-  - `rc-test-0330980f-loan-pg` is configured with `backup_retention_days = 7` (Staging: `7`, Production: `14`).
-  - To restore PostgreSQL to a timestamp prior to data corruption:
-    ```bash
-    az postgres flexible-server restore \
-      --resource-group rc-test-0330980f-platform-rg \
-      --name rc-test-0330980f-loan-pg-restored \
-      --source-server rc-test-0330980f-loan-pg \
-      --restore-time "2026-11-01T11:30:00Z" \
-      --vnet "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.Network/virtualNetworks/rc-test-0330980f-vnet" \
-      --subnet "postgres" \
-      --private-dns-zone "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.Network/privateDnsZones/privatelink.postgres.database.azure.com"
-    ```
-
----
+Do not roll back to pre-0002 writers after the due-date migration. Keep apps stopped
+after failed migration until you inspect SQL state. Image rollback and SQL restore
+are separate procedures; use the current runbook's compatibility checks.
 
 ## 4. Diagnosing Incidents, Outbox Backlog & Dead-Letter Queue (DLQ)
 

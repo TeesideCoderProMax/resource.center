@@ -10,7 +10,7 @@ resource "azurerm_log_analytics_saved_search" "correlation_trace" {
     | where isnotnull(parsed.fields.correlation_id) or isnotnull(parsed.fields.event_id)
     | project
         TimeGenerated,
-        Workload = coalesce(nonempty(ContainerAppName_s, ""), ContainerGroupName_s),
+        Workload = coalesce(tostring(column_ifexists("ContainerAppName_s", "")), tostring(column_ifexists("ContainerGroupName_s", ""))),
         Level = tostring(parsed.level),
         CorrelationId = tostring(parsed.fields.correlation_id),
         EventId = tostring(parsed.fields.event_id),
@@ -53,7 +53,7 @@ resource "azurerm_log_analytics_saved_search" "service_errors" {
     | where tostring(parsed.level) in ("WARN", "ERROR")
     | project
         TimeGenerated,
-        Workload = coalesce(nonempty(ContainerAppName_s, ""), ContainerGroupName_s),
+        Workload = coalesce(tostring(column_ifexists("ContainerAppName_s", "")), tostring(column_ifexists("ContainerGroupName_s", ""))),
         Level = tostring(parsed.level),
         CorrelationId = tostring(parsed.fields.correlation_id),
         EventId = tostring(parsed.fields.event_id),
