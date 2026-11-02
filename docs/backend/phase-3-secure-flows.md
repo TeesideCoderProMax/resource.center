@@ -1,6 +1,6 @@
 # Phase 3 — Secure student and staff flows
 
-Status: **planned**. One isolated implementation chat after phases 1–2. Follow `docs/backend/README.md`.
+Status: **implemented locally; live acceptance blocked** — see [phase-3-handoff.md](phase-3-handoff.md). One isolated implementation chat after phases 1–2. Follow `docs/backend/README.md`.
 
 ## Goal and entry context
 
