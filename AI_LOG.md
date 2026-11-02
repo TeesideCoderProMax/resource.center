@@ -859,3 +859,58 @@ Committed frontend phase 1 code and its docs/memory/log separately, and pushed `
 ### Validation and outcome
 
 Checks were those of entry 040; no new checks run. Push succeeded; `gh pr list` failed with "Could not resolve to a Repository". The user must open the PR from the compare URL.
+
+## 042 — 2026-11-02 — Diagnose Azure login failure in deploy workflow
+
+### Exact input prompt
+
+````text
+Ive got this issue on the github actions:
+
+The job failed in the Azure login step, before deployment could begin.
+What the log says:
+
+* "Login failed with Error: Using auth-type: SERVICE_PRINCIPAL. Not all values are present."
+* "Ensure 'client-id' and 'tenant-id' are supplied."
+
+That means the workflow is configured to authenticate to Azure using a service principal, but the required credentials were not present in the environment or GitHub secrets for that run.
+Additional clue:
+
+* The log shows:
+   * ACR_NAME:
+   * ACR_SERVER:
+* These values are blank, which suggests the deployment variables/secrets for Azure Container Registry or Azure login were not set.
+
+So the root cause is not a code/test failure in the app itself; it is a deployment configuration issue:
+
+* Azure auth type = SERVICE_PRINCIPAL
+* client-id missing
+* tenant-id missing
+* likely related secrets/vars not injected into the workflow
+
+In short: the job failed because Azure login could not authenticate with the required service principal details.
+````
+
+### Change summary
+
+Diagnosis only. `main`'s `.github/workflows/deploy.yml` release job reads `vars.AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME`, `ACR_SERVER` (plus `WORKLOADS_TFVARS`, `WORKLOADS_BACKEND_HCL`) from the GitHub `test` environment; they are unset, so azure/login gets empty IDs and falls back to service-principal mode. Fix is to set those environment variables (see `docs/backend/release-runbook.md`). No project files changed apart from this log.
+
+### Validation and outcome
+
+Compared `origin/main` and branch workflows locally. Could not read the run log or repository variables: `gh` (CodeZobac) cannot access the repository.
+
+## 043 — 2026-11-02 — gh access granted
+
+### Exact input prompt
+
+```text
+Okay, so COdezobac now have acess to this repo
+```
+
+### Change summary
+
+With access confirmed, checked GitHub: `test` environment has no variables and `staging`/`production` environments do not exist; run 41517898778 failed at `azure/login` as reported. Opened the frontend phase 1 PR to `main` (entry 041 follow-up). Only this log changed.
+
+### Validation and outcome
+
+`gh variable list`, `gh run view --log-failed` and `gh pr create` run as CodeZobac. Deploy variables are still unset; the user must supply/confirm the values.
