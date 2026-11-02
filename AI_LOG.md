@@ -774,3 +774,19 @@ Did not open the PR: `gh` is logged in only as CodeZobac (repo returns 404), and
 ### Validation and outcome
 
 `gh auth status` and `gh api repos/TeesideCoderProMax/resource.center` checked access (404). git push succeeded. No PR exists yet.
+
+## 037 — 2026-11-02 — Use GitHub integration
+
+### Exact input prompt
+
+```text
+Can u use the GH integration?
+```
+
+### Change summary
+
+No. No GitHub integration tool is available in this session; only `gh` as CodeZobac, which cannot see the repo. No PR was opened. Only this log entry changed.
+
+### Validation and outcome
+
+Searched the available tools for a GitHub integration; none found.
