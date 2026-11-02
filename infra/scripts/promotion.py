@@ -20,10 +20,10 @@ def validate_gate(gate):
 
 def validate_release(run, release, repository, run_id):
     if not (run.get("conclusion") == "success" and run.get("event") == "push"
-            and run.get("head_branch") == "main" and run.get("path") == ".github/workflows/deploy.yml"
+            and run.get("head_branch") == "dev" and run.get("path") == ".github/workflows/deploy.yml"
             and run.get("repository", {}).get("full_name") == repository
             and str(run.get("id")) == str(run_id)):
-        raise ValueError("Source must be a successful main push release in this repository")
+        raise ValueError("Source must be a successful dev push release in this repository")
     if not (release.get("environment") == "test" and release.get("smoke") == "passed"
             and release.get("sha") == run.get("head_sha") and str(release.get("run_id")) == str(run_id)
             and release.get("version") == run.get("head_sha")):

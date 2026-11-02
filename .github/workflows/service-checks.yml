@@ -5,7 +5,7 @@ permissions:
   contents: read
 jobs:
   cosmos:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     environment: test
     permissions:

@@ -115,10 +115,10 @@ class PromotionTests(unittest.TestCase):
             promotion.validate_gate(gate)
 
     def test_only_successful_matching_test_release_can_promote(self):
-        run = {"id": 1, "conclusion": "success", "event": "push", "head_branch": "main", "head_sha": "abc", "path": ".github/workflows/deploy.yml", "repository": {"full_name": "owner/repo"}}
+        run = {"id": 1, "conclusion": "success", "event": "push", "head_branch": "dev", "head_sha": "abc", "path": ".github/workflows/deploy.yml", "repository": {"full_name": "owner/repo"}}
         record = {"environment": "test", "smoke": "passed", "sha": "abc", "version": "abc", "run_id": "1", "backend_image": "r.test/backend@sha256:"+"a"*64, "web_image": "r.test/web@sha256:"+"b"*64}
         promotion.validate_release(run, record, "owner/repo", "1")
-        for key, value in (("conclusion", "failure"), ("event", "pull_request"), ("head_sha", "other"), ("head_branch", "feature")):
+        for key, value in (("conclusion", "failure"), ("event", "pull_request"), ("head_sha", "other"), ("head_branch", "feature"), ("head_branch", "main")):
             with self.assertRaises(ValueError):
                 promotion.validate_release({**run, key: value}, record, "owner/repo", "1")
         with self.assertRaises(ValueError):

@@ -1069,3 +1069,35 @@ Answer only (forked session). The ID-based credential is as narrow as the name-b
 ### Validation and outcome
 
 Read the environment settings with `gh api` and the role assignments with `az role assignment list`. Nothing changed in GitHub or Azure.
+
+## 048 — 2026-11-02 — Plan restricting test environment to qa
+
+### Exact input prompt
+
+```text
+Draft a plan to restrict the test environment to the qa branch
+```
+
+### Change summary
+
+Plan only, given in chat: create `qa`, retarget the deploy workflow (push trigger, verify guard) and `infra/scripts/promotion.py` from `main` to `qa`, set a custom deployment branch policy on `test` allowing only `qa`, update the release runbook, verify with a qa run and a rejected non-qa run. No project files changed apart from this log.
+
+### Validation and outcome
+
+Inspected remote branches (`qa` does not exist), `origin/main` deploy workflow and promotion script. Nothing changed.
+
+## 053 — 2026-11-02 — Restrict Test to dev branch
+
+### Exact input prompt
+
+```text
+I want to restrict test to the dev environment. So the workflow will now create PR against dev, where this test runs and then dev to main after tests are performed.
+```
+
+### Change summary
+
+Switched the branch flow to feature → `dev` → `main`: `deploy.yml` deploys Test on push to `dev` and runs promotions only when dispatched from `main`; CI runs on `dev` and `main`; `service-checks.yml` runs from `dev`; `infra/scripts/promotion.py` requires a successful `dev` push Test run (tests updated, `main` source rejected). Updated `docs/backend/release-runbook.md` and `mem:cloud/phase_3_result`. Created the `dev` branch from `main` on GitHub and retargeted PR #6 to `dev`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (13 tests); `serena memories check` passed. Workflow YAML was not linted (no local YAML parser; an external linter was blocked). The `test` environment branch policy could not be set: CodeZobac has push but not admin rights (API 404). A repository admin must restrict `test` to `dev`.
