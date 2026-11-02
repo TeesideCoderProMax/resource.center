@@ -1,4 +1,5 @@
 mod application;
+mod auth;
 mod domain;
 mod infrastructure;
 mod presentation;

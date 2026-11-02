@@ -363,17 +363,36 @@ async fn authenticate_request(
 }
 
 fn map_auth_error(err: AuthVerifyError, correlation_id: &str) -> impl IntoResponse {
-    let (status, code) = match err {
-        AuthVerifyError::NotConfigured => (StatusCode::SERVICE_UNAVAILABLE, "AuthNotConfigured"),
-        AuthVerifyError::MissingBearerToken => (StatusCode::UNAUTHORIZED, "Unauthorized"),
-        AuthVerifyError::InvalidToken(_) => (StatusCode::UNAUTHORIZED, "InvalidToken"),
+    let (status, code, message) = match &err {
+        AuthVerifyError::NotConfigured => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "AuthNotConfigured",
+            "authentication is not configured on this environment",
+        ),
+        AuthVerifyError::MissingBearerToken => (
+            StatusCode::UNAUTHORIZED,
+            "Unauthorized",
+            "a Bearer access token is required",
+        ),
+        AuthVerifyError::InvalidToken(_) => (
+            StatusCode::UNAUTHORIZED,
+            "InvalidToken",
+            "the access token is not valid",
+        ),
+        AuthVerifyError::KeysUnavailable(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "AuthUnavailable",
+            "token signing keys are temporarily unavailable",
+        ),
     };
+    // Detail stays in logs; clients get a fixed message.
+    tracing::warn!(correlation_id = %correlation_id, error_code = code, error = %err, "authentication failed");
     with_correlation_header(
         status,
         correlation_id,
         ApiErrorResponse {
             error: code,
-            message: err.to_string(),
+            message: message.to_string(),
             correlation_id: correlation_id.to_string(),
         },
     )
@@ -487,14 +506,14 @@ mod contract_tests {
     use crate::test_support::FakeStore;
     use axum::body::{to_bytes, Body};
     use axum::http::Request;
-    use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
     use serde_json::{json, Value};
     use tower::ServiceExt;
 
     fn token(subject: &str, role: &str) -> String {
-        let mut header = Header::new(Algorithm::RS256);
-        header.kid = Some("phase1-test".into());
-        encode(&header, &json!({"sub":subject,"email":format!("{subject}@example.invalid"),"roles":[role],"iss":"https://issuer.example.invalid/","aud":"loan-test","exp":chrono::Utc::now().timestamp()+600}), &EncodingKey::from_rsa_pem(include_bytes!("../tests/fixtures/test-only-rsa.pem")).unwrap()).unwrap()
+        crate::auth::test_keys::sign(
+            &crate::auth::test_keys::claims(subject, &[role]),
+            crate::auth::test_keys::KID,
+        )
     }
     async fn request(
         app: &Router,
