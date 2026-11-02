@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-02",
+  "base_commit": "7419d1a",
+  "branch": "codex/backend-phase-4-delivery",
+  "scope": "Local implementation; committed for branch publication; no cloud deployment",
+  "checks": {
+    "make_check": "passed before final focused edits",
+    "rust_default_tests": 27,
+    "postgres_suites": 3,
+    "python_release_tests": 13,
+    "frontend_proxy_tests": 3,
+    "frontend_build_typecheck_audit": "passed; 0 vulnerabilities",
+    "container_builds": "backend and web passed; final backend seed rebuild passed",
+    "runtime_images": "migration and seed twice; API/web smoke passed without Auth0",
+    "terraform": "fmt and validation passed; Test, Staging, Production",
+    "actionlint": "1.7.7 passed",
+    "serena_memories": "passed"
+  },
+  "local_catalogue_load": {
+    "time_utc": "2026-11-02T14:22:11.756239+00:00",
+    "url": "http://127.0.0.1:32772/api/v1/catalogue",
+    "requests": 40,
+    "concurrency": 5,
+    "duration_seconds": 0.167376815001262,
+    "errors": 0,
+    "p50_ms": 18.760946999464068,
+    "p95_ms": 27.922559000217007,
+    "replica_evidence": "not captured"
+  },
+  "live_proof": {
+    "github_run_id": null,
+    "deployment_id": null,
+    "approval_gates": "unverified",
+    "auth0_email": "pending",
+    "cosmos_broker_recovery": "pending",
+    "cloud_scaling_alerts": "pending",
+    "current_schema_rollback": "pending"
+  },
+  "submission": "Tool and outline ready; final identity, report, media and tutor approval not verified; no final ZIP",
+  "implementation_commits": [
+    "8687a95",
+    "b877d88"
+  ]
+}

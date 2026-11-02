@@ -790,3 +790,70 @@ No. No GitHub integration tool is available in this session; only `gh` as CodeZo
 ### Validation and outcome
 
 Searched the available tools for a GitHub integration; none found.
+
+## 038 — 2026-11-02 — Backend phase 4
+
+### Exact input prompt
+
+```text
+Hello, use serena and implement the phase 4 of the backend implementation plan.
+Start from main in a clean worktree. And create a new branch for this task
+```
+
+### Change summary
+
+Created a clean worktree from origin/main (7419d1a) and branch codex/backend-phase-4-delivery; used Serena. Added shared migration-first releases, verified-artifact promotion, CI/runtime/seed checks and submission tools; updated docs, memories and the phase 4 handoff.
+
+### Validation and outcome
+
+make check, real PostgreSQL suites, local image builds/smoke, release tests, actionlint and Serena checks passed; final focused image and link checks are recorded in the handoff. No commit, push, cloud deployment or email. Live Auth0/Cosmos/gates/recovery and final report/media remain open; the CLI environment-rules read returned 404.
+
+## 039 — 2026-11-02 — Continue phase 4
+
+### Exact input prompt
+
+```text
+go ahead and continue
+```
+
+### Change summary
+
+Finished phase 4 review and saved docs/backend/phase-4-checks.json. Fixed release retry draining in infra/scripts/release.py and added its test.
+
+### Validation and outcome
+
+Final 13 release tests passed after an approved rerun for the sandbox loopback restriction. Prior full suite, PostgreSQL and image checks passed; no cloud changes.
+
+## 040 — 2026-11-02 — Finish phase 4
+
+### Exact input prompt
+
+```text
+Finish up pls
+```
+
+### Change summary
+
+Completed the phase 4 handoff, saved final check results and finished the task log. Live acceptance and final submission remain partial.
+
+### Validation and outcome
+
+All 13 final Python tests passed; actionlint, Serena references and git diff --check passed. Earlier full checks, three PostgreSQL suites and final image smoke passed. No commit, push or deployment.
+
+## 041 — 2026-11-02 — Commit and push phase 4
+
+### Exact input prompt
+
+```text
+Great! Pls add and commit these changes. 
+
+Push it at the end and output a PR description here
+```
+
+### Change summary
+
+Reviewing and committing phase 4 in logical groups, then pushing the branch.
+
+### Validation and outcome
+
+Pending commit and push checks. Prior implementation checks are recorded in the phase 4 handoff.

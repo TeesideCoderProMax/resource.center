@@ -1,6 +1,6 @@
 # Phase 4 — Safe delivery and assessment evidence
 
-Status: **planned**. One isolated implementation chat after phases 1–3. Follow `docs/backend/README.md`.
+Status: **implemented and checked locally; live acceptance and submission partial**. Results: [phase 4 handoff](phase-4-handoff.md). The requirements below remain the scope checklist, not proof that all live checks ran.
 
 ## Goal and entry context
 
@@ -31,9 +31,3 @@ Read ADR 0004 and all three handoffs. Serena: `architecture/testing`, `assessmen
 ## Handoff
 
 Save `docs/backend/phase-4-handoff.md` with final per-environment status, release/run IDs, validation commands/results, evidence index, remaining blockers and recovery instructions. Update the plan index to show actual phase outcomes, not a blanket completed claim. No further phase is assumed.
-
-## Starting prompt
-
-```text
-Implement phase 4 of the Resource Center backend plan in /home/cabozzz/dev/resource.center. Read AGENTS.md, activate this Serena project, then read backend/plan, docs/backend/README.md, docs/backend/phase-4-delivery-evidence.md, ADR 0004 and phase-1/2/3 handoffs. Complete safe migration/release/promotion checks, meaningful CI and bounded recovery/scaling evidence within the session's deployment authority. Prepare the assessment evidence and submission materials without inventing student decisions, approvals or runtime results. Preserve data and unrelated work. Finish the phase-4 handoff, current memories and AI_LOG.md; report every remaining submission or live-verification blocker.
-```

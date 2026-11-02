@@ -1,6 +1,6 @@
 # ADR 0004: Backend use cases, transactions and recovery
 
-Date: 2026-11-01. Status: **selected direction; Loan phase 1 implemented and verified locally, remaining phases planned**. See [phase 1 handoff](../../backend/phase-1-handoff.md). Not deployed by phase 1. User requested an updated backend design and four isolated implementation sessions after the CIS3039 review. Specific mechanics below are design choices to validate in implementation, not claims of tutor approval.
+Date: 2026-11-01. Status: **selected direction; phases 1–4 implemented locally; live acceptance and submission partial**. Current results: [phase 4 handoff](../../backend/phase-4-handoff.md). Not deployed by phase 1. User requested an updated backend design and four isolated implementation sessions after the CIS3039 review. Specific mechanics below are design choices to validate in implementation, not claims of tutor approval.
 
 ## Reason
 
