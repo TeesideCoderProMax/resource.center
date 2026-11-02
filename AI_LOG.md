@@ -710,3 +710,83 @@ Published the backend code/tests commit through the School GitHub connection as 
 ### Validation and outcome
 
 Reviewed all changed paths; git diff --check and serena memories check passed. Used existing phase 2 test results; no code changed or tests reran in this request. Verified the remote code tree matches the staged tree. The local SSH key belongs to CodeZobac, so GitHub write operations use the School connector; local fetches only synchronize the resulting commits. Cosmos 403 and deployed recovery checks remain open; no merge or deployment occurred.
+
+## 033 — 2026-11-02 — Implement backend phase 3
+
+### Exact input prompt
+
+```text
+Hello, use serena MCP and implement phase 3 of the backend integration plan. Start from main, make sure worktree is clean and create a new branch for this task.
+```
+
+### Change summary
+
+Stopped before branching: `main` lacked phase 2. Asked the user to choose a base. No project files changed apart from the log.
+
+### Validation and outcome
+
+Checked `git status`, branches and docs/backend. No checks run.
+
+## 034 — 2026-11-02 — Phase 2 merged into main
+
+### Exact input prompt
+
+```text
+Okay, main now also have phase 2
+```
+
+### Change summary
+
+Created branch `codex/backend-phase-3-secure-flows` from `main` (3591ccf). Moved Loan JWT checks to `auth.rs`: trusted role/email claims only, JWKS refresh on unknown kid, fail-closed 503 when keys are unavailable, issuer from `AUTH0_DOMAIN`. Added the Auth0 Next.js login, server `/api/loan` proxy and student/staff screens in `frontend/`, the web Auth0 env names in `infra/workloads`, `docs/backend/phase-3-handoff.md`, and updated contracts, plan status and memories.
+
+### Validation and outcome
+
+`make check` targets passed (backend fmt/lint/test, frontend typecheck/test/build/audit). `make infra-fmt` fails only on the git-ignored local test tfvars; tracked Terraform fmt and `terraform validate` passed. A local smoke without Auth0 passed. `serena memories check` and `git diff --check` passed. Serena MCP tools were not available, so I read the memory files directly. No live Auth0 tenant or authorized email recipients exist, so no live sign-in or email proof was done. No commit, push or deployment.
+
+## 035 — 2026-11-02 — Commit phase 3
+
+### Exact input prompt
+
+```text
+pls go ahead and commit
+```
+
+### Change summary
+
+Made three commits on `codex/backend-phase-3-secure-flows` and pushed them to origin: backend auth, web app with infra, and docs with memories and this log. No PR was opened.
+
+### Validation and outcome
+
+Reused the checks from entry 034; no code changed after them. git diff --check passed. The push succeeded.
+
+## 036 — 2026-11-02 — Open phase 3 PR
+
+### Exact input prompt
+
+```text
+Open the PR and push it
+```
+
+### Change summary
+
+Did not open the PR: `gh` is logged in only as CodeZobac (repo returns 404), and no School GitHub connector tool is loaded in this session. The branch was already pushed; this log entry was committed and pushed. Gave the user the compare URL.
+
+### Validation and outcome
+
+`gh auth status` and `gh api repos/TeesideCoderProMax/resource.center` checked access (404). git push succeeded. No PR exists yet.
+
+## 037 — 2026-11-02 — Use GitHub integration
+
+### Exact input prompt
+
+```text
+Can u use the GH integration?
+```
+
+### Change summary
+
+No. No GitHub integration tool is available in this session; only `gh` as CodeZobac, which cannot see the repo. No PR was opened. Only this log entry changed.
+
+### Validation and outcome
+
+Searched the available tools for a GitHub integration; none found.

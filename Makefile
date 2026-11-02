@@ -1,6 +1,6 @@
-.PHONY: check backend-fmt backend-lint backend-test frontend-typecheck frontend-build frontend-audit docker-build smoke-test infra-fmt infra-validate infra-init infra-plan infra-apply
+.PHONY: check backend-fmt backend-lint backend-test frontend-typecheck frontend-test frontend-build frontend-audit docker-build smoke-test infra-fmt infra-validate infra-init infra-plan infra-apply
 
-check: backend-fmt backend-lint backend-test frontend-typecheck frontend-build frontend-audit infra-fmt
+check: backend-fmt backend-lint backend-test frontend-typecheck frontend-test frontend-build frontend-audit infra-fmt
 	$(MAKE) infra-validate ENV=test
 	$(MAKE) infra-validate ENV=staging
 	$(MAKE) infra-validate ENV=production
@@ -16,6 +16,9 @@ backend-test:
 
 frontend-typecheck:
 	npm --prefix frontend run typecheck
+
+frontend-test:
+	npm --prefix frontend test
 
 frontend-build:
 	npm --prefix frontend run build

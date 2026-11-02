@@ -15,7 +15,7 @@ The API accepts `x-correlation-id`, or creates one, and returns it as a response
 | Return | Staff; reservation UUID | COLLECTED → RETURNED; unit → AVAILABLE; count +1; active subscriptions → NOTIFIED | 200; missing reservation 404; invalid/repeated state 409 | Return confirmation plus one availability request per distinct recipient |
 | List reservations | Student or staff; no input | None | 200; role failure 403 | None |
 
-Actors and recipient addresses come from verified token claims, never from request body fields.
+Actors and recipient addresses come from verified token claims, never from request body fields. Since phase 3, roles come only from `AUTH0_ROLES_CLAIM` (default `https://resource-center.campus/roles`) and the recipient address only from `AUTH0_EMAIL_CLAIM` (default `https://resource-center.campus/email`). An Auth0 post-login Action must add both to the access token. A token without a usable email claim is rejected with 401; there is no fallback address. The issuer is `AUTH0_ISSUER`, or `https://<AUTH0_DOMAIN>/` when only the domain is set.
 Students can reserve and subscribe for themselves. Staff can do the same and can collect/return any reservation.
 A student cannot collect or return even their own reservation. The read use case filters by token subject for students; staff can read all owners.
 
@@ -44,9 +44,9 @@ Application errors use `{error, message, correlationId}` and the correlation hea
 | 404 | `NotFound` |
 | 409 | `NoAvailableUnits`, `UnitsCurrentlyAvailable`, `InvalidTransition` |
 | 500 | `InternalError` |
-| 503 | `AuthNotConfigured`, or readiness `DatabaseUnreachable` |
+| 503 | `AuthNotConfigured`, `AuthUnavailable` (no usable JWKS), or readiness `DatabaseUnreachable` |
 
-Axum handles malformed JSON, wrong content type and invalid UUID path syntax before the handler; these extractor errors still use Axum's default response format. Phase 1 does not claim a single envelope for these transport errors. Missing Auth0 config fails closed with 503. Test JWTs prove local signature/claim checks, not live Auth0 setup or sign-in.
+Axum handles malformed JSON, wrong content type and invalid UUID path syntax before the handler; these extractor errors still use Axum's default response format. Phase 1 does not claim a single envelope for these transport errors. Missing Auth0 config fails closed with 503. Auth error messages are fixed text; the detail goes only to logs. The web app calls these routes through its server-side `/api/loan/*` proxy (see phase 3 handoff). Test JWTs prove local signature/claim checks, not live Auth0 setup or sign-in.
 
 ## Transaction and storage contract
 

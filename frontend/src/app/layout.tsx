@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Campus Device Loan — Resource Center",
@@ -13,16 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        style={{
-          margin: 0,
-          fontFamily:
-            "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-          backgroundColor: "#0f172a",
-          color: "#f8fafc",
-          lineHeight: 1.5,
-        }}
-      >
+      <body>
         {children}
       </body>
     </html>
