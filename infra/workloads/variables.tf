@@ -120,7 +120,7 @@ variable "auth0_audience" {
 }
 
 variable "auth0_client_id" {
-  description = "Optional public Auth0 SPA/Web client ID (never a secret)."
+  description = "Optional Auth0 Regular Web Application client ID (public; its client secret is stored separately)."
   type        = string
   default     = ""
 }

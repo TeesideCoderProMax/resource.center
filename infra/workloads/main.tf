@@ -222,17 +222,24 @@ resource "azurerm_container_app" "web" {
         name  = "NEXT_PUBLIC_LOAN_API_URL"
         value = "https://${azurerm_container_app.loan_api.ingress[0].fqdn}"
       }
+      # Server-side Auth0 web client (nextjs-auth0). AUTH0_CLIENT_SECRET and
+      # AUTH0_SECRET must be added as Container App secrets before sign-in works;
+      # without them the UI reports "Sign-in not configured".
       env {
-        name  = "NEXT_PUBLIC_AUTH0_DOMAIN"
+        name  = "AUTH0_DOMAIN"
         value = var.auth0_domain
       }
       env {
-        name  = "NEXT_PUBLIC_AUTH0_CLIENT_ID"
+        name  = "AUTH0_CLIENT_ID"
         value = var.auth0_client_id
       }
       env {
-        name  = "NEXT_PUBLIC_AUTH0_AUDIENCE"
+        name  = "AUTH0_AUDIENCE"
         value = var.auth0_audience
+      }
+      env {
+        name  = "APP_BASE_URL"
+        value = "https://${local.web_app_name}.livelywave-2cc0564d.francecentral.azurecontainerapps.io"
       }
 
       startup_probe {
