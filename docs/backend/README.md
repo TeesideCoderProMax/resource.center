@@ -1,6 +1,6 @@
 # Backend implementation: four isolated chat sessions
 
-Status: **phases 1–3 implemented locally; live acceptance for phases 2–3 remains open; phase 4 planned**. Tutor approval status is unknown; deployment remains pending. Created 2026-11-01 from the user's request and the CIS3039 assessment review. Updated design: `docs/architecture/adr/0004-backend-use-cases-and-recovery.md`. Preserve the selected stack and existing data.
+Status: **phases 1–3 implemented locally; live acceptance for phases 2–3 remains open; phase 4 implemented locally; live delivery and submission evidence partial**. Tutor approval status is unknown; deployment remains pending. Created 2026-11-01 from the user's request and the CIS3039 assessment review. Updated design: `docs/architecture/adr/0004-backend-use-cases-and-recovery.md`. Preserve the selected stack and existing data.
 
 | Phase | Result | Depends on |
 | --- | --- | --- |
@@ -43,4 +43,4 @@ Tutor Stage 2 approval is an assessment prerequisite to record, not an approval 
 
 ## Current result
 
-Phases 1–3 code and local checks are done: [phase 1](phase-1-handoff.md), [phase 2](phase-2-handoff.md), [phase 3](phase-3-handoff.md). Live Auth0, live email, Cosmos access and deployment remain open. Read the handoffs and [contracts](contracts.md) before phase 4.
+Phases 1–3 code and local checks are done: [phase 1](phase-1-handoff.md), [phase 2](phase-2-handoff.md), [phase 3](phase-3-handoff.md). Live Auth0, live email, Cosmos access and deployment remain open. Phase 4 release/tooling results and remaining limits: [handoff](phase-4-handoff.md). No further phase is assumed.

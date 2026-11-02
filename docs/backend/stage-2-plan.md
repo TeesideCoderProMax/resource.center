@@ -57,7 +57,7 @@ flowchart TB
 | R5 | Collection/return confirmations and all active subscribers on return. Stable v1 requests in phase 1; worker recovery phase 2; received email phase 3. |
 | Operations | Stateless processes, bounded DB connections, durable queue, health/logs/metrics, IaC, Test CI and gated promotion. Existing source/stored evidence; phase 4 closes evidence gaps. |
 
-Build order: (1) Loan rules, ports, migration and tests; (2) notification lease/retry/recovery; (3) Auth0 plus student/staff screens and email proof; (4) release order, seeding, CI/gates and scaling evidence. Do not treat planned screens, safe rollout or owned worker leases as implemented.
+Build order: (1) Loan rules, ports, migration and tests; (2) notification lease/retry/recovery; (3) Auth0 plus student/staff screens and email proof; (4) release order, seeding, CI/gates and scaling evidence. Screens and owned worker leases are locally implemented (phases 2–3). Phase 4 locally tests the release path; live acceptance and tutor approval remain open. See [phase 4 handoff](phase-4-handoff.md).
 
 The brief asks for tutor approval of final MVP choices. The review can cover scope, the reservation-based 48-hour clock and fakes in the demo. Local implementation proceeds under the user's request; it does not grant tutor approval.
 

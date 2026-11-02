@@ -154,19 +154,21 @@ Source review: 2026-11-01. The rows below distinguish current code from stored r
 | Public catalogue and counts | Implemented; stored Test evidence | API and Next.js catalogue exist. Confirm brand/model/category are clear in demo. Signed-in browser flows remain absent. |
 | Reservation with return date | Implemented and verified locally; not deployed | Phase 1 assigns dueAt at reservation and preserves it on collection. Migration 0002 preserves valid old dates and backfills null dates. See [handoff](../backend/phase-1-handoff.md). |
 | Concurrent reservation | Code plus stored PostgreSQL check | Model-first locks; phase 1 local PostgreSQL five-way race has one winner. Partial-write rollback, concurrent returns and multi-subscriber outbox checks also pass. HTTP tests use fake storage with real local JWT verification. |
-| Availability subscription | Backend implemented | Route and SQL subscription exist. Browser action and live authenticated proof remain open. |
+| Availability subscription | Backend implemented | Route and SQL subscription exist. Browser action exists locally (phase 3); live authenticated proof remains open. |
 | Collection/return/availability messages | Backend plus stored fake-delivery checks | Return selects active subscribers for the model; collection/return state and outbox writes are atomic. Stored three-event flow reaches Cosmos with fake email, not real recipient delivery. |
-| Auth0/JWT/RBAC | API code; incomplete user flow | JWT validator and role checks exist. Recorded Test configuration returns AuthNotConfigured on protected routes. Browser login/actions and live valid/invalid-token/403 evidence remain open. |
-| Resilience/idempotency | Partial evidence | Stored publisher lease recovery and tests for terminal duplicate/retry handling. Concurrent nonterminal worker claims, send/crash windows and full outage/backlog recovery still need proof. |
+| Auth0/JWT/RBAC | API and web code; live acceptance open | JWT validator and role checks exist. Recorded Test configuration returns AuthNotConfigured on protected routes. Browser login/actions exist locally; live valid/invalid-token/403 evidence remains open. |
+| Resilience/idempotency | Partial evidence | Stored publisher lease recovery and tests for terminal duplicate/retry handling. Phase 2 local tests cover concurrent claims and send/crash windows. Real Cosmos/broker outage and backlog recovery remain open. |
 | Observability | Code and stored Test checks | JSON logs, correlation, probes, publisher metrics, KQL and six alerts exist. Synthetic alert-routing test was blocked by Azure Students policy; actual delivery not verified. |
-| CI/CD and promotion | Workflow files implemented; execution proof incomplete | YAML defines Test automation and manual promotion confirmation. Need successful GitHub runs and verified environment gate settings. Test rollout precedes migrations; promotion lacks migration wait/smoke checks. |
+| CI/CD and promotion | Workflow files implemented; execution proof incomplete | Phase 4 shares drain → migrate/seed → activate → smoke across environments, verifies Test artifacts, and fails closed on missing independent gate settings. Local failure tests pass; actual workflow runs/settings remain unverified. |
 | IaC/scaling | Code and stored Test evidence | Terraform roots and remote state exist; worker scale-from-zero recorded. Forty successful catalogue requests are limited load evidence, not proof of HTTP scale-out. Staging/Production only parameterized. |
 
 ## 4. Remaining work
 
 - Obtain tutor approval for the prepared Stage 2 diagram, MVP/fakes/build order and due-date rule.
-- Deploy the tested due-date migration/API through a safe release; implement browser sign-in/student/staff actions.
+- Deploy the tested API and browser flows through the phase 4 release path.
 - Configure and verify Auth0 and email where required by approved scope; do not label fake outputs as live results.
-- Complete concurrent duplicate/failure recovery tests and capture real GitHub pipeline/gate evidence.
-- Make release order and promotion checks safe; reconcile disabled Staging/Production seed settings with per-deployment demo-data requirement.
+- Complete real-service recovery checks and capture real GitHub pipeline/gate evidence.
+- Verify the implemented release order, promotion rules and repeatable assessment seeding in actual runs.
 - Produce the 1,500–2,000-word report, screenshots and clips, then the required Media/Source/Documentation ZIP and root readme.
+
+Current phase 4 results: [handoff](../backend/phase-4-handoff.md). Submission outline: [checklist](../assessment/submission-checklist.md).
