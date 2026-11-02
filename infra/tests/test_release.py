@@ -1,5 +1,6 @@
 import importlib.util
 import json
+from types import SimpleNamespace
 import os
 from pathlib import Path
 import tempfile
@@ -34,7 +35,9 @@ class ReleaseTests(unittest.TestCase):
                 return ""
             def console(args, input, **kwargs):
                 values = {"var.handoff.workload_resource_group": "rg", "var.name_prefix": "rc", "var.handoff.environment": "test", "var.seed_demo_data": seed}
-                return json.dumps(values[input])
+                expression = input.removeprefix("jsonencode(").removesuffix(")\n")
+                assert "-no-color" in args and input.endswith("\n")
+                return SimpleNamespace(returncode=0, stdout=json.dumps(json.dumps(values[expression])) + "\n", stderr="")
             def azure(*args):
                 calls.append(args)
                 if args[:2] == ("containerapp", "list"):
@@ -54,7 +57,7 @@ class ReleaseTests(unittest.TestCase):
                    "TF_VAR_service_version": "sha", "GITHUB_SHA": "sha", "GITHUB_RUN_ID": "1"}
             cwd = Path.cwd()
             try:
-                with patch.object(release.Path, "resolve", return_value=root / "infra/scripts/release.py"), patch.object(release, "run", side_effect=command), patch.object(release, "az", side_effect=azure), patch.object(release.subprocess, "check_output", side_effect=console), patch.object(release.time, "sleep"), patch.dict(os.environ, env):
+                with patch.object(release.Path, "resolve", return_value=root / "infra/scripts/release.py"), patch.object(release, "run", side_effect=command), patch.object(release, "az", side_effect=azure), patch.object(release.subprocess, "run", side_effect=console), patch.object(release.time, "sleep"), patch.dict(os.environ, env):
                     try:
                         release.release("test")
                     except (RuntimeError, TimeoutError, ValueError) as error:

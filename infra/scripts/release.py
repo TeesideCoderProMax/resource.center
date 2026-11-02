@@ -52,7 +52,14 @@ def release(environment):
     varargs = (f"-var-file={config / 'workloads.tfvars'}", f"-var=environment={environment}",
                *(f"-var={key}={os.environ['TF_VAR_' + key]}" for key in ("backend_image", "web_image", "service_version")))
     def value(expression):
-        return json.loads(subprocess.check_output((*tf, "console", *varargs), input=expression, text=True))
+        # Newline-terminated so console evaluates the line; jsonencode gives exact JSON.
+        result = subprocess.run((*tf, "console", "-no-color", *varargs), input=f"jsonencode({expression})\n",
+                                text=True, capture_output=True)
+        out = result.stdout.strip()
+        if result.returncode or not out:
+            raise RuntimeError(f"terraform console failed for {expression}: {result.stderr.strip() or 'no output'}")
+        # Console prints the encoded string as an HCL string literal.
+        return json.loads(json.loads(out))
     group = value("var.handoff.workload_resource_group")
     prefix = value("var.name_prefix")
     if value("var.handoff.environment") != environment:
