@@ -913,7 +913,9 @@ Committed the frontend plan docs, memory and log entries in one commit on `codex
 
 Reviewed `git status`; only plan, memory and log files changed. Push result is in the git output for this turn.
 
-## 040 — 2026-11-02 — Implement frontend phase 1
+## 045 — 2026-11-02 — Implement frontend phase 1
+
+Correction (2026-11-02): renumbered from 040–046 to 045–051 after merging `main`, which already used 040–044.
 
 ### Exact input prompt
 
@@ -931,7 +933,7 @@ Implemented frontend phase 1 in `frontend/`: routes `/`, `/devices/[id]`, `/rese
 
 `make frontend-typecheck frontend-test frontend-build frontend-audit` passed (11 tests, 0 vulnerabilities); a no-Auth0 `next start` smoke rendered all routes; client bundle scan found no secrets/tokens. Not verified: signed-in flows against a live Loan API/Auth0, browser visual check, Docker build.
 
-## 041 — 2026-11-02 — Create PR
+## 046 — 2026-11-02 — Create PR
 
 ### Exact input prompt
 
@@ -945,9 +947,9 @@ Committed frontend phase 1 code and its docs/memory/log separately, and pushed `
 
 ### Validation and outcome
 
-Checks were those of entry 040; no new checks run. Push succeeded; `gh pr list` failed with "Could not resolve to a Repository". The user must open the PR from the compare URL.
+Checks were those of entry 045; no new checks run. Push succeeded; `gh pr list` failed with "Could not resolve to a Repository". The user must open the PR from the compare URL.
 
-## 042 — 2026-11-02 — Diagnose Azure login failure in deploy workflow
+## 047 — 2026-11-02 — Diagnose Azure login failure in deploy workflow
 
 ### Exact input prompt
 
@@ -986,7 +988,7 @@ Diagnosis only. `main`'s `.github/workflows/deploy.yml` release job reads `vars.
 
 Compared `origin/main` and branch workflows locally. Could not read the run log or repository variables: `gh` (CodeZobac) cannot access the repository.
 
-## 043 — 2026-11-02 — gh access granted
+## 048 — 2026-11-02 — gh access granted
 
 ### Exact input prompt
 
@@ -996,13 +998,13 @@ Okay, so COdezobac now have acess to this repo
 
 ### Change summary
 
-With access confirmed, checked GitHub: `test` environment has no variables and `staging`/`production` environments do not exist; run 41517898778 failed at `azure/login` as reported. Opened the frontend phase 1 PR to `main` (entry 041 follow-up). Only this log changed.
+With access confirmed, checked GitHub: `test` environment has no variables and `staging`/`production` environments do not exist; run 41517898778 failed at `azure/login` as reported. Opened the frontend phase 1 PR to `main` (entry 046 follow-up). Only this log changed.
 
 ### Validation and outcome
 
 `gh variable list`, `gh run view --log-failed` and `gh pr create` run as CodeZobac. Deploy variables are still unset; the user must supply/confirm the values.
 
-## 044 — 2026-11-02 — Set Test deploy variables
+## 049 — 2026-11-02 — Set Test deploy variables
 
 ### Exact input prompt
 
@@ -1017,3 +1019,53 @@ Set GitHub `test` environment variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `A
 ### Validation and outcome
 
 `gh variable list --env test` shows all seven. Deploy not re-run. The Test tfvars have empty Auth0 values, so the release smoke (which requires configured Auth0) is expected to fail next; OIDC federated trust for the `test` environment is unverified. `staging`/`production` environments still do not exist.
+
+## 050 — 2026-11-02 — Re-run Test deploy
+
+### Exact input prompt
+
+```text
+Re-run deploy
+```
+
+### Change summary
+
+Re-ran the failed job of run 41517898778. The variables now resolve, but `azure/login` fails with AADSTS700213: GitHub presents the immutable subject `repo:TeesideCoderProMax@346585383/resource.center@1432721449:environment:test` (repo OIDC setting `use_immutable_subject: true`), while the Azure federated credential `github-environment` on the deploy identity trusts `repo:TeesideCoderProMax/resource.center:environment:test` (`infra/platform/identity.tf`). Proposed fix pending user choice; only this log changed.
+
+### Validation and outcome
+
+Read the failed log and both subject configurations with `gh api` and `az identity federated-credential list`. Deploy still failing; nothing in Azure or GitHub changed beyond the re-run.
+
+## 051 — 2026-11-02 — Add Azure federated credential
+
+### Exact input prompt
+
+```text
+Add Azure credential
+```
+
+### Change summary
+
+Created federated credential `github-environment-immutable` on `rc-test-0330980f-github-workloads` for the ID-based subject and added the matching optional resource and `github_immutable_subject_prefix` variable to `infra/platform/identity.tf` and the `platform.tfvars` files. The re-run then passed `azure/login` but failed in `make image-test`: `pg_isready` over the Unix socket succeeded during the Postgres entrypoint's temporary init server, so migrate hit "connection refused". Merged `origin/main` and changed `backend/scripts/test-images.sh` to probe over TCP.
+
+### Validation and outcome
+
+`terraform validate` passed; `az` returned the new subject; run 41517898778 attempt passed login and failed at image test as described. The TCP probe fix is not yet exercised: the deploy runs only on `main`, so it needs PR #6 merged. The Terraform state has not been applied, so a later platform `apply` will import-conflict unless the existing credential is imported first.
+
+## 052 — 2026-11-02 — Security of the new federated credential
+
+Correction (2026-11-02): renumbered from 047, which duplicated an existing ID.
+
+### Exact input prompt
+
+```text
+How secure is The deploy identity now also trusts the ID-based subject GitHub sends.
+```
+
+### Change summary
+
+Answer only (forked session). The ID-based credential is as narrow as the name-based one and survives renames/transfers, but the GitHub `test` environment has no protection rules or branch policy, so any branch workflow naming `environment: test` can obtain the deploy identity (Contributor on workloads RG, AcrPush, state blob write, Managed Identity Operator on four identities). Recommended: restrict `test` to `main`, then remove the old name-based credential. No project files changed apart from this log.
+
+### Validation and outcome
+
+Read the environment settings with `gh api` and the role assignments with `az role assignment list`. Nothing changed in GitHub or Azure.
