@@ -1,20 +1,21 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { call, describe } from "@/lib/api-client";
+import { call } from "@/lib/api-client";
 import type { DeviceModelSummary } from "@/lib/loan";
 import { DeviceCard } from "./DeviceCard";
-import { Notice, type NoticeValue } from "./Notice";
+import { errorNotice, Notice, type NoticeValue } from "./Notice";
 
 export function Catalogue({ initialItems, initialError, canAct }: { initialItems: DeviceModelSummary[]; initialError: string | null; canAct: boolean }) {
   const [items, setItems] = useState(initialItems);
-  const [notice, setNotice] = useState<NoticeValue>(initialError ? { kind: "error", text: initialError } : null);
+  const [notice, setNotice] = useState<NoticeValue>(initialError ? { kind: "error", text: initialError, hint: "degraded" } : null);
 
   const refresh = useCallback(async () => {
     try {
       setItems((await call<{ items: DeviceModelSummary[] }>("GET", "catalogue")).items);
+      setNotice(null);
     } catch (e) {
-      setNotice({ kind: "error", text: describe(e) });
+      setNotice(errorNotice(e, "/"));
     }
   }, []);
 

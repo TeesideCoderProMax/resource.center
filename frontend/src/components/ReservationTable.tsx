@@ -1,20 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { call, describe, fmt } from "@/lib/api-client";
+import { call, fmt } from "@/lib/api-client";
 import type { ReservationRow } from "@/lib/loan";
+import { errorNotice, Notice, type NoticeValue } from "./Notice";
 
-export function useReservations() {
+/** Overdue: due date passed and the device is not back yet. */
+export const isOverdue = (r: ReservationRow, now = Date.now()) => r.status !== "RETURNED" && new Date(r.dueAt).getTime() < now;
+
+export function useReservations(returnTo: string) {
   const [rows, setRows] = useState<ReservationRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<NoticeValue>(null);
   const load = useCallback(async () => {
     try {
       setRows(await call<ReservationRow[]>("GET", "reservations"));
       setError(null);
     } catch (e) {
-      setError(describe(e));
+      setError(errorNotice(e, returnTo));
     }
-  }, []);
+  }, [returnTo]);
   useEffect(() => { load(); }, [load]);
   return { rows, error, load };
 }
@@ -25,6 +29,7 @@ export function ReservationTable({ rows, showStudent = false, actions }: {
   actions?: (r: ReservationRow) => React.ReactNode;
 }) {
   if (rows.length === 0) return <p className="muted">No reservations.</p>;
+  const now = Date.now();
   return (
     <div className="table-wrap">
       <table>
@@ -36,15 +41,21 @@ export function ReservationTable({ rows, showStudent = false, actions }: {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.reservationId}>
-              <td>{r.modelId}</td><td>{r.unitId}</td>{showStudent && <td>{r.studentEmail}</td>}
-              <td><span className={`status s-${r.status.toLowerCase()}`}>{r.status}</span></td>
-              <td>{fmt(r.reservedAt)}</td><td><strong>{fmt(r.dueAt)}</strong></td>
-              <td>{fmt(r.collectedAt)}</td><td>{fmt(r.returnedAt)}</td>
-              {actions && <td>{actions(r)}</td>}
-            </tr>
-          ))}
+          {rows.map((r) => {
+            const overdue = isOverdue(r, now);
+            return (
+              <tr key={r.reservationId} className={overdue ? "overdue" : undefined}>
+                <td>{r.modelId}</td><td>{r.unitId}</td>{showStudent && <td>{r.studentEmail}</td>}
+                <td>
+                  <span className={`status s-${r.status.toLowerCase()}`}>{r.status}</span>
+                  {overdue && <> <span className="badge overdue-badge">Overdue</span></>}
+                </td>
+                <td>{fmt(r.reservedAt)}</td><td><strong>{fmt(r.dueAt)}</strong></td>
+                <td>{fmt(r.collectedAt)}</td><td>{fmt(r.returnedAt)}</td>
+                {actions && <td>{actions(r)}</td>}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -52,11 +63,12 @@ export function ReservationTable({ rows, showStudent = false, actions }: {
 }
 
 export function MyReservations({ title, showStudent = false }: { title: string; showStudent?: boolean }) {
-  const { rows, error } = useReservations();
+  const { rows, error } = useReservations("/reservations");
   return (
     <section aria-labelledby="my-res-h">
       <h1 id="my-res-h">{title}</h1>
-      {error && <p role="alert" className="alert">{error}</p>}
+      {!showStudent && <p className="muted">Collect reserved devices at the desk and return them by the due date.</p>}
+      <Notice notice={error} />
       {rows === null && !error ? <p className="muted" role="status">Loading…</p> : rows && <ReservationTable rows={rows} showStudent={showStudent} />}
     </section>
   );
