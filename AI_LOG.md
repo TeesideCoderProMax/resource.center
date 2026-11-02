@@ -825,3 +825,37 @@ Committed the frontend plan docs, memory and log entries in one commit on `codex
 ### Validation and outcome
 
 Reviewed `git status`; only plan, memory and log files changed. Push result is in the git output for this turn.
+
+## 040 — 2026-11-02 — Implement frontend phase 1
+
+### Exact input prompt
+
+```text
+Implement frontend phase 1 from docs/frontend/phase-1-structure.md in
+/home/cabozzz/dev/resource.center. Follow AGENTS.md and docs/frontend/README.md.
+Write the phase 1 handoff when done.
+```
+
+### Change summary
+
+Implemented frontend phase 1 in `frontend/`: routes `/`, `/devices/[id]`, `/reservations`, `/staff` with display-only guards and a 403 staff page, app shell (header, role badge, nav, footer, loading/error/not-found), `ui.tsx` split into `src/components/`, typed `lib/api-client.ts`, CSS tokens with light/dark, and Vitest + RTL tests. Wrote `docs/frontend/phase-1-handoff.md` and updated `mem:frontend/plan`.
+
+### Validation and outcome
+
+`make frontend-typecheck frontend-test frontend-build frontend-audit` passed (11 tests, 0 vulnerabilities); a no-Auth0 `next start` smoke rendered all routes; client bundle scan found no secrets/tokens. Not verified: signed-in flows against a live Loan API/Auth0, browser visual check, Docker build.
+
+## 041 — 2026-11-02 — Create PR
+
+### Exact input prompt
+
+```text
+Create PR (desktop app "Create PR" action: commit, push and open a ready-for-review PR from codex/backend-phase-3-secure-flows to main)
+```
+
+### Change summary
+
+Committed frontend phase 1 code and its docs/memory/log separately, pushed `codex/backend-phase-3-secure-flows`, and opened or reused the PR to `main`.
+
+### Validation and outcome
+
+Checks were those of entry 040; no new checks run. PR URL is reported in the reply.
