@@ -1,4 +1,4 @@
-.PHONY: check backend-fmt backend-lint backend-test frontend-typecheck frontend-test frontend-build frontend-audit docker-build smoke-test infra-fmt infra-validate infra-init infra-plan infra-apply
+.PHONY: check backend-fmt backend-lint backend-test frontend-typecheck frontend-test frontend-build frontend-audit frontend-e2e docker-build smoke-test infra-fmt infra-validate infra-init infra-plan infra-apply
 
 check: release-test backend-fmt backend-lint backend-test frontend-typecheck frontend-test frontend-build frontend-audit infra-fmt
 	$(MAKE) infra-validate ENV=test
@@ -62,3 +62,7 @@ release-test:
 .PHONY: image-test
 image-test:
 	./backend/scripts/test-images.sh
+
+frontend-e2e:
+	npm --prefix frontend run build
+	npm --prefix frontend run e2e
