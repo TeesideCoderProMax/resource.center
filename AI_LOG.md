@@ -790,3 +790,38 @@ No. No GitHub integration tool is available in this session; only `gh` as CodeZo
 ### Validation and outcome
 
 Searched the available tools for a GitHub integration; none found.
+
+## 038 — 2026-11-02 — Plan frontend phases
+
+### Exact input prompt
+
+```text
+@"/home/cabozzz/Downloads/cnd-cis3039-assessment-spec.docx"
+Great, based on the project assesment and on this chart, use serena MCP on the resource.center and let's create a 3 phased plan for the frontend implementation. The backend/cloud docs are available at the docs folder in the resource center folder.
+
+This 3 phased plan is to be implemented in different chat sessions
+```
+
+### Change summary
+
+Created a three-phase frontend plan in `docs/frontend/` (README plus phase 1 structure/UX, phase 2 flows and tests, phase 3 cloud/observability/demo), each with a starting prompt. Added `mem:frontend/plan` and linked it from `core`. Noted that the supplied starter diagram is stale (Python, Nginx, Notifications reading PostgreSQL).
+
+### Validation and outcome
+
+`serena memories check` passed; `git diff --check` passed. Serena MCP tools were not available in this session, so memories were read as files. Plan only; no code changed.
+
+## 039 — 2026-11-02 — Commit frontend plan
+
+### Exact input prompt
+
+```text
+Commit
+```
+
+### Change summary
+
+Committed the frontend plan docs, memory and log entries in one commit on `codex/backend-phase-3-secure-flows` and pushed it.
+
+### Validation and outcome
+
+Reviewed `git status`; only plan, memory and log files changed. Push result is in the git output for this turn.
