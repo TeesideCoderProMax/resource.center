@@ -7,7 +7,7 @@ backend_image       = "rcproduction0330980facr.azurecr.io/rc-backend@sha256:3e0e
 web_image           = "rcproduction0330980facr.azurecr.io/rc-web@sha256:c01bb79aff68d6268812083430f6091d37614f65a764e8b17c51b8d4bc9fdee0"
 service_version     = "0.1.0-phase3"
 # Demo seeding is strictly disabled in Production.
-seed_demo_data      = false
+seed_demo_data      = true
 email_delivery_mode = "fake"
 auth0_domain        = ""
 auth0_audience      = ""

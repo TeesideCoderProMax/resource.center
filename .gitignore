@@ -29,3 +29,9 @@ frontend/.next/
 frontend/out/
 frontend/next-env.d.ts
 *.tsbuildinfo
+
+# Local Python checks and release artifacts
+__pycache__/
+*.pyc
+release.json
+tested-release/

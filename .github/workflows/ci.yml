@@ -40,6 +40,12 @@ jobs:
       - name: Unit and integration tests
         run: make backend-test
 
+      - name: Real PostgreSQL rollback, contention and safe seed checks
+        run: make backend-test-postgres
+
+      - name: Release failure and promotion policy checks
+        run: make release-test
+
   frontend:
     name: Next.js Frontend (typecheck, build, audit)
     runs-on: ubuntu-latest
@@ -59,6 +65,9 @@ jobs:
 
       - name: TypeScript typecheck
         run: make frontend-typecheck
+
+      - name: Proxy security tests
+        run: make frontend-test
 
       - name: Production build check
         run: make frontend-build
@@ -102,3 +111,6 @@ jobs:
 
       - name: Build backend and frontend images
         run: make docker-build
+
+      - name: Runtime images, migration rerun and bounded catalogue load
+        run: make image-test

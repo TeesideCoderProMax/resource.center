@@ -1,6 +1,6 @@
 .PHONY: check backend-fmt backend-lint backend-test frontend-typecheck frontend-test frontend-build frontend-audit docker-build smoke-test infra-fmt infra-validate infra-init infra-plan infra-apply
 
-check: backend-fmt backend-lint backend-test frontend-typecheck frontend-test frontend-build frontend-audit infra-fmt
+check: release-test backend-fmt backend-lint backend-test frontend-typecheck frontend-test frontend-build frontend-audit infra-fmt
 	$(MAKE) infra-validate ENV=test
 	$(MAKE) infra-validate ENV=staging
 	$(MAKE) infra-validate ENV=production
@@ -54,3 +54,11 @@ backend-test-postgres:
 .PHONY: backend-test-cosmos
 backend-test-cosmos:
 	cargo test --manifest-path backend/Cargo.toml -p notifications-worker real_cosmos_claim_renew_finalize_conflicts -- --ignored --nocapture
+
+.PHONY: release-test
+release-test:
+	python3 -m unittest discover -s infra/tests -v
+
+.PHONY: image-test
+image-test:
+	./backend/scripts/test-images.sh

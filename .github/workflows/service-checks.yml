@@ -1,0 +1,35 @@
+name: Optional real Cosmos checks
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cosmos:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.COSMOS_CHECK_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Real ETag claim, renew and finalize conflicts (no email)
+        env:
+          COSMOS_ENDPOINT: ${{ vars.COSMOS_ENDPOINT }}
+          COSMOS_DATABASE: notifications
+          COSMOS_CONTAINER: jobs
+        run: |
+          set -euo pipefail
+          token=$(az account get-access-token --resource https://cosmos.azure.com --query accessToken -o tsv)
+          echo "::add-mask::$token"
+          export AZURE_STATIC_TOKEN_OVERRIDE="$token"
+          make backend-test-cosmos

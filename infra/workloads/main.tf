@@ -215,6 +215,10 @@ resource "azurerm_container_app" "web" {
         value = var.environment
       }
       env {
+        name  = "RC_VERSION"
+        value = var.service_version
+      }
+      env {
         name  = "LOAN_API_BASE_URL"
         value = "https://${azurerm_container_app.loan_api.ingress[0].fqdn}"
       }
@@ -352,7 +356,7 @@ resource "azurerm_container_app_job" "publisher" {
   resource_group_name          = local.resource_group_name
   container_app_environment_id = var.handoff.container_app_environment_id
   workload_profile_name        = "Consumption"
-  replica_timeout_in_seconds   = 60
+  replica_timeout_in_seconds   = 960
   replica_retry_limit          = 1
   tags                         = merge(local.base_tags, { service = "loan" })
 
