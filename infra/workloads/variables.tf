@@ -53,6 +53,8 @@ variable "handoff" {
     }))
     location                = string
     notifications_vault_uri = string
+    # Empty until the platform with the web vault is applied; web secrets are then skipped.
+    web_vault_uri           = optional(string, "")
     platform_resource_group = string
     postgres_database       = string
     postgres_host           = string

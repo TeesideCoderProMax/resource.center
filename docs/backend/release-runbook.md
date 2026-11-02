@@ -58,24 +58,28 @@ reservations, and does not recreate a removed unit. Tests cover this with a live
 local PostgreSQL database. A real institutional production service needs a separate
 approved seed policy; do not apply demo inventory to it by inference.
 
-The release requires configured Auth0 in API and web smoke responses. Web secrets
-must also be bound to container env vars, not merely stored as Container App
-secrets; phase 3 did not add those bindings. Set that up before live release.
+The release requires configured Auth0 in API and web smoke responses. Web secrets (`AUTH0_CLIENT_SECRET`, `AUTH0_SECRET`) live in the web-owned Key
+Vault (`handoff.web_vault_uri`) as `auth0-client-secret` and `auth0-secret`. The
+web Container App reads them through Key Vault references with its own `web`
+identity, so Terraform state and GitHub hold only the URIs. Apply the platform,
+write both values out of band (`az keyvault secret set --file`), add
+`web_vault_uri` and the `web` identity to the environment's `handoff`, then
+release. With `web_vault_uri` empty the web app runs without them.
 `ALLOW_UNCONFIGURED_AUTH=true` exists only for an explicitly approved local/fake
 smoke; the deployment workflow does not set it. Health config flags do not prove
 that an actual login, token, role or email works.
 
 ## GitHub controls and promotion
 
-Protect `main` with reviewed changes and required CI checks. Configure target
+Branch flow: one branch per environment — `qa` → `test`, `dev` → `staging`, `main` → `production`. Feature PRs target `qa`; a push to `qa` runs CI and the Test release. Reviewed `qa` → `dev` and `dev` → `main` PRs follow passing runs; promotion is then dispatched from that branch. Restrict each GitHub environment's deployment branches to its branch ("Selected branches", exactly one branch rule); promotion fails closed otherwise. Protect all three branches with reviewed changes and required CI checks. Configure target
 Environments with required independent reviewers, prevent self-review, disable
-admin bypass and allow protected branches only. Confirm the repository plan
+admin bypass and allow only that environment's branch. Confirm the repository plan
 supports these controls for a private repository. Environment names alone do not
 create them. Typed confirmation is no longer treated as approval.
 
-Dispatch `Deploy & Promote` from `main`, choose the target and give `test_run_id`.
+Dispatch `Deploy & Promote` from `dev` (staging) or `main` (production), choose the target and give `test_run_id`.
 The policy checks the actual environment response and requires a successful
-`push` run on `main` from this repository's deploy workflow. It downloads that
+`push` run on `qa` from this repository's deploy workflow. It downloads that
 run's `test-release` artifact and checks source SHA, run ID, version, smoke result
 and both digests. Promotion imports these digests to target ACR and checks they
 remain unchanged. It does not rebuild them. Failed/missing rules or API access
@@ -143,6 +147,6 @@ times, errors and replica counts. Do not run this against real users. Current lo
 notification tests cover lease loss, retained fake backlog, retries and the
 uncertain-send gap. Real broker/Cosmos recovery, restart and scale-out remain open.
 The optional `service-checks.yml` uses a dedicated authorized Cosmos test identity,
-runs only by manual dispatch on main, creates unique synthetic records and sends
+runs only by manual dispatch on qa, creates unique synthetic records and sends
 no email. It deletes records on success; failed checks may leave synthetic IDs
 for reviewed cleanup. No permission grant or service check ran in phase 4.

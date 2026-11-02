@@ -1,7 +1,13 @@
 variable "github_repository" { type = string }
+# GitHub sends ID-based OIDC subjects for this repository (use_immutable_subject), e.g.
+# "repo:Owner@123/name@456". Empty keeps only the name-based credential.
+variable "github_immutable_subject_prefix" {
+  type    = string
+  default = ""
+}
 variable "state_storage_account_id" { type = string }
 resource "azurerm_user_assigned_identity" "workload" {
-  for_each            = toset(["loan", "publisher", "notifications", "migrations"])
+  for_each            = toset(["loan", "publisher", "notifications", "migrations", "web"])
   name                = "${local.prefix}-${each.key}"
   resource_group_name = azurerm_resource_group.platform.name
   location            = var.location
@@ -30,6 +36,21 @@ resource "azurerm_cosmosdb_sql_role_assignment" "notifications" {
   principal_id        = azurerm_user_assigned_identity.workload["notifications"].principal_id
   scope               = "${azurerm_cosmosdb_account.notifications.id}/dbs/${azurerm_cosmosdb_sql_database.notifications.name}/colls/${azurerm_cosmosdb_sql_container.jobs.name}"
 }
+resource "azurerm_role_assignment" "web_secrets" {
+  scope                = azurerm_key_vault.web.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.workload["web"].principal_id
+}
+# The operator writes the web secret values out of band (never Terraform), so they never enter state.
+variable "web_secrets_operator_object_id" {
+  type    = string
+  default = ""
+}
+resource "azurerm_role_assignment" "web_secrets_operator" {
+  scope                = azurerm_key_vault.web.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = coalesce(var.web_secrets_operator_object_id, var.postgres_admin_object_id)
+}
 resource "azurerm_role_assignment" "notification_secrets" {
   scope                = azurerm_key_vault.notifications.id
   role_definition_name = "Key Vault Secrets User"
@@ -47,6 +68,14 @@ resource "azurerm_federated_identity_credential" "github" {
   audience                  = ["api://AzureADTokenExchange"]
   issuer                    = "https://token.actions.githubusercontent.com"
   subject                   = "repo:${var.github_repository}:environment:${var.environment}"
+}
+resource "azurerm_federated_identity_credential" "github_immutable" {
+  count                     = var.github_immutable_subject_prefix == "" ? 0 : 1
+  name                      = "github-environment-immutable"
+  user_assigned_identity_id = azurerm_user_assigned_identity.deploy.id
+  audience                  = ["api://AzureADTokenExchange"]
+  issuer                    = "https://token.actions.githubusercontent.com"
+  subject                   = "${var.github_immutable_subject_prefix}:environment:${var.environment}"
 }
 resource "azurerm_role_assignment" "deploy_workloads" {
   scope                = azurerm_resource_group.workloads.id

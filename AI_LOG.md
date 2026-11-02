@@ -912,3 +912,365 @@ Committed the frontend plan docs, memory and log entries in one commit on `codex
 ### Validation and outcome
 
 Reviewed `git status`; only plan, memory and log files changed. Push result is in the git output for this turn.
+
+## 045 — 2026-11-02 — Implement frontend phase 1
+
+Correction (2026-11-02): renumbered from 040–046 to 045–051 after merging `main`, which already used 040–044.
+
+### Exact input prompt
+
+```text
+Implement frontend phase 1 from docs/frontend/phase-1-structure.md in
+/home/cabozzz/dev/resource.center. Follow AGENTS.md and docs/frontend/README.md.
+Write the phase 1 handoff when done.
+```
+
+### Change summary
+
+Implemented frontend phase 1 in `frontend/`: routes `/`, `/devices/[id]`, `/reservations`, `/staff` with display-only guards and a 403 staff page, app shell (header, role badge, nav, footer, loading/error/not-found), `ui.tsx` split into `src/components/`, typed `lib/api-client.ts`, CSS tokens with light/dark, and Vitest + RTL tests. Wrote `docs/frontend/phase-1-handoff.md` and updated `mem:frontend/plan`.
+
+### Validation and outcome
+
+`make frontend-typecheck frontend-test frontend-build frontend-audit` passed (11 tests, 0 vulnerabilities); a no-Auth0 `next start` smoke rendered all routes; client bundle scan found no secrets/tokens. Not verified: signed-in flows against a live Loan API/Auth0, browser visual check, Docker build.
+
+## 046 — 2026-11-02 — Create PR
+
+### Exact input prompt
+
+```text
+Create PR (desktop app "Create PR" action: commit, push and open a ready-for-review PR from codex/backend-phase-3-secure-flows to main)
+```
+
+### Change summary
+
+Committed frontend phase 1 code and its docs/memory/log separately, and pushed `codex/backend-phase-3-secure-flows`. No PR opened: `gh` (account CodeZobac) cannot resolve `TeesideCoderProMax/resource.center`, as in entries 036–037.
+
+### Validation and outcome
+
+Checks were those of entry 045; no new checks run. Push succeeded; `gh pr list` failed with "Could not resolve to a Repository". The user must open the PR from the compare URL.
+
+## 047 — 2026-11-02 — Diagnose Azure login failure in deploy workflow
+
+### Exact input prompt
+
+````text
+Ive got this issue on the github actions:
+
+The job failed in the Azure login step, before deployment could begin.
+What the log says:
+
+* "Login failed with Error: Using auth-type: SERVICE_PRINCIPAL. Not all values are present."
+* "Ensure 'client-id' and 'tenant-id' are supplied."
+
+That means the workflow is configured to authenticate to Azure using a service principal, but the required credentials were not present in the environment or GitHub secrets for that run.
+Additional clue:
+
+* The log shows:
+   * ACR_NAME:
+   * ACR_SERVER:
+* These values are blank, which suggests the deployment variables/secrets for Azure Container Registry or Azure login were not set.
+
+So the root cause is not a code/test failure in the app itself; it is a deployment configuration issue:
+
+* Azure auth type = SERVICE_PRINCIPAL
+* client-id missing
+* tenant-id missing
+* likely related secrets/vars not injected into the workflow
+
+In short: the job failed because Azure login could not authenticate with the required service principal details.
+````
+
+### Change summary
+
+Diagnosis only. `main`'s `.github/workflows/deploy.yml` release job reads `vars.AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME`, `ACR_SERVER` (plus `WORKLOADS_TFVARS`, `WORKLOADS_BACKEND_HCL`) from the GitHub `test` environment; they are unset, so azure/login gets empty IDs and falls back to service-principal mode. Fix is to set those environment variables (see `docs/backend/release-runbook.md`). No project files changed apart from this log.
+
+### Validation and outcome
+
+Compared `origin/main` and branch workflows locally. Could not read the run log or repository variables: `gh` (CodeZobac) cannot access the repository.
+
+## 048 — 2026-11-02 — gh access granted
+
+### Exact input prompt
+
+```text
+Okay, so COdezobac now have acess to this repo
+```
+
+### Change summary
+
+With access confirmed, checked GitHub: `test` environment has no variables and `staging`/`production` environments do not exist; run 41517898778 failed at `azure/login` as reported. Opened the frontend phase 1 PR to `main` (entry 046 follow-up). Only this log changed.
+
+### Validation and outcome
+
+`gh variable list`, `gh run view --log-failed` and `gh pr create` run as CodeZobac. Deploy variables are still unset; the user must supply/confirm the values.
+
+## 049 — 2026-11-02 — Set Test deploy variables
+
+### Exact input prompt
+
+```text
+Yes, set them
+```
+
+### Change summary
+
+Set GitHub `test` environment variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME`, `ACR_SERVER`, and `WORKLOADS_TFVARS`/`WORKLOADS_BACKEND_HCL` from the local Test files (identical to the committed `.example` copies; no secrets). Only this log changed in the repository.
+
+### Validation and outcome
+
+`gh variable list --env test` shows all seven. Deploy not re-run. The Test tfvars have empty Auth0 values, so the release smoke (which requires configured Auth0) is expected to fail next; OIDC federated trust for the `test` environment is unverified. `staging`/`production` environments still do not exist.
+
+## 050 — 2026-11-02 — Re-run Test deploy
+
+### Exact input prompt
+
+```text
+Re-run deploy
+```
+
+### Change summary
+
+Re-ran the failed job of run 41517898778. The variables now resolve, but `azure/login` fails with AADSTS700213: GitHub presents the immutable subject `repo:TeesideCoderProMax@346585383/resource.center@1432721449:environment:test` (repo OIDC setting `use_immutable_subject: true`), while the Azure federated credential `github-environment` on the deploy identity trusts `repo:TeesideCoderProMax/resource.center:environment:test` (`infra/platform/identity.tf`). Proposed fix pending user choice; only this log changed.
+
+### Validation and outcome
+
+Read the failed log and both subject configurations with `gh api` and `az identity federated-credential list`. Deploy still failing; nothing in Azure or GitHub changed beyond the re-run.
+
+## 051 — 2026-11-02 — Add Azure federated credential
+
+### Exact input prompt
+
+```text
+Add Azure credential
+```
+
+### Change summary
+
+Created federated credential `github-environment-immutable` on `rc-test-0330980f-github-workloads` for the ID-based subject and added the matching optional resource and `github_immutable_subject_prefix` variable to `infra/platform/identity.tf` and the `platform.tfvars` files. The re-run then passed `azure/login` but failed in `make image-test`: `pg_isready` over the Unix socket succeeded during the Postgres entrypoint's temporary init server, so migrate hit "connection refused". Merged `origin/main` and changed `backend/scripts/test-images.sh` to probe over TCP.
+
+### Validation and outcome
+
+`terraform validate` passed; `az` returned the new subject; run 41517898778 attempt passed login and failed at image test as described. The TCP probe fix is not yet exercised: the deploy runs only on `main`, so it needs PR #6 merged. The Terraform state has not been applied, so a later platform `apply` will import-conflict unless the existing credential is imported first.
+
+## 052 — 2026-11-02 — Security of the new federated credential
+
+Correction (2026-11-02): renumbered from 047, which duplicated an existing ID.
+
+### Exact input prompt
+
+```text
+How secure is The deploy identity now also trusts the ID-based subject GitHub sends.
+```
+
+### Change summary
+
+Answer only (forked session). The ID-based credential is as narrow as the name-based one and survives renames/transfers, but the GitHub `test` environment has no protection rules or branch policy, so any branch workflow naming `environment: test` can obtain the deploy identity (Contributor on workloads RG, AcrPush, state blob write, Managed Identity Operator on four identities). Recommended: restrict `test` to `main`, then remove the old name-based credential. No project files changed apart from this log.
+
+### Validation and outcome
+
+Read the environment settings with `gh api` and the role assignments with `az role assignment list`. Nothing changed in GitHub or Azure.
+
+## 048 — 2026-11-02 — Plan restricting test environment to qa
+
+### Exact input prompt
+
+```text
+Draft a plan to restrict the test environment to the qa branch
+```
+
+### Change summary
+
+Plan only, given in chat: create `qa`, retarget the deploy workflow (push trigger, verify guard) and `infra/scripts/promotion.py` from `main` to `qa`, set a custom deployment branch policy on `test` allowing only `qa`, update the release runbook, verify with a qa run and a rejected non-qa run. No project files changed apart from this log.
+
+### Validation and outcome
+
+Inspected remote branches (`qa` does not exist), `origin/main` deploy workflow and promotion script. Nothing changed.
+
+## 053 — 2026-11-02 — Restrict Test to dev branch
+
+### Exact input prompt
+
+```text
+I want to restrict test to the dev environment. So the workflow will now create PR against dev, where this test runs and then dev to main after tests are performed.
+```
+
+### Change summary
+
+Switched the branch flow to feature → `dev` → `main`: `deploy.yml` deploys Test on push to `dev` and runs promotions only when dispatched from `main`; CI runs on `dev` and `main`; `service-checks.yml` runs from `dev`; `infra/scripts/promotion.py` requires a successful `dev` push Test run (tests updated, `main` source rejected). Updated `docs/backend/release-runbook.md` and `mem:cloud/phase_3_result`. Created the `dev` branch from `main` on GitHub and retargeted PR #6 to `dev`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (13 tests); `serena memories check` passed. Workflow YAML was not linted (no local YAML parser; an external linter was blocked). The `test` environment branch policy could not be set: CodeZobac has push but not admin rights (API 404). A repository admin must restrict `test` to `dev`.
+
+## 054 — 2026-11-02 — Map qa/dev/main to test/staging/production
+
+### Exact input prompt
+
+```text
+Okay, so let's do this diferently. A new branch QA is the test environment; dev is the staging and main is production.
+```
+
+### Change summary
+
+Replaced the `dev`-only flow with one branch per environment: `qa` → test, `dev` → staging, `main` → production. `deploy.yml` deploys Test on push to `qa` and allows staging/production promotions only when dispatched from `dev`/`main`; CI covers all three branches; `service-checks.yml` runs from `qa`. `infra/scripts/promotion.py` now requires a successful `qa` Test run, the matching dispatch branch, and an environment branch policy of exactly that one branch (tests updated). Updated `docs/backend/release-runbook.md` and `mem:cloud/phase_3_result`; created the `qa` branch from `main` and retargeted PR #6 to `qa`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (13 tests); `serena memories check` passed. Workflow YAML not linted. Environment branch policies and creation of `staging`/`production` environments still need a repository admin (CodeZobac lacks admin).
+
+## 055 — 2026-11-02 — Auth0 setup guidance
+
+### Exact input prompt
+
+```text
+Okay, how do i fill in Auth0 values? What keys are needed, can you guide me trough their dashboard
+```
+
+### Change summary
+
+Answer only: explained the Auth0 setup (API with audience and RBAC, Regular Web Application with callback/logout URLs, `student`/`staff` roles, post-login Action adding the roles and email claims) and which values go where (`auth0_domain`, `auth0_audience`, `auth0_client_id` in `WORKLOADS_TFVARS`; client secret and `AUTH0_SECRET` as secrets). Noted that `infra/workloads/main.tf` does not yet bind the web secrets, so live sign-in also needs an infra change. No project files changed apart from this log.
+
+### Validation and outcome
+
+Read `infra/workloads/main.tf`, `variables.tf`, `docs/backend/contracts.md` and `frontend/src/lib/auth0.ts`. Not checked against the live Auth0 dashboard.
+
+## 056 — 2026-11-02 — Auth0 free plan coverage
+
+### Exact input prompt
+
+```text
+Is all the features we need available in auth0 free plan?
+```
+
+### Change summary
+
+Answer only: the features used (Regular Web App with Authorization Code + PKCE, one custom API/audience with RS256, RBAC roles in access tokens, a post-login Action adding custom claims, database/social connections) are available on Auth0's free plan; noted limits to check (MAU cap, M2M tokens, custom domain, email provider for production). No project files changed apart from this log.
+
+### Validation and outcome
+
+Based on general knowledge of Auth0 plans; the live pricing page was not checked this turn.
+
+## 057 — 2026-11-02 — Auth0 audience without a domain
+
+### Exact input prompt
+
+```text
+i dont have a domain for this app. Does https://loan.resource-center.campus work? Can you make azure generate a generic URI for my API service that stays always the same?
+```
+
+### Change summary
+
+Answer only: an Auth0 API identifier is an opaque audience string that is never fetched, so `https://loan.resource-center.campus` works without owning the domain. Azure already gives the Loan API a stable FQDN, `rc-test-0330980f-loan-api.livelywave-2cc0564d.francecentral.azurecontainerapps.io`, which stays the same while the app name and Container Apps environment are kept; recommended keeping a logical identifier instead. No project files changed apart from this log.
+
+### Validation and outcome
+
+Listed Container App FQDNs with `az containerapp list` in `rc-test-0330980f-workloads-rg`.
+
+## 058 — 2026-11-02 — Set Auth0 Test values and plan web secrets
+
+### Exact input prompt
+
+```text
+Okay, pls setup the vars in both gh and the tfvars file.
+
+AUTH0_DOMAIN=dev-1mxf8h3b7mphavlc.eu.auth0.com
+AUTH0_CLIENT_ID=vDJ4vxu2kQ0Dyq8ifOIKN9DAFiKSXKSQ
+AUTH0_AUDIENCE=https://loan-test.resource-center.campu
+
+From what i understood the other private ones are not meant to be put in GH actions.
+
+How to add the remaining envs as Container App secrets? They are set in .env.local
+```
+
+### Change summary
+
+Set `auth0_domain`, `auth0_audience` and `auth0_client_id` in `infra/environments/test/workloads.tfvars` (local, ignored) and the committed `.example`, and updated the GitHub `test` variable `WORKLOADS_TFVARS`. Explained options for the web secrets; recommended Key Vault references bound by Terraform. Not implemented yet.
+
+### Validation and outcome
+
+`gh variable set` succeeded. The audience ends in `.campu` (no `s`), matching `frontend/.env.local`; flagged to the user to confirm against the Auth0 API identifier. Secret values were not read or printed.
+
+## 059 — 2026-11-02 — Key Vault references for web Auth0 secrets
+
+### Exact input prompt
+
+```text
+Yes, use Key Vault. I confirm the audience ends in .campu
+```
+
+### Change summary
+
+Added a web-owned Key Vault (`<compact>wkv`), a `web` user-assigned identity with Key Vault Secrets User, an operator Secrets Officer assignment (`web_secrets_operator_object_id`, defaulting to the Postgres admin) and `web_vault_uri` in the platform handoff. The web Container App now uses the `web` identity and Key Vault references for `AUTH0_CLIENT_SECRET`/`AUTH0_SECRET` when `handoff.web_vault_uri` is set. Added `infra/scripts/set-web-secrets.sh`, updated the release runbook and `mem:cloud/phase_3_result`.
+
+### Validation and outcome
+
+`terraform validate` passed for platform and workloads. Platform init/import/plan/apply against Test state was blocked by the session permission guard, so nothing was applied and no secrets were written; the user must run the documented steps.
+
+## 060 — 2026-11-02 — Record applied Test platform handoff
+
+### Exact input prompt
+
+```text
+<bash-input>./infra/scripts/terraform.sh apply platform test</bash-input> (user ran the platform apply; output: "Apply complete! Resources: 8 added, 0 changed, 2 destroyed." with the updated `handoff` output)
+```
+
+Correction: the user's message was a shell run and its long output; only the command and result line are recorded here.
+
+### Change summary
+
+Recorded the applied Test platform outputs: added the `web` identity and `web_vault_uri` to the Test `workloads.tfvars` (local and `.example`), `docs/cloud/test-foundation-outputs.json`, and the GitHub `test` variable `WORKLOADS_TFVARS`.
+
+### Validation and outcome
+
+User's apply reported 8 added, 2 destroyed (saved searches recreated). `terraform validate` passed; `gh variable set` succeeded. Web secrets not yet written to the vault (user step pending); deploy not run.
+
+## 061 — 2026-11-02 — Platform handoff output and repeated import
+
+### Exact input prompt
+
+````text
+Here is the output:
+
+{"container_app_environment_id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.App/managedEnvironments/rc-test-0330980f-apps","cosmos_capacity_mode":"free_tier","cosmos_container":"jobs","cosmos_database":"notifications","cosmos_endpoint":"https://rc-test-0330980f-notifications.documents.azure.com:443/","environment":"test","github_client_id":"b8dba55f-9eb5-4d3f-9f5d-cfe913b62104","identities":{"loan":{"client_id":"43b555a6-c33d-4a3d-9f06-169a31307f49","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-loan","name":"rc-test-0330980f-loan","principal_id":"9ecf13c8-82a7-4f3c-a646-f4fc3ad32b50"},"migrations":{"client_id":"c6b4b9a7-e15a-4f17-8b3a-3c8f3cf5c3db","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-migrations","name":"rc-test-0330980f-migrations","principal_id":"82caf993-cd67-4037-9d29-d3e359f63bf1"},"notifications":{"client_id":"9d2ca270-ebc1-4cb6-a498-f7cb0bc2d16b","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-notifications","name":"rc-test-0330980f-notifications","principal_id":"b855eb0a-3d5d-4d43-aebd-5adb2ce33cf0"},"publisher":{"client_id":"06917d48-9475-40c8-95be-47c0c2376130","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-publisher","name":"rc-test-0330980f-publisher","principal_id":"16f78a70-a167-4406-b612-686764a101eb"},"web":{"client_id":"2c1e9785-9454-462b-b818-18a028f5e9f1","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-web","name":"rc-test-0330980f-web","principal_id":"ba319349-130e-4a6d-9905-f0a5225d0a31"}},"location":"francecentral","notifications_vault_uri":"https://rctest0330980fnkv.vault.azure.net/","platform_resource_group":"rc-test-0330980f-platform-rg","postgres_database":"loan","postgres_host":"rc-test-0330980f-loan-pg.postgres.database.azure.com","registry_id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ContainerRegistry/registries/rctest0330980facr","registry_login_server":"rctest0330980facr.azurecr.io","registry_sku":"Standard","servicebus_namespace":"rc-test-0330980f-bus.servicebus.windows.net","servicebus_queue":"notification-requests-v1","subscription_id":"0330980f-85ea-4b38-8b9e-c871432c9d4f","tenant_id":"43d2115b-a55e-46b6-9df7-b03388ecfc60","web_vault_uri":"https://rctest0330980fwkv.vault.azure.net/","workload_resource_group":"rc-test-0330980f-workloads-rg"}
+
+It failed at step 7
+
+le"...
+azurerm_federated_identity_credential.github_immutable[0]: Import prepared!
+  Prepared azurerm_federated_identity_credential for import
+╷
+│ Error: Resource already managed by Terraform
+│ 
+│ Terraform is already managing a remote
+│ object for
+│ azurerm_federated_identity_credential.github_immutable[0].
+│ To import to this address you must first
+│ remove the existing object from the state.
+╵
+
+Releasing state lock. This may take a few moments...
+````
+
+### Change summary
+
+Answer only: the handoff output matches what entry 060 already recorded in the Test tfvars, outputs file and GitHub variable. The import error is from re-running step 2, which had already succeeded; it changed nothing. Step 7 was the agent's update, already done. No project files changed apart from this log.
+
+### Validation and outcome
+
+Grepped the Test `workloads.tfvars` for the web identity name, client ID, principal ID and vault URI; all present.
+
+## 062 — 2026-11-02 — Ship PR #6 to qa
+
+### Exact input prompt
+
+```text
+Ship it
+```
+
+### Change summary
+
+Merged PR #6 into `qa` to trigger the Test deploy; outcome recorded in the reply.
+
+### Validation and outcome
+
+See the deploy run result reported to the user.
