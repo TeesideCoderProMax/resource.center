@@ -1223,3 +1223,54 @@ Recorded the applied Test platform outputs: added the `web` identity and `web_va
 ### Validation and outcome
 
 User's apply reported 8 added, 2 destroyed (saved searches recreated). `terraform validate` passed; `gh variable set` succeeded. Web secrets not yet written to the vault (user step pending); deploy not run.
+
+## 061 — 2026-11-02 — Platform handoff output and repeated import
+
+### Exact input prompt
+
+````text
+Here is the output:
+
+{"container_app_environment_id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.App/managedEnvironments/rc-test-0330980f-apps","cosmos_capacity_mode":"free_tier","cosmos_container":"jobs","cosmos_database":"notifications","cosmos_endpoint":"https://rc-test-0330980f-notifications.documents.azure.com:443/","environment":"test","github_client_id":"b8dba55f-9eb5-4d3f-9f5d-cfe913b62104","identities":{"loan":{"client_id":"43b555a6-c33d-4a3d-9f06-169a31307f49","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-loan","name":"rc-test-0330980f-loan","principal_id":"9ecf13c8-82a7-4f3c-a646-f4fc3ad32b50"},"migrations":{"client_id":"c6b4b9a7-e15a-4f17-8b3a-3c8f3cf5c3db","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-migrations","name":"rc-test-0330980f-migrations","principal_id":"82caf993-cd67-4037-9d29-d3e359f63bf1"},"notifications":{"client_id":"9d2ca270-ebc1-4cb6-a498-f7cb0bc2d16b","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-notifications","name":"rc-test-0330980f-notifications","principal_id":"b855eb0a-3d5d-4d43-aebd-5adb2ce33cf0"},"publisher":{"client_id":"06917d48-9475-40c8-95be-47c0c2376130","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-publisher","name":"rc-test-0330980f-publisher","principal_id":"16f78a70-a167-4406-b612-686764a101eb"},"web":{"client_id":"2c1e9785-9454-462b-b818-18a028f5e9f1","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-web","name":"rc-test-0330980f-web","principal_id":"ba319349-130e-4a6d-9905-f0a5225d0a31"}},"location":"francecentral","notifications_vault_uri":"https://rctest0330980fnkv.vault.azure.net/","platform_resource_group":"rc-test-0330980f-platform-rg","postgres_database":"loan","postgres_host":"rc-test-0330980f-loan-pg.postgres.database.azure.com","registry_id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ContainerRegistry/registries/rctest0330980facr","registry_login_server":"rctest0330980facr.azurecr.io","registry_sku":"Standard","servicebus_namespace":"rc-test-0330980f-bus.servicebus.windows.net","servicebus_queue":"notification-requests-v1","subscription_id":"0330980f-85ea-4b38-8b9e-c871432c9d4f","tenant_id":"43d2115b-a55e-46b6-9df7-b03388ecfc60","web_vault_uri":"https://rctest0330980fwkv.vault.azure.net/","workload_resource_group":"rc-test-0330980f-workloads-rg"}
+
+It failed at step 7
+
+le"...
+azurerm_federated_identity_credential.github_immutable[0]: Import prepared!
+  Prepared azurerm_federated_identity_credential for import
+╷
+│ Error: Resource already managed by Terraform
+│ 
+│ Terraform is already managing a remote
+│ object for
+│ azurerm_federated_identity_credential.github_immutable[0].
+│ To import to this address you must first
+│ remove the existing object from the state.
+╵
+
+Releasing state lock. This may take a few moments...
+````
+
+### Change summary
+
+Answer only: the handoff output matches what entry 060 already recorded in the Test tfvars, outputs file and GitHub variable. The import error is from re-running step 2, which had already succeeded; it changed nothing. Step 7 was the agent's update, already done. No project files changed apart from this log.
+
+### Validation and outcome
+
+Grepped the Test `workloads.tfvars` for the web identity name, client ID, principal ID and vault URI; all present.
+
+## 062 — 2026-11-02 — Ship PR #6 to qa
+
+### Exact input prompt
+
+```text
+Ship it
+```
+
+### Change summary
+
+Merged PR #6 into `qa` to trigger the Test deploy; outcome recorded in the reply.
+
+### Validation and outcome
+
+See the deploy run result reported to the user.
