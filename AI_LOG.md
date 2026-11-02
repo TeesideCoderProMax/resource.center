@@ -1101,3 +1101,19 @@ Switched the branch flow to feature → `dev` → `main`: `deploy.yml` deploys T
 ### Validation and outcome
 
 `python3 -m unittest discover -s infra/tests` passed (13 tests); `serena memories check` passed. Workflow YAML was not linted (no local YAML parser; an external linter was blocked). The `test` environment branch policy could not be set: CodeZobac has push but not admin rights (API 404). A repository admin must restrict `test` to `dev`.
+
+## 054 — 2026-11-02 — Map qa/dev/main to test/staging/production
+
+### Exact input prompt
+
+```text
+Okay, so let's do this diferently. A new branch QA is the test environment; dev is the staging and main is production.
+```
+
+### Change summary
+
+Replaced the `dev`-only flow with one branch per environment: `qa` → test, `dev` → staging, `main` → production. `deploy.yml` deploys Test on push to `qa` and allows staging/production promotions only when dispatched from `dev`/`main`; CI covers all three branches; `service-checks.yml` runs from `qa`. `infra/scripts/promotion.py` now requires a successful `qa` Test run, the matching dispatch branch, and an environment branch policy of exactly that one branch (tests updated). Updated `docs/backend/release-runbook.md` and `mem:cloud/phase_3_result`; created the `qa` branch from `main` and retargeted PR #6 to `qa`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (13 tests); `serena memories check` passed. Workflow YAML not linted. Environment branch policies and creation of `staging`/`production` environments still need a repository admin (CodeZobac lacks admin).

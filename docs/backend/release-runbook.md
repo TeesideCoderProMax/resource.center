@@ -67,15 +67,15 @@ that an actual login, token, role or email works.
 
 ## GitHub controls and promotion
 
-Branch flow: feature PRs target `dev`; a push to `dev` runs CI and the Test release; reviewed `dev` → `main` PRs follow passing Test runs. The `test` GitHub environment allows deployments from `dev` only. Protect `dev` and `main` with reviewed changes and required CI checks. Configure target
+Branch flow: one branch per environment — `qa` → `test`, `dev` → `staging`, `main` → `production`. Feature PRs target `qa`; a push to `qa` runs CI and the Test release. Reviewed `qa` → `dev` and `dev` → `main` PRs follow passing runs; promotion is then dispatched from that branch. Restrict each GitHub environment's deployment branches to its branch ("Selected branches", exactly one branch rule); promotion fails closed otherwise. Protect all three branches with reviewed changes and required CI checks. Configure target
 Environments with required independent reviewers, prevent self-review, disable
-admin bypass and allow protected branches only. Confirm the repository plan
+admin bypass and allow only that environment's branch. Confirm the repository plan
 supports these controls for a private repository. Environment names alone do not
 create them. Typed confirmation is no longer treated as approval.
 
-Dispatch `Deploy & Promote` from `main`, choose the target and give `test_run_id`.
+Dispatch `Deploy & Promote` from `dev` (staging) or `main` (production), choose the target and give `test_run_id`.
 The policy checks the actual environment response and requires a successful
-`push` run on `dev` from this repository's deploy workflow. It downloads that
+`push` run on `qa` from this repository's deploy workflow. It downloads that
 run's `test-release` artifact and checks source SHA, run ID, version, smoke result
 and both digests. Promotion imports these digests to target ACR and checks they
 remain unchanged. It does not rebuild them. Failed/missing rules or API access
@@ -143,6 +143,6 @@ times, errors and replica counts. Do not run this against real users. Current lo
 notification tests cover lease loss, retained fake backlog, retries and the
 uncertain-send gap. Real broker/Cosmos recovery, restart and scale-out remain open.
 The optional `service-checks.yml` uses a dedicated authorized Cosmos test identity,
-runs only by manual dispatch on dev, creates unique synthetic records and sends
+runs only by manual dispatch on qa, creates unique synthetic records and sends
 no email. It deletes records on success; failed checks may leave synthetic IDs
 for reviewed cleanup. No permission grant or service check ran in phase 4.

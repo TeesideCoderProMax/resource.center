@@ -1,7 +1,7 @@
 name: Deploy & Promote
 on:
   push:
-    branches: [dev]
+    branches: [qa]
   workflow_dispatch:
     inputs:
       target_environment:
@@ -11,7 +11,7 @@ on:
         type: choice
         options: [test, staging, production]
       test_run_id:
-        description: Successful dev push Test release run ID (promotion only)
+        description: Successful qa push Test release run ID (promotion only)
         type: string
         required: false
 permissions:
@@ -22,11 +22,12 @@ concurrency:
 jobs:
   verify:
     timeout-minutes: 30
-    # Test deploys only from dev (also enforced by the test environment branch policy);
-    # staging/production promotions are dispatched from main.
+    # Branch per environment (also enforced by each environment's branch policy):
+    # qa -> test (push or dispatch), dev -> staging, main -> production (dispatch promotions).
     if: >-
-      (github.ref == 'refs/heads/dev' && (github.event_name == 'push' || inputs.target_environment == 'test'))
-      || (github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.target_environment != 'test')
+      (github.ref == 'refs/heads/qa' && (github.event_name == 'push' || inputs.target_environment == 'test'))
+      || (github.ref == 'refs/heads/dev' && github.event_name == 'workflow_dispatch' && inputs.target_environment == 'staging')
+      || (github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.target_environment == 'production')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
