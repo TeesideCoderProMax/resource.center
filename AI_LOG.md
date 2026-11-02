@@ -1117,3 +1117,75 @@ Replaced the `dev`-only flow with one branch per environment: `qa` → test, `de
 ### Validation and outcome
 
 `python3 -m unittest discover -s infra/tests` passed (13 tests); `serena memories check` passed. Workflow YAML not linted. Environment branch policies and creation of `staging`/`production` environments still need a repository admin (CodeZobac lacks admin).
+
+## 055 — 2026-11-02 — Auth0 setup guidance
+
+### Exact input prompt
+
+```text
+Okay, how do i fill in Auth0 values? What keys are needed, can you guide me trough their dashboard
+```
+
+### Change summary
+
+Answer only: explained the Auth0 setup (API with audience and RBAC, Regular Web Application with callback/logout URLs, `student`/`staff` roles, post-login Action adding the roles and email claims) and which values go where (`auth0_domain`, `auth0_audience`, `auth0_client_id` in `WORKLOADS_TFVARS`; client secret and `AUTH0_SECRET` as secrets). Noted that `infra/workloads/main.tf` does not yet bind the web secrets, so live sign-in also needs an infra change. No project files changed apart from this log.
+
+### Validation and outcome
+
+Read `infra/workloads/main.tf`, `variables.tf`, `docs/backend/contracts.md` and `frontend/src/lib/auth0.ts`. Not checked against the live Auth0 dashboard.
+
+## 056 — 2026-11-02 — Auth0 free plan coverage
+
+### Exact input prompt
+
+```text
+Is all the features we need available in auth0 free plan?
+```
+
+### Change summary
+
+Answer only: the features used (Regular Web App with Authorization Code + PKCE, one custom API/audience with RS256, RBAC roles in access tokens, a post-login Action adding custom claims, database/social connections) are available on Auth0's free plan; noted limits to check (MAU cap, M2M tokens, custom domain, email provider for production). No project files changed apart from this log.
+
+### Validation and outcome
+
+Based on general knowledge of Auth0 plans; the live pricing page was not checked this turn.
+
+## 057 — 2026-11-02 — Auth0 audience without a domain
+
+### Exact input prompt
+
+```text
+i dont have a domain for this app. Does https://loan.resource-center.campus work? Can you make azure generate a generic URI for my API service that stays always the same?
+```
+
+### Change summary
+
+Answer only: an Auth0 API identifier is an opaque audience string that is never fetched, so `https://loan.resource-center.campus` works without owning the domain. Azure already gives the Loan API a stable FQDN, `rc-test-0330980f-loan-api.livelywave-2cc0564d.francecentral.azurecontainerapps.io`, which stays the same while the app name and Container Apps environment are kept; recommended keeping a logical identifier instead. No project files changed apart from this log.
+
+### Validation and outcome
+
+Listed Container App FQDNs with `az containerapp list` in `rc-test-0330980f-workloads-rg`.
+
+## 058 — 2026-11-02 — Set Auth0 Test values and plan web secrets
+
+### Exact input prompt
+
+```text
+Okay, pls setup the vars in both gh and the tfvars file.
+
+AUTH0_DOMAIN=dev-1mxf8h3b7mphavlc.eu.auth0.com
+AUTH0_CLIENT_ID=vDJ4vxu2kQ0Dyq8ifOIKN9DAFiKSXKSQ
+AUTH0_AUDIENCE=https://loan-test.resource-center.campu
+
+From what i understood the other private ones are not meant to be put in GH actions.
+
+How to add the remaining envs as Container App secrets? They are set in .env.local
+```
+
+### Change summary
+
+Set `auth0_domain`, `auth0_audience` and `auth0_client_id` in `infra/environments/test/workloads.tfvars` (local, ignored) and the committed `.example`, and updated the GitHub `test` variable `WORKLOADS_TFVARS`. Explained options for the web secrets; recommended Key Vault references bound by Terraform. Not implemented yet.
+
+### Validation and outcome
+
+`gh variable set` succeeded. The audience ends in `.campu` (no `s`), matching `frontend/.env.local`; flagged to the user to confirm against the Auth0 API identifier. Secret values were not read or printed.

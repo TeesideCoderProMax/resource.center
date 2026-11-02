@@ -9,9 +9,9 @@ service_version          = "0.1.0-phase3"
 seed_demo_data           = true
 email_delivery_mode      = "fake"
 alert_notification_email = "G6605870@live.tees.ac.uk"
-auth0_domain             = ""
-auth0_audience           = ""
-auth0_client_id          = ""
+auth0_domain             = "dev-1mxf8h3b7mphavlc.eu.auth0.com"
+auth0_audience           = "https://loan-test.resource-center.campu"
+auth0_client_id          = "vDJ4vxu2kQ0Dyq8ifOIKN9DAFiKSXKSQ"
 
 # Direct copy of docs/cloud/test-foundation-outputs.json:
 handoff = {
