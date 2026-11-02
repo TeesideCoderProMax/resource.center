@@ -914,3 +914,19 @@ With access confirmed, checked GitHub: `test` environment has no variables and `
 ### Validation and outcome
 
 `gh variable list`, `gh run view --log-failed` and `gh pr create` run as CodeZobac. Deploy variables are still unset; the user must supply/confirm the values.
+
+## 044 — 2026-11-02 — Set Test deploy variables
+
+### Exact input prompt
+
+```text
+Yes, set them
+```
+
+### Change summary
+
+Set GitHub `test` environment variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME`, `ACR_SERVER`, and `WORKLOADS_TFVARS`/`WORKLOADS_BACKEND_HCL` from the local Test files (identical to the committed `.example` copies; no secrets). Only this log changed in the repository.
+
+### Validation and outcome
+
+`gh variable list --env test` shows all seven. Deploy not re-run. The Test tfvars have empty Auth0 values, so the release smoke (which requires configured Auth0) is expected to fail next; OIDC federated trust for the `test` environment is unverified. `staging`/`production` environments still do not exist.
