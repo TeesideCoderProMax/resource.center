@@ -1205,3 +1205,21 @@ Added a web-owned Key Vault (`<compact>wkv`), a `web` user-assigned identity wit
 ### Validation and outcome
 
 `terraform validate` passed for platform and workloads. Platform init/import/plan/apply against Test state was blocked by the session permission guard, so nothing was applied and no secrets were written; the user must run the documented steps.
+
+## 060 — 2026-11-02 — Record applied Test platform handoff
+
+### Exact input prompt
+
+```text
+<bash-input>./infra/scripts/terraform.sh apply platform test</bash-input> (user ran the platform apply; output: "Apply complete! Resources: 8 added, 0 changed, 2 destroyed." with the updated `handoff` output)
+```
+
+Correction: the user's message was a shell run and its long output; only the command and result line are recorded here.
+
+### Change summary
+
+Recorded the applied Test platform outputs: added the `web` identity and `web_vault_uri` to the Test `workloads.tfvars` (local and `.example`), `docs/cloud/test-foundation-outputs.json`, and the GitHub `test` variable `WORKLOADS_TFVARS`.
+
+### Validation and outcome
+
+User's apply reported 8 added, 2 destroyed (saved searches recreated). `terraform validate` passed; `gh variable set` succeeded. Web secrets not yet written to the vault (user step pending); deploy not run.
