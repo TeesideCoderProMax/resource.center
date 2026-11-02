@@ -47,7 +47,10 @@ impl CosmosRestJobStore {
             database,
             container,
             token_provider,
-            http: reqwest::Client::new(),
+            http: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("HTTP client"),
         }
     }
 
@@ -145,7 +148,7 @@ impl NotificationJobStorePort for CosmosRestJobStore {
         let body = resp.text().await.unwrap_or_default();
         if !status.is_success() {
             return Err(JobStoreError::Storage(format!(
-                "cosmos create_job failed with HTTP {status}: {body}"
+                "cosmos create_job failed with HTTP {status}"
             )));
         }
 
@@ -175,7 +178,7 @@ impl NotificationJobStorePort for CosmosRestJobStore {
         let body = resp.text().await.unwrap_or_default();
         if !status.is_success() {
             return Err(JobStoreError::Storage(format!(
-                "cosmos get_job failed with HTTP {status}: {body}"
+                "cosmos get_job failed with HTTP {status}"
             )));
         }
 
@@ -212,7 +215,7 @@ impl NotificationJobStorePort for CosmosRestJobStore {
         let body = resp.text().await.unwrap_or_default();
         if !status.is_success() {
             return Err(JobStoreError::Storage(format!(
-                "cosmos replace_job failed with HTTP {status}: {body}"
+                "cosmos replace_job failed with HTTP {status}"
             )));
         }
 
@@ -238,9 +241,8 @@ impl NotificationJobStorePort for CosmosRestJobStore {
         if status == StatusCode::NOT_FOUND || status.is_success() {
             return Ok(());
         }
-        let body = resp.text().await.unwrap_or_default();
         Err(JobStoreError::Storage(format!(
-            "cosmos delete_job failed with HTTP {status}: {body}"
+            "cosmos delete_job failed with HTTP {status}"
         )))
     }
 }
@@ -277,7 +279,10 @@ impl ServiceBusRestConsumer {
             namespace_fqdn,
             queue_name,
             token_provider,
-            http: reqwest::Client::new(),
+            http: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("HTTP client"),
         }
     }
 
@@ -313,10 +318,7 @@ impl ServiceBusRestConsumer {
             return Ok(None);
         }
         if status != StatusCode::CREATED && !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(format!(
-                "service bus receive returned HTTP {status}: {body}"
-            ));
+            return Err(format!("service bus receive returned HTTP {status}"));
         }
 
         let lock_location = resp
@@ -375,10 +377,7 @@ impl ServiceBusRestConsumer {
             .map_err(|e| format!("service bus message complete failed: {e}"))?;
         if !resp.status().is_success() {
             let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            return Err(format!(
-                "service bus complete returned HTTP {status}: {body}"
-            ));
+            return Err(format!("service bus complete returned HTTP {status}"));
         }
         Ok(())
     }
@@ -395,10 +394,7 @@ impl ServiceBusRestConsumer {
             .map_err(|e| format!("service bus message abandon failed: {e}"))?;
         if !resp.status().is_success() {
             let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            return Err(format!(
-                "service bus abandon returned HTTP {status}: {body}"
-            ));
+            return Err(format!("service bus abandon returned HTTP {status}"));
         }
         Ok(())
     }
@@ -426,7 +422,10 @@ impl KeyVaultSecretClient {
         Self {
             vault_uri: vault_uri.trim_end_matches('/').to_string(),
             token_provider,
-            http: reqwest::Client::new(),
+            http: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("HTTP client"),
         }
     }
 
@@ -454,8 +453,7 @@ impl KeyVaultSecretClient {
             return Ok(SecretLookupOutcome::NotFound);
         }
         if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(format!("key vault returned HTTP {status}: {body}"));
+            return Err(format!("key vault returned HTTP {status}"));
         }
 
         let bundle: KeyVaultSecretBundle = resp
@@ -494,7 +492,10 @@ impl ConfigurableEmailSender {
             secret_name,
             from_address,
             authorized_recipients,
-            http: reqwest::Client::new(),
+            http: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("HTTP client"),
         }
     }
 }
@@ -587,14 +588,10 @@ impl EmailDeliveryPort for ConfigurableEmailSender {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS {
-            return Err(DeliveryError::Transient(format!(
-                "resend HTTP {status}: {body}"
-            )));
+            return Err(DeliveryError::Transient(format!("resend HTTP {status}")));
         }
         if !status.is_success() {
-            return Err(DeliveryError::Terminal(format!(
-                "resend HTTP {status}: {body}"
-            )));
+            return Err(DeliveryError::Terminal(format!("resend HTTP {status}")));
         }
 
         let parsed: ResendResponse = serde_json::from_str(&body)

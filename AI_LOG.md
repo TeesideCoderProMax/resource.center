@@ -662,3 +662,51 @@ Added a documented clippy::double_must_use exception only to the two async-trait
 ### Validation and outcome
 
 make backend-fmt, backend-lint and backend-test passed on Rust 1.94 (13 tests; separate PostgreSQL suite ignored). Full-workspace cargo +1.95.0 clippy --all-targets with -D warnings and git diff --check also passed. Rust 1.95 initially reproduced the separate role-match lint; the reported macro lint did not independently reproduce locally. No live CI result or deployment is claimed.
+
+## 030 — 2026-11-01 — Implement backend phase 2
+
+### Exact input prompt
+
+```text
+Pls implement phase 2 of the backend implementation plan. Start from main, clean the worktree and create a new branch for this task
+```
+
+### Change summary
+
+Created codex/backend-phase-2-notifications from updated main (14e897d); the starting worktree was clean. Added notification lease tokens, renewal, durable retry waits, bounded attempts/timeouts, cancellation, compatibility and recovery tests; bounded publisher batches/calls and removed provider error bodies. Added the phase 2 handoff/recovery guide and real Cosmos test target; updated plan status and affected Serena memories.
+
+### Validation and outcome
+
+Rust formatting, Clippy and 23 local tests passed; two external suites are ignored by default. The real disposable PostgreSQL suite passed. The real Cosmos conflict test was attempted with the existing Azure login but failed at create with HTTP 403; real Cosmos conflicts and deployed broker/outage/backlog/replay checks remain open. serena memories check and git diff --check passed. No deployment, live email, commit or push occurred; phase 2 real-service acceptance remains partial.
+
+## 031 — 2026-11-01 — Explain Cosmos 403
+
+### Exact input prompt
+
+```text
+what does the 403 mean?
+```
+
+### Change summary
+
+Explained that Cosmos rejected the test request with HTTP 403 Forbidden. The response alone does not prove whether Cosmos data permissions or a network access rule caused the denial; no project files changed apart from this log.
+
+### Validation and outcome
+
+Used the previous test result: Azure token acquisition succeeded, but Cosmos rejected document creation. No new service check ran; the exact access rule remains unconfirmed.
+
+## 032 — 2026-11-01 — Commit phase 2 and create PR
+
+### Exact input prompt
+
+```text
+great commit and create the PR. Use my school account github
+```
+
+### Change summary
+
+Published the backend code/tests commit through the School GitHub connection as TeesideCoderProMax and opened PR #2 against main. Grouped recovery docs, handoff, plan status, Serena notes and this log as the second commit. PR: https://github.com/TeesideCoderProMax/resource.center/pull/2.
+
+### Validation and outcome
+
+Reviewed all changed paths; git diff --check and serena memories check passed. Used existing phase 2 test results; no code changed or tests reran in this request. Verified the remote code tree matches the staged tree. The local SSH key belongs to CodeZobac, so GitHub write operations use the School connector; local fetches only synchronize the resulting commits. Cosmos 403 and deployed recovery checks remain open; no merge or deployment occurred.

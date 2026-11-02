@@ -1,4 +1,6 @@
 pub mod application;
+#[cfg(test)]
+mod cosmos_tests;
 pub mod domain;
 pub mod infrastructure;
 
@@ -169,30 +171,43 @@ async fn run_worker(
             continue;
         };
 
-        // Renew message lock in background every 25 seconds while processing
-        let renew_consumer = Arc::clone(&consumer);
-        let lock_uri = msg.lock_location.clone();
-        let renew_handle = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(25));
-            interval.tick().await;
+        // Keep retries on this locked delivery, so waiting does not consume the
+        // broker delivery budget. Dropping either future cancels in-flight work.
+        let processing = processor.process_until_settled(&msg.body);
+        let renewals = async {
             loop {
-                interval.tick().await;
-                if let Err(err) = renew_consumer.renew_lock(&lock_uri).await {
-                    warn!(error = %err, "failed to renew Service Bus message lock");
-                    break;
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                match tokio::time::timeout(
+                    Duration::from_secs(10),
+                    consumer.renew_lock(&msg.lock_location),
+                )
+                .await
+                {
+                    Ok(Ok(())) => {}
+                    _ => break,
                 }
             }
-        });
-
-        let result = processor.process_raw_message(&msg.body).await;
-        renew_handle.abort();
+        };
+        let result = tokio::select! {
+            biased;
+            _ = shutdown_signal() => {
+                // Retain the message and Cosmos lease for recovery after expiry.
+                info!("shutdown: cancelled processing; retained work will recover");
+                break;
+            }
+            _ = renewals => {
+                warn!("broker lock renewal failed; cancelled processing");
+                continue;
+            }
+            result = processing => result,
+        };
 
         match result {
-            Ok(MessageDisposition::Complete {
+            MessageDisposition::Complete {
                 event_id,
                 duplicate_skipped,
                 final_status,
-            }) => {
+            } => {
                 consumer.complete_message(&msg.lock_location).await?;
                 processed_count += 1;
                 info!(
@@ -203,7 +218,10 @@ async fn run_worker(
                     "settled (completed) Service Bus notification message"
                 );
             }
-            Ok(MessageDisposition::Abandon { event_id, reason }) => {
+            MessageDisposition::Wait { .. } => {
+                unreachable!("wait handled inside processing loop")
+            }
+            MessageDisposition::Abandon { event_id, reason } => {
                 warn!(
                     event_id = %event_id,
                     reason = %reason,
@@ -211,17 +229,6 @@ async fn run_worker(
                     "abandoning Service Bus message for retry or dead-letter"
                 );
                 let _ = consumer.abandon_message(&msg.lock_location).await;
-            }
-            Err(store_err) => {
-                error!(
-                    error = %store_err,
-                    message_id = ?msg.message_id,
-                    "Cosmos DB error during message processing; abandoning message so lock releases"
-                );
-                let _ = consumer.abandon_message(&msg.lock_location).await;
-                if drain_once {
-                    return Err(store_err.into());
-                }
             }
         }
     }
