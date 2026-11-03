@@ -1310,3 +1310,68 @@ Committed the phase 2 work in logical groups on `frontend/phase-2-flows`, pushed
 ### Validation and outcome
 
 Checks from entry 063 were not rerun; see the PR for CI.
+
+## 065 — 2026-11-03 — Implement frontend phase 3
+
+### Exact input prompt
+
+```text
+Implement frontend phase 3 from docs/frontend/phase-3-cloud-and-evidence.md in
+/home/cabozzz/dev/resource.center. Read the frontend phase 1–2 handoffs and backend
+phase 4 docs first. Follow AGENTS.md and docs/frontend/README.md. Ask before any
+deployment, live email or paid change. Write the phase 3 handoff when done.
+
+Start from the branch qa and create a branch from there. ALL PR are to be merged against qa
+```
+
+### Change summary
+
+On branch `frontend/phase-3-cloud-evidence` from `qa`: added structured JSON proxy logs and safe correlation IDs (`frontend/src/lib/observability.ts`, loan proxy route), `/api/ready` readiness used by the Terraform web readiness probe and deployed smoke, and Playwright E2E + report artifact in CI with `frontend-e2e` in `make check`. Refreshed the C4 container diagram (`docs/cloud/assessment-evidence.md`), wrote `docs/frontend/demo-script.md` and `docs/frontend/phase-3-handoff.md`, updated `mem:frontend/plan`.
+
+### Validation and outcome
+
+Passed locally: `make check` (incl. 29 unit and 11 E2E frontend tests, Terraform validate for all envs), 13 infra Python tests, `serena memories check`, `git diff --check`. actionlint not installed. No deployment, live Auth0, email or load test run; these are blocked pending approval and Auth0/GitHub environment setup, as listed in the handoff.
+
+## 066 — 2026-11-03 — Diagnose QA release JSON failure
+
+### Exact input prompt
+
+````text
+The last PR job failed at QA with this error:
+
+to parse JSON.
+From the workflow, the failing part is the release job’s final step:
+
+* `run: python3 infra/scripts/release.py "$TARGET_ENV"`
+
+The log shows:
+
+* `json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)`
+
+That means the script was handed empty, malformed, or otherwise non-JSON content and attempted to decode it as JSON, causing the process to exit with code 1.
+This was not a compile or test failure in the earlier verification job; it was a runtime failure in the deployment/release script.
+````
+
+### Change summary
+
+`infra/scripts/release.py` JSON-parsed every `az` call, but `containerapp revision activate/deactivate` print plain text, which matches the reported decode error once apps already exist on Test. Added `az_action()` for those calls and a clear non-JSON error in `az()`; regression test in `infra/tests/test_release.py`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (14). The CI traceback was not read (`gh` hung locally), so the failing line is inferred from code; not re-run on GitHub.
+
+## 067 — 2026-11-03 — Open frontend phase 3 PR
+
+### Exact input prompt
+
+```text
+Yeas create a PR and include all these changes from the 3rd phase
+```
+
+### Change summary
+
+Committed the phase 3 work and the release JSON fix in logical groups on `frontend/phase-3-cloud-evidence`, pushed and opened a PR against `qa`. Left the untracked `frontend/AGENTS.md` alone.
+
+### Validation and outcome
+
+No new checks; entries 065–066 record the local results. PR CI not yet observed.

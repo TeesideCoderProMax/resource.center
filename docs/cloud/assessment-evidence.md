@@ -51,7 +51,8 @@ flowchart TB
     end
 
     subgraph Azure["Azure Resource Center Platform (francecentral)"]
-        web["Web Frontend Container App\n(Next.js 16.4.3 Standalone SSR)\nrc-test-0330980f-web"]
+        ingress["Container Apps managed HTTPS ingress\n(TLS termination; no Nginx/Let's Encrypt, ADR 0003)"]
+        web["Web Frontend Container App\n(Next.js 16 SSR + BFF proxy /api/loan/*,\nAuth0 server session; /api/health, /api/ready)\nrc-test-0330980f-web"]
 
         subgraph LoanBoundary["Loan Service Boundary (Authoritative Business State)"]
             loan_api["Loan API Container App\n(Rust 1.94 / Tokio / Axum)\nrc-test-0330980f-loan-api"]
@@ -71,9 +72,10 @@ flowchart TB
         monitor["Azure Monitor & Log Analytics\n(rc-test-0330980f-logs + 6 Metric Alerts\n+ Action Group rc-test-0330980f-ops-ag)"]
     end
 
-    browser -->|"HTTPS GET / (SSR Catalogue)"| web
-    browser -->|"HTTPS REST /api/v1/*\n(Bearer JWT for protected reads/writes)"| loan_api
-    web -->|"Server-side fetch /api/v1/catalogue"| loan_api
+    browser -->|"HTTPS pages + same-origin /api/loan/*\n(encrypted HttpOnly session cookie; no token in browser)"| ingress
+    ingress --> web
+    browser -->|"OIDC Authorization Code + PKCE sign-in"| auth0
+    web -->|"Server-side /api/v1/* with Bearer access token\n+ x-correlation-id (contract routes only)"| loan_api
     loan_api -->|"Validates JWT signature, iss, aud, exp & role"| auth0
 
     migrations -->|"Applies SQL migrations & seeds models\n(Entra Managed Identity)"| pg
@@ -86,6 +88,7 @@ flowchart TB
     notif_worker -->|"Reads resend-api-key via RBAC"| kv
     notif_worker -->|"Delivers email (or FakeEmailSender in Test)"| resend
 
+    web -.->|"Structured JSON proxy logs\n(route template, status, duration, correlation ID)"| monitor
     loan_api -.->|"Structured JSON logs + metrics"| monitor
     publisher -.->|"Structured JSON logs + job metrics"| monitor
     notif_worker -.->|"Structured JSON logs + metrics"| monitor
@@ -141,7 +144,7 @@ The [new Stage 2 annotated Container diagram](../backend/stage-2-plan.md) maps r
 | **2 (MVP Core)** | **Loan API (`rc-test-0330980f-loan-api`, `loan-service api`)** | Public device catalogue (`GET /api/v1/catalogue`), authenticated student reservation (`POST /api/v1/reservations`) with model-first row-lock concurrency control, waitlist subscription (`POST /api/v1/subscriptions`), staff collection (`POST /api/v1/reservations/{id}/collect`) & return (`POST /api/v1/reservations/{id}/return`), `/health/live` and `/health/ready`. | Managed TLS ingress, strict CORS allowlist (`ALLOWED_ORIGIN`), Auth0 RS256 JWKS validation (`Auth0JwtVerifier`), RBAC role enforcement (`student` vs `staff`), fails closed (`503 AuthNotConfigured`) when Auth0 env vars are blank. | In unit/integration tests: transactional fake storage and locally signed JWTs with cached test JWKS. In live Test: Auth0 is unconfigured (`auth0Configured: false`), so write routes fail closed (`503`) while live DB concurrency/RBAC are verified via `verify-resilience`. | **Yes (MVP Service 1)** |
 | **3 (MVP Core)** | **Outbox Publisher Job (`rc-test-0330980f-loan-publisher`, `loan-service publish`) + Service Bus (`notification-requests-v1`)** | Asynchronous decoupling between Loan commits and Notifications; claims unpublished `outbox_events` rows with 60s lease (`claimed_until`), publishes self-contained event envelopes (`DeviceCollectionConfirmationRequested`, `DeviceReturnConfirmationRequested`, `DeviceAvailabilityNotificationRequested`) to Service Bus with `MessageId = eventId` and `CorrelationId`. | Passwordless Entra Managed Identity (`rc-test-0330980f-publisher`) with `Azure Service Bus Data Sender` role on `notification-requests-v1` only. | In unit tests: fake broker port. In live Test: real scheduled Container Apps Job + real Azure Service Bus Basic queue. | **Yes (MVP Async Bridge)** |
 | **4 (MVP Core)** | **Notifications Worker (`rc-test-0330980f-notifications`) + Cosmos DB (`notifications`/`jobs`)** | KEDA scale-from-zero queue consumer; idempotency and delivery state tracking in Cosmos DB (`id = eventId`, `/eventId` partition key, `_etag` optimistic concurrency); retry classification (transient retry vs permanent dead-letter). | Passwordless Entra Managed Identity (`rc-test-0330980f-notifications`) with `Azure Service Bus Data Receiver`, Cosmos Built-in Data Contributor (`00000000-0000-0000-0000-000000000002`), and Key Vault Secrets User. Zero access to PostgreSQL. | **`FakeEmailSender` (`EMAIL_DELIVERY_MODE=fake`)**: Used in Test so zero real emails are dispatched while full Cosmos DB state transitions (`Claimed` → `Delivered`) and Service Bus settlement are exercised. (`ConfigurableEmailSender` supports Resend mode with a Key Vault secret). | **Yes (MVP Service 2 + MVP DB 2)** |
-| **5 (Portal UI)** | **Web Frontend (`rc-test-0330980f-web`, Next.js 16.4.3)** | Responsive campus portal displaying real-time device models, categories, 2-day loan duration, available/total unit counts, architecture boundary status, and `/api/health` readiness endpoint. | Managed TLS ingress, non-root Node 22 Alpine container, server-side fetch to `LOAN_API_BASE_URL`. | Browser login and action flows are not implemented; status badges only show configuration. Credentials alone will not add those flows. | **Yes (Frontend Container)** |
+| **5 (Portal UI)** | **Web Frontend (`rc-test-0330980f-web`, Next.js 16)** | Routed catalogue, device detail, reserve/subscribe, My reservations with overdue highlight, staff desk collect/return; `/api/health` liveness and `/api/ready` readiness (config + Loan API reachability). | Managed TLS ingress, Auth0 server-side session (BFF), same-origin `/api/loan/*` proxy with route allowlist, Origin check and `modelId`-only bodies; structured JSON proxy logs with correlation IDs. | Implemented and tested locally (Vitest + Playwright against a fake Loan API, frontend phases 2–3). Live Auth0 sign-in and actions on Test are not yet verified. | **Yes (Frontend Container)** |
 
 ---
 
