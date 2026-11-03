@@ -19,17 +19,18 @@ async function seed(body: object) {
 test("public catalogue renders signed out", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Devices" })).toBeVisible();
-  await expect(page.getByText("Dell Latitude 7440")).toBeVisible();
+  // Role queries skip hidden nodes, e.g. streamed HTML React has not swapped in yet.
+  await expect(page.getByRole("link", { name: "Dell Latitude 7440" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Reserve" })).toHaveCount(0);
 });
 
 test("student reserves and sees due date and next steps", async ({ page, context }) => {
   await signIn(context, "student");
   await page.goto("/devices/dell-latitude-7440");
-  await expect(page.getByText("2 / 2 available")).toBeVisible();
+  await expect(page.getByText("2 / 2 available").filter({ visible: true })).toBeVisible();
   await page.getByRole("button", { name: "Reserve" }).click();
   await expect(page.getByRole("status")).toContainText(/Due back .*collect it at the Resource Center desk/);
-  await expect(page.getByText("1 / 2 available")).toBeVisible();
+  await expect(page.getByText("1 / 2 available").filter({ visible: true })).toBeVisible();
   await page.getByRole("link", { name: "View my reservations" }).click();
   await expect(page.getByRole("heading", { name: "My reservations" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "RESERVED" })).toBeVisible();
@@ -65,7 +66,7 @@ test("staff collects and returns with confirm, timestamps and refresh", async ({
   await page.getByRole("button", { name: "Mark collected" }).click();
   await page.getByRole("button", { name: "Confirm collect" }).click();
   await expect(page.getByRole("status")).toContainText(/Collected dell-latitude-7440-u1 at .* Confirmation email queued/);
-  await expect(page.getByText("No reservations.")).toBeVisible();
+  await expect(page.getByText("No reservations.").filter({ visible: true })).toBeVisible();
 
   await page.getByLabel("Status").selectOption("COLLECTED");
   await page.getByLabel("Find reservation").fill("student1");
@@ -80,7 +81,7 @@ test("overdue loans are highlighted", async ({ page, context }) => {
   await seed({ modelId: "dell-latitude-7440", sub: "auth0|student-1", email: "student1@campus.test", status: "COLLECTED", reservedHoursAgo: 72 });
   await signIn(context, "student");
   await page.goto("/reservations");
-  await expect(page.getByText("Overdue")).toBeVisible();
+  await expect(page.getByText("Overdue").filter({ visible: true })).toBeVisible();
 });
 
 test("student gets 403 on /staff and on a forced collect call", async ({ page, context }) => {
