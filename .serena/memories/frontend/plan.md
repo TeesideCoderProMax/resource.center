@@ -1,5 +1,8 @@
 # Frontend implementation status
-- Plan created 2026-11-02: docs/frontend/README.md — three sequential chats (1 structure/UX, 2 role flows + tests with fake Loan API, 3 observability/CI/deploy/live Auth0/demo evidence). Not implemented yet.
-- Baseline: single-page MVP from backend phase 3 (docs/backend/phase-3-handoff.md). Keep the BFF proxy model: tokens never reach the browser; only contract routes; UI role checks are display-only.
-- The Blackboard starter container diagram shows Python/Nginx/Notifications-on-PostgreSQL; it is stale versus `mem:architecture/selected_baseline`. Phase 3 refreshes the diagram.
-- Each phase writes docs/frontend/phase-N-handoff.md; only handoffs establish implementation status.
+- Plan: docs/frontend/README.md — three sequential chats (1 structure/UX, 2 role flows + tests with fake Loan API, 3 observability/CI/deploy/live Auth0/demo evidence).
+- Phase 1 implemented 2026-11-02, locally verified without Auth0/Loan API: docs/frontend/phase-1-handoff.md (routes, app shell, components/, lib/api-client.ts, lib/roles.ts guards, Vitest+RTL). Phase 2 implemented 2026-11-02 on `frontend/phase-2-flows` (from `qa`): docs/frontend/phase-2-handoff.md — role flows, 401/403/409/503 UX, fake Loan API (`frontend/fake/`), Playwright E2E with SDK-generated session cookies (`make frontend-e2e`). Phase 3 implemented locally 2026-11-03 on `frontend/phase-3-cloud-evidence`: docs/frontend/phase-3-handoff.md — JSON proxy logs + correlation IDs, `/api/ready` (Terraform readiness probe, deployed smoke), CI E2E + report artifact, `make check` includes E2E, demo script docs/frontend/demo-script.md. Not deployed; live Auth0, email and load checks blocked (see handoff).
+- Campus Device Hub redesign (4 Stitch screens + browser-side loan bag `/bag`, staff admin hub) is implemented and checked locally on `feat/frontend-stitch-catalogue` and not deployed: docs/frontend/2026-11-03-campus-device-hub-redesign.md. PRD features without Loan API support (lockers, approvals, inventory editing, etc.) are deliberately not built.
+- Frontend PRs target `qa`.
+- Keep the BFF proxy model: tokens never reach the browser; only contract routes; UI role checks are display-only.
+- The Blackboard starter container diagram shows Python/Nginx/Notifications-on-PostgreSQL; it is stale versus `mem:architecture/selected_baseline`. The current C4 container diagram is in docs/cloud/assessment-evidence.md (refreshed in phase 3).
+- Only handoffs establish implementation status.

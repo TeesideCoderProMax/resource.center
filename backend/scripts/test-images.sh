@@ -13,9 +13,10 @@ chmod 755 "$cert_dir"
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout "$cert_dir/server.key" -out "$cert_dir/server.crt" -subj '/CN=pg' -addext 'subjectAltName=DNS:pg' >/dev/null 2>&1
 docker network create "$prefix" >/dev/null
 docker run -d --name "$prefix-pg" --network "$prefix" --network-alias pg   -e POSTGRES_PASSWORD=local-image-check -e POSTGRES_DB=loan -v "$cert_dir:/certs:ro" postgres:17   sh -c 'cp /certs/server.* /tmp/; chown postgres:postgres /tmp/server.*; chmod 600 /tmp/server.key; exec docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=/tmp/server.crt -c ssl_key_file=/tmp/server.key' >/dev/null
+# Probe TCP: the entrypoint's temporary init server answers on the Unix socket only.
 ready=false
 for _ in {1..40}; do
-  if docker exec "$prefix-pg" pg_isready -U postgres >/dev/null 2>&1; then ready=true; break; fi
+  if docker exec "$prefix-pg" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then ready=true; break; fi
   sleep 0.5
 done
 if [[ "$ready" != true ]]; then docker logs "$prefix-pg"; exit 1; fi

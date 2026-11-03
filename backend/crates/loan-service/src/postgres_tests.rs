@@ -288,3 +288,36 @@ async fn postgres_tests_seed_collision_rolls_back_new_models() {
     assert_eq!(row.get::<_, i64>(0), 1);
     assert_eq!(row.get::<_, String>(1), "model");
 }
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_migrations_run_without_database_create_privilege() {
+    // Mirrors the Azure bootstrap (initialize-loan-roles.sql): the migrations role owns the
+    // `loan` schema but has only CONNECT on the database, so it cannot run CREATE SCHEMA.
+    let owner = database("phase4_least_privilege").await;
+    let (client, _permit) = owner.connect_client().await.unwrap();
+    client
+        .batch_execute(
+            "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rc_migrator') THEN
+               CREATE ROLE rc_migrator LOGIN PASSWORD 'local-phase1-test'; END IF; END $$;
+             REVOKE ALL ON DATABASE phase4_least_privilege FROM PUBLIC;
+             GRANT CONNECT ON DATABASE phase4_least_privilege TO rc_migrator;
+             CREATE SCHEMA loan AUTHORIZATION rc_migrator;",
+        )
+        .await
+        .unwrap();
+    let migrator = PostgresAdapter::new(
+        PostgresConfig {
+            host: "localhost".into(),
+            port: std::env::var("RC_TEST_PG_PORT").unwrap().parse().unwrap(),
+            database: "phase4_least_privilege".into(),
+            user: "rc_migrator".into(),
+            static_password: Some("local-phase1-test".into()),
+            max_connections: 2,
+            publisher_role_name: None,
+        },
+        None,
+    );
+    migrator.run_migrations(true).await.unwrap();
+    migrator.run_migrations(true).await.unwrap();
+}

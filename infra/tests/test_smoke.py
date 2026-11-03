@@ -9,6 +9,8 @@ class SmokeTests(unittest.TestCase):
             return 200, {"status": "ok"}, {"x-correlation-id": correlation}
         if url.endswith("/health/ready"):
             return 200, {"status": "ready", "database": "reachable", "version": "sha", "auth0Configured": True}, {}
+        if url.endswith("/api/ready"):
+            return 200, {"status": "ready", "loanApi": "reachable", "auth0Configured": True}, {}
         if url.endswith("/catalogue"):
             return 200, {"items": [{"loanDurationDays": 2}]}, {}
         if body:

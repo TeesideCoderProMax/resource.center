@@ -1,7 +1,7 @@
 name: Deploy & Promote
 on:
   push:
-    branches: [main]
+    branches: [qa]
   workflow_dispatch:
     inputs:
       target_environment:
@@ -11,7 +11,7 @@ on:
         type: choice
         options: [test, staging, production]
       test_run_id:
-        description: Successful main push Test release run ID (promotion only)
+        description: Successful qa push Test release run ID (promotion only)
         type: string
         required: false
 permissions:
@@ -22,7 +22,12 @@ concurrency:
 jobs:
   verify:
     timeout-minutes: 30
-    if: github.ref == 'refs/heads/main'
+    # Branch per environment (also enforced by each environment's branch policy):
+    # qa -> test (push or dispatch), dev -> staging, main -> production (dispatch promotions).
+    if: >-
+      (github.ref == 'refs/heads/qa' && (github.event_name == 'push' || inputs.target_environment == 'test'))
+      || (github.ref == 'refs/heads/dev' && github.event_name == 'workflow_dispatch' && inputs.target_environment == 'staging')
+      || (github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.target_environment == 'production')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +46,7 @@ jobs:
         with:
           terraform_version: "1.14.3"
       - run: npm --prefix frontend ci
+      - run: npm --prefix frontend exec playwright install -- --with-deps chromium
       - name: All checks including real PostgreSQL
         shell: bash
         run: |

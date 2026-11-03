@@ -1,5 +1,6 @@
 import importlib.util
 import json
+from types import SimpleNamespace
 import os
 from pathlib import Path
 import tempfile
@@ -17,7 +18,7 @@ release = load("release")
 promotion = load("promotion")
 
 class ReleaseTests(unittest.TestCase):
-    def scenario(self, status="Succeeded", replicas=None, seed=True, state_environment=None, active=True):
+    def scenario(self, status="Succeeded", replicas=None, seed=True, state_environment=None, active=True, latest_active=False):
         calls = []
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -34,7 +35,9 @@ class ReleaseTests(unittest.TestCase):
                 return ""
             def console(args, input, **kwargs):
                 values = {"var.handoff.workload_resource_group": "rg", "var.name_prefix": "rc", "var.handoff.environment": "test", "var.seed_demo_data": seed}
-                return json.dumps(values[input])
+                expression = input.removeprefix("jsonencode(").removesuffix(")\n")
+                assert "-no-color" in args and input.endswith("\n")
+                return SimpleNamespace(returncode=0, stdout=json.dumps(json.dumps(values[expression])) + "\n", stderr="")
             def azure(*args):
                 calls.append(args)
                 if args[:2] == ("containerapp", "list"):
@@ -47,6 +50,8 @@ class ReleaseTests(unittest.TestCase):
                     return {"name": "migration-1"}
                 if args[1:4] == ("job", "execution", "show"):
                     return {"properties": {"status": status}}
+                if args[1:3] == ("revision", "show"):
+                    return {"properties": {"active": latest_active}}
                 if args[1] == "show":
                     return {"properties": {"latestRevisionName": "new"}}
             env = {"TF_VAR_backend_image": "registry.test/backend@sha256:" + "a"*64,
@@ -54,7 +59,7 @@ class ReleaseTests(unittest.TestCase):
                    "TF_VAR_service_version": "sha", "GITHUB_SHA": "sha", "GITHUB_RUN_ID": "1"}
             cwd = Path.cwd()
             try:
-                with patch.object(release.Path, "resolve", return_value=root / "infra/scripts/release.py"), patch.object(release, "run", side_effect=command), patch.object(release, "az", side_effect=azure), patch.object(release.subprocess, "check_output", side_effect=console), patch.object(release.time, "sleep"), patch.dict(os.environ, env):
+                with patch.object(release.Path, "resolve", return_value=root / "infra/scripts/release.py"), patch.object(release, "run", side_effect=command), patch.object(release, "az", side_effect=azure), patch.object(release.subprocess, "run", side_effect=console), patch.object(release.time, "sleep"), patch.dict(os.environ, env):
                     try:
                         release.release("test")
                     except (RuntimeError, TimeoutError, ValueError) as error:
@@ -103,23 +108,76 @@ class ReleaseTests(unittest.TestCase):
             if "plan" in c:
                 self.assertTrue(any(x.startswith("-var=backend_image=") for x in c))
 
+    def test_already_active_latest_revision_is_not_activated_again(self):
+        calls, error = self.scenario(latest_active=True)
+        self.assertIsNone(error)
+        self.assertFalse(any("activate" in c for c in calls))
+        self.assertTrue(any("./infra/scripts/smoke-test.sh" in c for c in calls))
+
 class PromotionTests(unittest.TestCase):
     def test_gate_rejects_missing_self_approval_and_admin_bypass(self):
-        gate = {"protection_rules": [{"type": "required_reviewers", "reviewers": [{"id": 1}], "prevent_self_review": True}], "can_admins_bypass": False, "deployment_branch_policy": {"protected_branches": True}}
-        promotion.validate_gate(gate)
-        for invalid in ({}, {**gate, "can_admins_bypass": True}, {**gate, "protection_rules": []}):
+        gate = {"protection_rules": [{"type": "required_reviewers", "reviewers": [{"id": 1}], "prevent_self_review": True}], "can_admins_bypass": False, "deployment_branch_policy": {"protected_branches": False, "custom_branch_policies": True}}
+        dev = [{"name": "dev", "type": "branch"}]
+        promotion.validate_gate(gate, dev, "dev")
+        for invalid in ({}, {**gate, "can_admins_bypass": True}, {**gate, "protection_rules": []},
+                        {**gate, "deployment_branch_policy": {"protected_branches": True, "custom_branch_policies": False}}):
             with self.assertRaises(ValueError):
-                promotion.validate_gate(invalid)
+                promotion.validate_gate(invalid, dev, "dev")
+        for policies in ([], [{"name": "main", "type": "branch"}], dev + [{"name": "qa", "type": "branch"}], [{"name": "dev", "type": "tag"}]):
+            with self.assertRaises(ValueError):
+                promotion.validate_gate(gate, policies, "dev")
         gate["protection_rules"][0]["prevent_self_review"] = False
         with self.assertRaises(ValueError):
-            promotion.validate_gate(gate)
+            promotion.validate_gate(gate, dev, "dev")
 
     def test_only_successful_matching_test_release_can_promote(self):
-        run = {"id": 1, "conclusion": "success", "event": "push", "head_branch": "main", "head_sha": "abc", "path": ".github/workflows/deploy.yml", "repository": {"full_name": "owner/repo"}}
+        run = {"id": 1, "conclusion": "success", "event": "push", "head_branch": "qa", "head_sha": "abc", "path": ".github/workflows/deploy.yml", "repository": {"full_name": "owner/repo"}}
         record = {"environment": "test", "smoke": "passed", "sha": "abc", "version": "abc", "run_id": "1", "backend_image": "r.test/backend@sha256:"+"a"*64, "web_image": "r.test/web@sha256:"+"b"*64}
         promotion.validate_release(run, record, "owner/repo", "1")
-        for key, value in (("conclusion", "failure"), ("event", "pull_request"), ("head_sha", "other"), ("head_branch", "feature")):
+        for key, value in (("conclusion", "failure"), ("event", "pull_request"), ("head_sha", "other"), ("head_branch", "feature"), ("head_branch", "dev"), ("head_branch", "main")):
             with self.assertRaises(ValueError):
                 promotion.validate_release({**run, key: value}, record, "owner/repo", "1")
         with self.assertRaises(ValueError):
             promotion.validate_release(run, {**record, "backend_image": "r.test/backend:latest"}, "owner/repo", "1")
+
+
+class AzureOutputTests(unittest.TestCase):
+    def test_revision_actions_accept_plain_text_and_json_reads_fail_clearly(self):
+        with patch.object(release, "run", return_value="Deactivate succeeded"):
+            release.az_action("containerapp", "revision", "deactivate")
+            with self.assertRaisesRegex(RuntimeError, "non-JSON output"):
+                release.az("containerapp", "show")
+
+
+class ConsoleOutputTests(unittest.TestCase):
+    def run_until_azure(self, outputs):
+        # Drive release() through the console reads; stop at the first Azure call.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "infra/environments/test"
+            config.mkdir(parents=True)
+            for name in ("workloads.tfvars", "workloads.backend.hcl"):
+                (config / name).touch()
+            env = {"TF_VAR_backend_image": "registry.test/backend@sha256:" + "a"*64,
+                   "TF_VAR_web_image": "registry.test/web@sha256:" + "b"*64, "TF_VAR_service_version": "sha"}
+            results = iter(outputs)
+            console = lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=next(results), stderr="")
+            cwd = Path.cwd()
+            try:
+                with patch.object(release.Path, "resolve", return_value=root / "infra/scripts/release.py"), \
+                     patch.object(release, "run", return_value="{}"), \
+                     patch.object(release.subprocess, "run", side_effect=console), \
+                     patch.object(release, "az", side_effect=RuntimeError("reached azure")), patch.dict(os.environ, env):
+                    release.release("test")
+            finally:
+                os.chdir(cwd)
+
+    def test_console_noise_around_value_is_ignored(self):
+        encoded = lambda v: json.dumps(json.dumps(v))
+        outputs = [f"Warning: noise\n{encoded(v)}\n" for v in ("rg", "rc", "test", True)]
+        with self.assertRaisesRegex(RuntimeError, "reached azure"):
+            self.run_until_azure(outputs)
+
+    def test_non_json_console_output_is_reported(self):
+        with self.assertRaisesRegex(RuntimeError, "no JSON.*only noise"):
+            self.run_until_azure(["Warning: only noise\n"])

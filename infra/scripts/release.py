@@ -14,7 +14,16 @@ def run(*args):
 
 
 def az(*args):
-    return json.loads(run("az", *args, "-o", "json") or "null")
+    out = run("az", *args, "-o", "json")
+    try:
+        return json.loads(out or "null")
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"az {' '.join(args[:3])} returned non-JSON output: {out[:200]!r}") from error
+
+
+def az_action(*args):
+    # Revision activate/deactivate print a plain message, not JSON; success is the exit code.
+    run("az", *args)
 
 
 def wait_for(read, done, failed, attempts=90):
@@ -52,7 +61,21 @@ def release(environment):
     varargs = (f"-var-file={config / 'workloads.tfvars'}", f"-var=environment={environment}",
                *(f"-var={key}={os.environ['TF_VAR_' + key]}" for key in ("backend_image", "web_image", "service_version")))
     def value(expression):
-        return json.loads(subprocess.check_output((*tf, "console", *varargs), input=expression, text=True))
+        # Newline-terminated so console evaluates the line; jsonencode gives exact JSON.
+        result = subprocess.run((*tf, "console", "-no-color", *varargs), input=f"jsonencode({expression})\n",
+                                text=True, capture_output=True)
+        out = result.stdout.strip()
+        if result.returncode or not out:
+            raise RuntimeError(f"terraform console failed for {expression}: {result.stderr.strip() or 'no output'}")
+        # Console prints the encoded string as an HCL string literal. Some Terraform versions
+        # also print warnings or prompts on stdout, so use the last line that decodes.
+        for line in reversed(out.splitlines()):
+            try:
+                return json.loads(json.loads(line.strip()))
+            except (json.JSONDecodeError, TypeError):
+                continue
+        raise RuntimeError(f"terraform console returned no JSON for {expression}: "
+                           f"stdout={out[:500]!r} stderr={result.stderr.strip()[:500]!r}")
     group = value("var.handoff.workload_resource_group")
     prefix = value("var.name_prefix")
     if value("var.handoff.environment") != environment:
@@ -69,7 +92,7 @@ def release(environment):
         for revision in az("containerapp", "revision", "list", "-g", group, "-n", app["name"]):
             name = revision["name"]
             if revision["properties"]["active"]:
-                az("containerapp", "revision", "deactivate", "-g", group, "-n", app["name"], "--revision", name)
+                az_action("containerapp", "revision", "deactivate", "-g", group, "-n", app["name"], "--revision", name)
             # An interrupted release can leave an inactive revision still draining.
             stopped.append((app["name"], name))
     for app, revision in stopped:
@@ -94,7 +117,12 @@ def release(environment):
     for suffix in ("loan-api", "notifications", "web"):
         app = prefix + "-" + suffix
         latest = az("containerapp", "show", "-g", group, "-n", app)["properties"]["latestRevisionName"]
-        az("containerapp", "revision", "activate", "-g", group, "-n", app, "--revision", latest)
+        # The apply may already have made the latest revision active (e.g. a new revision in
+        # single-revision mode); activating it again fails with RevisionAlreadyInRequestedState.
+        if az("containerapp", "revision", "show", "-g", group, "-n", app, "--revision", latest)["properties"]["active"]:
+            print(json.dumps({"stage": "revision_already_active", "app": app, "revision": latest}), flush=True)
+            continue
+        az_action("containerapp", "revision", "activate", "-g", group, "-n", app, "--revision", latest)
     outputs = json.loads(run(*tf, "output", "-json"))
     os.environ["LOAN_API_URL"] = outputs["loan_api_url"]["value"]
     os.environ["WEB_URL"] = outputs["web_app_url"]["value"]

@@ -912,3 +912,1099 @@ Committed the frontend plan docs, memory and log entries in one commit on `codex
 ### Validation and outcome
 
 Reviewed `git status`; only plan, memory and log files changed. Push result is in the git output for this turn.
+
+## 045 — 2026-11-02 — Implement frontend phase 1
+
+Correction (2026-11-02): renumbered from 040–046 to 045–051 after merging `main`, which already used 040–044.
+
+### Exact input prompt
+
+```text
+Implement frontend phase 1 from docs/frontend/phase-1-structure.md in
+/home/cabozzz/dev/resource.center. Follow AGENTS.md and docs/frontend/README.md.
+Write the phase 1 handoff when done.
+```
+
+### Change summary
+
+Implemented frontend phase 1 in `frontend/`: routes `/`, `/devices/[id]`, `/reservations`, `/staff` with display-only guards and a 403 staff page, app shell (header, role badge, nav, footer, loading/error/not-found), `ui.tsx` split into `src/components/`, typed `lib/api-client.ts`, CSS tokens with light/dark, and Vitest + RTL tests. Wrote `docs/frontend/phase-1-handoff.md` and updated `mem:frontend/plan`.
+
+### Validation and outcome
+
+`make frontend-typecheck frontend-test frontend-build frontend-audit` passed (11 tests, 0 vulnerabilities); a no-Auth0 `next start` smoke rendered all routes; client bundle scan found no secrets/tokens. Not verified: signed-in flows against a live Loan API/Auth0, browser visual check, Docker build.
+
+## 046 — 2026-11-02 — Create PR
+
+### Exact input prompt
+
+```text
+Create PR (desktop app "Create PR" action: commit, push and open a ready-for-review PR from codex/backend-phase-3-secure-flows to main)
+```
+
+### Change summary
+
+Committed frontend phase 1 code and its docs/memory/log separately, and pushed `codex/backend-phase-3-secure-flows`. No PR opened: `gh` (account CodeZobac) cannot resolve `TeesideCoderProMax/resource.center`, as in entries 036–037.
+
+### Validation and outcome
+
+Checks were those of entry 045; no new checks run. Push succeeded; `gh pr list` failed with "Could not resolve to a Repository". The user must open the PR from the compare URL.
+
+## 047 — 2026-11-02 — Diagnose Azure login failure in deploy workflow
+
+### Exact input prompt
+
+````text
+Ive got this issue on the github actions:
+
+The job failed in the Azure login step, before deployment could begin.
+What the log says:
+
+* "Login failed with Error: Using auth-type: SERVICE_PRINCIPAL. Not all values are present."
+* "Ensure 'client-id' and 'tenant-id' are supplied."
+
+That means the workflow is configured to authenticate to Azure using a service principal, but the required credentials were not present in the environment or GitHub secrets for that run.
+Additional clue:
+
+* The log shows:
+   * ACR_NAME:
+   * ACR_SERVER:
+* These values are blank, which suggests the deployment variables/secrets for Azure Container Registry or Azure login were not set.
+
+So the root cause is not a code/test failure in the app itself; it is a deployment configuration issue:
+
+* Azure auth type = SERVICE_PRINCIPAL
+* client-id missing
+* tenant-id missing
+* likely related secrets/vars not injected into the workflow
+
+In short: the job failed because Azure login could not authenticate with the required service principal details.
+````
+
+### Change summary
+
+Diagnosis only. `main`'s `.github/workflows/deploy.yml` release job reads `vars.AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME`, `ACR_SERVER` (plus `WORKLOADS_TFVARS`, `WORKLOADS_BACKEND_HCL`) from the GitHub `test` environment; they are unset, so azure/login gets empty IDs and falls back to service-principal mode. Fix is to set those environment variables (see `docs/backend/release-runbook.md`). No project files changed apart from this log.
+
+### Validation and outcome
+
+Compared `origin/main` and branch workflows locally. Could not read the run log or repository variables: `gh` (CodeZobac) cannot access the repository.
+
+## 048 — 2026-11-02 — gh access granted
+
+### Exact input prompt
+
+```text
+Okay, so COdezobac now have acess to this repo
+```
+
+### Change summary
+
+With access confirmed, checked GitHub: `test` environment has no variables and `staging`/`production` environments do not exist; run 41517898778 failed at `azure/login` as reported. Opened the frontend phase 1 PR to `main` (entry 046 follow-up). Only this log changed.
+
+### Validation and outcome
+
+`gh variable list`, `gh run view --log-failed` and `gh pr create` run as CodeZobac. Deploy variables are still unset; the user must supply/confirm the values.
+
+## 049 — 2026-11-02 — Set Test deploy variables
+
+### Exact input prompt
+
+```text
+Yes, set them
+```
+
+### Change summary
+
+Set GitHub `test` environment variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME`, `ACR_SERVER`, and `WORKLOADS_TFVARS`/`WORKLOADS_BACKEND_HCL` from the local Test files (identical to the committed `.example` copies; no secrets). Only this log changed in the repository.
+
+### Validation and outcome
+
+`gh variable list --env test` shows all seven. Deploy not re-run. The Test tfvars have empty Auth0 values, so the release smoke (which requires configured Auth0) is expected to fail next; OIDC federated trust for the `test` environment is unverified. `staging`/`production` environments still do not exist.
+
+## 050 — 2026-11-02 — Re-run Test deploy
+
+### Exact input prompt
+
+```text
+Re-run deploy
+```
+
+### Change summary
+
+Re-ran the failed job of run 41517898778. The variables now resolve, but `azure/login` fails with AADSTS700213: GitHub presents the immutable subject `repo:TeesideCoderProMax@346585383/resource.center@1432721449:environment:test` (repo OIDC setting `use_immutable_subject: true`), while the Azure federated credential `github-environment` on the deploy identity trusts `repo:TeesideCoderProMax/resource.center:environment:test` (`infra/platform/identity.tf`). Proposed fix pending user choice; only this log changed.
+
+### Validation and outcome
+
+Read the failed log and both subject configurations with `gh api` and `az identity federated-credential list`. Deploy still failing; nothing in Azure or GitHub changed beyond the re-run.
+
+## 051 — 2026-11-02 — Add Azure federated credential
+
+### Exact input prompt
+
+```text
+Add Azure credential
+```
+
+### Change summary
+
+Created federated credential `github-environment-immutable` on `rc-test-0330980f-github-workloads` for the ID-based subject and added the matching optional resource and `github_immutable_subject_prefix` variable to `infra/platform/identity.tf` and the `platform.tfvars` files. The re-run then passed `azure/login` but failed in `make image-test`: `pg_isready` over the Unix socket succeeded during the Postgres entrypoint's temporary init server, so migrate hit "connection refused". Merged `origin/main` and changed `backend/scripts/test-images.sh` to probe over TCP.
+
+### Validation and outcome
+
+`terraform validate` passed; `az` returned the new subject; run 41517898778 attempt passed login and failed at image test as described. The TCP probe fix is not yet exercised: the deploy runs only on `main`, so it needs PR #6 merged. The Terraform state has not been applied, so a later platform `apply` will import-conflict unless the existing credential is imported first.
+
+## 052 — 2026-11-02 — Security of the new federated credential
+
+Correction (2026-11-02): renumbered from 047, which duplicated an existing ID.
+
+### Exact input prompt
+
+```text
+How secure is The deploy identity now also trusts the ID-based subject GitHub sends.
+```
+
+### Change summary
+
+Answer only (forked session). The ID-based credential is as narrow as the name-based one and survives renames/transfers, but the GitHub `test` environment has no protection rules or branch policy, so any branch workflow naming `environment: test` can obtain the deploy identity (Contributor on workloads RG, AcrPush, state blob write, Managed Identity Operator on four identities). Recommended: restrict `test` to `main`, then remove the old name-based credential. No project files changed apart from this log.
+
+### Validation and outcome
+
+Read the environment settings with `gh api` and the role assignments with `az role assignment list`. Nothing changed in GitHub or Azure.
+
+## 048 — 2026-11-02 — Plan restricting test environment to qa
+
+### Exact input prompt
+
+```text
+Draft a plan to restrict the test environment to the qa branch
+```
+
+### Change summary
+
+Plan only, given in chat: create `qa`, retarget the deploy workflow (push trigger, verify guard) and `infra/scripts/promotion.py` from `main` to `qa`, set a custom deployment branch policy on `test` allowing only `qa`, update the release runbook, verify with a qa run and a rejected non-qa run. No project files changed apart from this log.
+
+### Validation and outcome
+
+Inspected remote branches (`qa` does not exist), `origin/main` deploy workflow and promotion script. Nothing changed.
+
+## 053 — 2026-11-02 — Restrict Test to dev branch
+
+### Exact input prompt
+
+```text
+I want to restrict test to the dev environment. So the workflow will now create PR against dev, where this test runs and then dev to main after tests are performed.
+```
+
+### Change summary
+
+Switched the branch flow to feature → `dev` → `main`: `deploy.yml` deploys Test on push to `dev` and runs promotions only when dispatched from `main`; CI runs on `dev` and `main`; `service-checks.yml` runs from `dev`; `infra/scripts/promotion.py` requires a successful `dev` push Test run (tests updated, `main` source rejected). Updated `docs/backend/release-runbook.md` and `mem:cloud/phase_3_result`. Created the `dev` branch from `main` on GitHub and retargeted PR #6 to `dev`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (13 tests); `serena memories check` passed. Workflow YAML was not linted (no local YAML parser; an external linter was blocked). The `test` environment branch policy could not be set: CodeZobac has push but not admin rights (API 404). A repository admin must restrict `test` to `dev`.
+
+## 054 — 2026-11-02 — Map qa/dev/main to test/staging/production
+
+### Exact input prompt
+
+```text
+Okay, so let's do this diferently. A new branch QA is the test environment; dev is the staging and main is production.
+```
+
+### Change summary
+
+Replaced the `dev`-only flow with one branch per environment: `qa` → test, `dev` → staging, `main` → production. `deploy.yml` deploys Test on push to `qa` and allows staging/production promotions only when dispatched from `dev`/`main`; CI covers all three branches; `service-checks.yml` runs from `qa`. `infra/scripts/promotion.py` now requires a successful `qa` Test run, the matching dispatch branch, and an environment branch policy of exactly that one branch (tests updated). Updated `docs/backend/release-runbook.md` and `mem:cloud/phase_3_result`; created the `qa` branch from `main` and retargeted PR #6 to `qa`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (13 tests); `serena memories check` passed. Workflow YAML not linted. Environment branch policies and creation of `staging`/`production` environments still need a repository admin (CodeZobac lacks admin).
+
+## 055 — 2026-11-02 — Auth0 setup guidance
+
+### Exact input prompt
+
+```text
+Okay, how do i fill in Auth0 values? What keys are needed, can you guide me trough their dashboard
+```
+
+### Change summary
+
+Answer only: explained the Auth0 setup (API with audience and RBAC, Regular Web Application with callback/logout URLs, `student`/`staff` roles, post-login Action adding the roles and email claims) and which values go where (`auth0_domain`, `auth0_audience`, `auth0_client_id` in `WORKLOADS_TFVARS`; client secret and `AUTH0_SECRET` as secrets). Noted that `infra/workloads/main.tf` does not yet bind the web secrets, so live sign-in also needs an infra change. No project files changed apart from this log.
+
+### Validation and outcome
+
+Read `infra/workloads/main.tf`, `variables.tf`, `docs/backend/contracts.md` and `frontend/src/lib/auth0.ts`. Not checked against the live Auth0 dashboard.
+
+## 056 — 2026-11-02 — Auth0 free plan coverage
+
+### Exact input prompt
+
+```text
+Is all the features we need available in auth0 free plan?
+```
+
+### Change summary
+
+Answer only: the features used (Regular Web App with Authorization Code + PKCE, one custom API/audience with RS256, RBAC roles in access tokens, a post-login Action adding custom claims, database/social connections) are available on Auth0's free plan; noted limits to check (MAU cap, M2M tokens, custom domain, email provider for production). No project files changed apart from this log.
+
+### Validation and outcome
+
+Based on general knowledge of Auth0 plans; the live pricing page was not checked this turn.
+
+## 057 — 2026-11-02 — Auth0 audience without a domain
+
+### Exact input prompt
+
+```text
+i dont have a domain for this app. Does https://loan.resource-center.campus work? Can you make azure generate a generic URI for my API service that stays always the same?
+```
+
+### Change summary
+
+Answer only: an Auth0 API identifier is an opaque audience string that is never fetched, so `https://loan.resource-center.campus` works without owning the domain. Azure already gives the Loan API a stable FQDN, `rc-test-0330980f-loan-api.livelywave-2cc0564d.francecentral.azurecontainerapps.io`, which stays the same while the app name and Container Apps environment are kept; recommended keeping a logical identifier instead. No project files changed apart from this log.
+
+### Validation and outcome
+
+Listed Container App FQDNs with `az containerapp list` in `rc-test-0330980f-workloads-rg`.
+
+## 058 — 2026-11-02 — Set Auth0 Test values and plan web secrets
+
+### Exact input prompt
+
+```text
+Okay, pls setup the vars in both gh and the tfvars file.
+
+AUTH0_DOMAIN=dev-1mxf8h3b7mphavlc.eu.auth0.com
+AUTH0_CLIENT_ID=vDJ4vxu2kQ0Dyq8ifOIKN9DAFiKSXKSQ
+AUTH0_AUDIENCE=https://loan-test.resource-center.campu
+
+From what i understood the other private ones are not meant to be put in GH actions.
+
+How to add the remaining envs as Container App secrets? They are set in .env.local
+```
+
+### Change summary
+
+Set `auth0_domain`, `auth0_audience` and `auth0_client_id` in `infra/environments/test/workloads.tfvars` (local, ignored) and the committed `.example`, and updated the GitHub `test` variable `WORKLOADS_TFVARS`. Explained options for the web secrets; recommended Key Vault references bound by Terraform. Not implemented yet.
+
+### Validation and outcome
+
+`gh variable set` succeeded. The audience ends in `.campu` (no `s`), matching `frontend/.env.local`; flagged to the user to confirm against the Auth0 API identifier. Secret values were not read or printed.
+
+## 059 — 2026-11-02 — Key Vault references for web Auth0 secrets
+
+### Exact input prompt
+
+```text
+Yes, use Key Vault. I confirm the audience ends in .campu
+```
+
+### Change summary
+
+Added a web-owned Key Vault (`<compact>wkv`), a `web` user-assigned identity with Key Vault Secrets User, an operator Secrets Officer assignment (`web_secrets_operator_object_id`, defaulting to the Postgres admin) and `web_vault_uri` in the platform handoff. The web Container App now uses the `web` identity and Key Vault references for `AUTH0_CLIENT_SECRET`/`AUTH0_SECRET` when `handoff.web_vault_uri` is set. Added `infra/scripts/set-web-secrets.sh`, updated the release runbook and `mem:cloud/phase_3_result`.
+
+### Validation and outcome
+
+`terraform validate` passed for platform and workloads. Platform init/import/plan/apply against Test state was blocked by the session permission guard, so nothing was applied and no secrets were written; the user must run the documented steps.
+
+## 060 — 2026-11-02 — Record applied Test platform handoff
+
+### Exact input prompt
+
+```text
+<bash-input>./infra/scripts/terraform.sh apply platform test</bash-input> (user ran the platform apply; output: "Apply complete! Resources: 8 added, 0 changed, 2 destroyed." with the updated `handoff` output)
+```
+
+Correction: the user's message was a shell run and its long output; only the command and result line are recorded here.
+
+### Change summary
+
+Recorded the applied Test platform outputs: added the `web` identity and `web_vault_uri` to the Test `workloads.tfvars` (local and `.example`), `docs/cloud/test-foundation-outputs.json`, and the GitHub `test` variable `WORKLOADS_TFVARS`.
+
+### Validation and outcome
+
+User's apply reported 8 added, 2 destroyed (saved searches recreated). `terraform validate` passed; `gh variable set` succeeded. Web secrets not yet written to the vault (user step pending); deploy not run.
+
+## 061 — 2026-11-02 — Platform handoff output and repeated import
+
+### Exact input prompt
+
+````text
+Here is the output:
+
+{"container_app_environment_id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.App/managedEnvironments/rc-test-0330980f-apps","cosmos_capacity_mode":"free_tier","cosmos_container":"jobs","cosmos_database":"notifications","cosmos_endpoint":"https://rc-test-0330980f-notifications.documents.azure.com:443/","environment":"test","github_client_id":"b8dba55f-9eb5-4d3f-9f5d-cfe913b62104","identities":{"loan":{"client_id":"43b555a6-c33d-4a3d-9f06-169a31307f49","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-loan","name":"rc-test-0330980f-loan","principal_id":"9ecf13c8-82a7-4f3c-a646-f4fc3ad32b50"},"migrations":{"client_id":"c6b4b9a7-e15a-4f17-8b3a-3c8f3cf5c3db","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-migrations","name":"rc-test-0330980f-migrations","principal_id":"82caf993-cd67-4037-9d29-d3e359f63bf1"},"notifications":{"client_id":"9d2ca270-ebc1-4cb6-a498-f7cb0bc2d16b","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-notifications","name":"rc-test-0330980f-notifications","principal_id":"b855eb0a-3d5d-4d43-aebd-5adb2ce33cf0"},"publisher":{"client_id":"06917d48-9475-40c8-95be-47c0c2376130","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-publisher","name":"rc-test-0330980f-publisher","principal_id":"16f78a70-a167-4406-b612-686764a101eb"},"web":{"client_id":"2c1e9785-9454-462b-b818-18a028f5e9f1","id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-web","name":"rc-test-0330980f-web","principal_id":"ba319349-130e-4a6d-9905-f0a5225d0a31"}},"location":"francecentral","notifications_vault_uri":"https://rctest0330980fnkv.vault.azure.net/","platform_resource_group":"rc-test-0330980f-platform-rg","postgres_database":"loan","postgres_host":"rc-test-0330980f-loan-pg.postgres.database.azure.com","registry_id":"/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ContainerRegistry/registries/rctest0330980facr","registry_login_server":"rctest0330980facr.azurecr.io","registry_sku":"Standard","servicebus_namespace":"rc-test-0330980f-bus.servicebus.windows.net","servicebus_queue":"notification-requests-v1","subscription_id":"0330980f-85ea-4b38-8b9e-c871432c9d4f","tenant_id":"43d2115b-a55e-46b6-9df7-b03388ecfc60","web_vault_uri":"https://rctest0330980fwkv.vault.azure.net/","workload_resource_group":"rc-test-0330980f-workloads-rg"}
+
+It failed at step 7
+
+le"...
+azurerm_federated_identity_credential.github_immutable[0]: Import prepared!
+  Prepared azurerm_federated_identity_credential for import
+╷
+│ Error: Resource already managed by Terraform
+│ 
+│ Terraform is already managing a remote
+│ object for
+│ azurerm_federated_identity_credential.github_immutable[0].
+│ To import to this address you must first
+│ remove the existing object from the state.
+╵
+
+Releasing state lock. This may take a few moments...
+````
+
+### Change summary
+
+Answer only: the handoff output matches what entry 060 already recorded in the Test tfvars, outputs file and GitHub variable. The import error is from re-running step 2, which had already succeeded; it changed nothing. Step 7 was the agent's update, already done. No project files changed apart from this log.
+
+### Validation and outcome
+
+Grepped the Test `workloads.tfvars` for the web identity name, client ID, principal ID and vault URI; all present.
+
+## 062 — 2026-11-02 — Ship PR #6 to qa
+
+### Exact input prompt
+
+```text
+Ship it
+```
+
+### Change summary
+
+Merged PR #6 into `qa` (merge `dcf2c73`). Deploy run 41533085460 passed verify, image build and image test, then failed in `infra/scripts/release.py`: `terraform console` returned empty stdout, so `json.loads` raised. Changed the console call to send a newline-terminated `jsonencode(...)` expression with `-no-color`, decode it, and fail with Terraform's stderr when output is empty; updated the release test mock. Shipped via a follow-up PR into `qa`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (13). Locally (Terraform 1.15.9, local-backend copy of `infra/workloads` with the Test tfvars) the new form returns `"test"` and `True`; CI pins 1.14.3, which was not reproduced locally, so the newline cause is inferred.
+
+## 063 — 2026-11-02 — Implement frontend phase 2
+
+### Exact input prompt
+
+```text
+Implement frontend phase 2 from docs/frontend/phase-2-flows-and-tests.md in
+/home/cabozzz/dev/resource.center. Read docs/frontend/phase-1-handoff.md first.
+Follow AGENTS.md and docs/frontend/README.md. Write the phase 2 handoff when done.
+
+Start from the branch qa and create a branch from there. ALL PR are to be merged against qa
+```
+
+### Change summary
+
+On branch `frontend/phase-2-flows` from `qa`: added student/staff flows, 401/403/409/503 handling and overdue/confirm UX in `frontend/src/components`, a fake Loan API in `frontend/fake/`, Vitest component tests and Playwright E2E (`frontend/e2e`, `make frontend-e2e`). Wrote `docs/frontend/phase-2-handoff.md` and updated `mem:frontend/plan`.
+
+### Validation and outcome
+
+Passed locally: frontend typecheck, 26 Vitest tests, build, audit (0 vulnerabilities), 9 Playwright E2E tests, `dev:fake` smoke, `git diff --check`. Not run: live Auth0/real Loan API, `make check`, docker build.
+
+## 064 — 2026-11-02 — Commit and open frontend phase 2 PR
+
+### Exact input prompt
+
+```text
+Commit and open PR
+```
+
+### Change summary
+
+Committed the phase 2 work in logical groups on `frontend/phase-2-flows`, pushed it and opened a PR against `qa`. Left the untracked `frontend/AGENTS.md` alone.
+
+### Validation and outcome
+
+Checks from entry 063 were not rerun; see the PR for CI.
+
+## 065 — 2026-11-03 — Implement frontend phase 3
+
+### Exact input prompt
+
+```text
+Implement frontend phase 3 from docs/frontend/phase-3-cloud-and-evidence.md in
+/home/cabozzz/dev/resource.center. Read the frontend phase 1–2 handoffs and backend
+phase 4 docs first. Follow AGENTS.md and docs/frontend/README.md. Ask before any
+deployment, live email or paid change. Write the phase 3 handoff when done.
+
+Start from the branch qa and create a branch from there. ALL PR are to be merged against qa
+```
+
+### Change summary
+
+On branch `frontend/phase-3-cloud-evidence` from `qa`: added structured JSON proxy logs and safe correlation IDs (`frontend/src/lib/observability.ts`, loan proxy route), `/api/ready` readiness used by the Terraform web readiness probe and deployed smoke, and Playwright E2E + report artifact in CI with `frontend-e2e` in `make check`. Refreshed the C4 container diagram (`docs/cloud/assessment-evidence.md`), wrote `docs/frontend/demo-script.md` and `docs/frontend/phase-3-handoff.md`, updated `mem:frontend/plan`.
+
+### Validation and outcome
+
+Passed locally: `make check` (incl. 29 unit and 11 E2E frontend tests, Terraform validate for all envs), 13 infra Python tests, `serena memories check`, `git diff --check`. actionlint not installed. No deployment, live Auth0, email or load test run; these are blocked pending approval and Auth0/GitHub environment setup, as listed in the handoff.
+
+## 066 — 2026-11-03 — Diagnose QA release JSON failure
+
+### Exact input prompt
+
+````text
+The last PR job failed at QA with this error:
+
+to parse JSON.
+From the workflow, the failing part is the release job’s final step:
+
+* `run: python3 infra/scripts/release.py "$TARGET_ENV"`
+
+The log shows:
+
+* `json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)`
+
+That means the script was handed empty, malformed, or otherwise non-JSON content and attempted to decode it as JSON, causing the process to exit with code 1.
+This was not a compile or test failure in the earlier verification job; it was a runtime failure in the deployment/release script.
+````
+
+### Change summary
+
+`infra/scripts/release.py` JSON-parsed every `az` call, but `containerapp revision activate/deactivate` print plain text, which matches the reported decode error once apps already exist on Test. Added `az_action()` for those calls and a clear non-JSON error in `az()`; regression test in `infra/tests/test_release.py`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (14). The CI traceback was not read (`gh` hung locally), so the failing line is inferred from code; not re-run on GitHub.
+
+## 067 — 2026-11-03 — Open frontend phase 3 PR
+
+### Exact input prompt
+
+```text
+Yeas create a PR and include all these changes from the 3rd phase
+```
+
+### Change summary
+
+Committed the phase 3 work and the release JSON fix in logical groups on `frontend/phase-3-cloud-evidence`, pushed and opened a PR against `qa`. Left the untracked `frontend/AGENTS.md` alone.
+
+### Validation and outcome
+
+No new checks; entries 065–066 record the local results. PR CI not yet observed.
+
+## 068 — 2026-11-03 — How to run all services locally
+
+### Exact input prompt
+
+```text
+Great! How to run all services locally?
+```
+
+### Change summary
+
+Answered from the repository's run tooling and docs; no project files changed apart from this log.
+
+### Validation and outcome
+
+Commands were read from the repo, not executed in this turn.
+
+## 069 — 2026-11-03 — Add make dev
+
+### Exact input prompt
+
+```text
+Great make one global make dev that runs all that things at once
+```
+
+### Change summary
+
+Added `make dev` (Makefile) running `infra/scripts/dev.sh`: rebuilds images, starts PostgreSQL 17 with TLS, migrates/seeds, runs Loan API on :8080 and web on :3000, follows logs and removes everything on exit. Auth0 vars pass through when set; otherwise `ALLOW_UNCONFIGURED_AUTH=true` for a signed-out local stack. Publisher and Notifications are not started (need Azure Service Bus/Cosmos).
+
+### Validation and outcome
+
+Ran `make dev` (first run exposed a cleanup-order bug, fixed) and the script again: migrations ran, `/api/ready` ready with Loan API reachable, catalogue served, web `/` 200. Interactive Ctrl-C cleanup was not exercised from this non-interactive shell; containers were removed manually.
+
+## 070 — 2026-11-03 — Commit and push make dev
+
+### Exact input prompt
+
+```text
+Commit and push
+```
+
+### Change summary
+
+Committed `make dev` and the AI_LOG updates to `frontend/phase-3-cloud-evidence` and pushed. Left the untracked `frontend/AGENTS.md` alone.
+
+### Validation and outcome
+
+No new checks; entry 069 records the `make dev` run.
+
+## 071 — 2026-11-03 — Stitch MCP access
+
+### Exact input prompt
+
+```text
+Do you have acess to stitch MCP?
+```
+
+### Change summary
+
+No. This session has no Stitch MCP tools (connected: Claude Docs, scheduled-tasks, plus built-in browser and Chrome tools), and the registry search found no Google Stitch connector. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked session connector status and searched the MCP registry; Stitch was not found.
+
+## 072 — 2026-11-03 — Stitch MCP added but not showing
+
+### Exact input prompt
+
+```text
+claude mcp add stitch \
+  --transport http \
+  https://stitch.googleapis.com/mcp \
+  --header "X-Goog-Api-Key: (...)"
+
+I used this command, why it did not setup stitch? Do i need to restart this client?
+```
+
+### Change summary
+
+No `stitch` entry exists in `~/.claude.json` (user or this project) or a project `.mcp.json`, so the `claude mcp add` did not persist where this session reads. No project files changed apart from the log.
+
+### Validation and outcome
+
+Inspected the config files and session connector status (Stitch absent). `claude mcp list` hung past 120s and was not used as evidence. Restart need is unverified.
+
+## 073 — 2026-11-03 — claude mcp get stitch result
+
+### Exact input prompt
+
+```text
+claude mcp get stitch
+```
+
+### Change summary
+
+The user's output shows `stitch` is not configured (only claude.ai Claude Docs and Google Docs), confirming the earlier add did not persist. No project files changed apart from the log.
+
+### Validation and outcome
+
+Based on the user-supplied command output; I did not run it myself.
+
+## 074 — 2026-11-03 — Stitch exists in local config; check desktop app config
+
+### Exact input prompt
+
+```text
+MCP server stitch already exists in local config 
+
+Check if claude desktop has the same config has claude. This is a linux version of claude, it may not share the files
+```
+
+### Change summary
+
+Found `stitch` in `~/.claude.json` only under local scope for project `/home/cabozzz` (the add was run from the home directory), so it does not apply to this repo. `claude_desktop_config.json` has no MCP servers. No project files changed apart from the log.
+
+### Validation and outcome
+
+Inspected the config files (key values not printed). Did not modify any config.
+
+## 075 — 2026-11-03 — Re-added stitch at user scope
+
+### Exact input prompt
+
+```text
+cd ~ && claude mcp remove stitch && claude mcp add stitch --scope user --transport http https://stitch.googleapis.com/mcp --header "X-Goog-Api-Key: YOUR_KEY"
+```
+
+### Change summary
+
+The user's command removed the local `stitch` entry and added it at user scope, but with the literal placeholder `YOUR_KEY` as the API key, so the old real key is gone and the new one is invalid. No project files changed apart from the log.
+
+### Validation and outcome
+
+Based on the user-supplied output; I did not run it. Whether Stitch connects was not verified.
+
+## 076 — 2026-11-03 — Release JSON error seen again on CI
+
+### Exact input prompt
+
+```text
+Ive got this issue on the CI:
+
+his job failed in the final deployment/release step, not in the earlier verification checks.
+
+The relevant workflow step is the one that runs:
+
+python3 infra/scripts/release.py "$TARGET_ENV"
+
+in the “Drain, migrate and seed, activate, then smoke” phase of the release job.
+
+The log shows the decisive error:
+
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+```
+
+### Change summary
+
+The CI run 41556892657 traceback (read with `/usr/bin/gh`) shows the failure is in `release.py` `value()` parsing `terraform console` output for `var.handoff.workload_resource_group`, not the `az` calls fixed in entry 066. `value()` now uses the last stdout line that decodes and otherwise raises with the console stdout/stderr; two tests added in `infra/tests/test_release.py`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (16). Exact console output on CI (Terraform 1.14.3) is still unknown: downloading 1.14.3 locally was blocked by the permission classifier. Not committed or re-run on GitHub.
+
+## 077 — 2026-11-03 — Does CI run to the end now?
+
+### Exact input prompt
+
+```text
+DOes the CI now run untill the end?
+```
+
+### Change summary
+
+Checked the latest `qa` deploy runs; no project files changed apart from this log.
+
+### Validation and outcome
+
+See the run list in the reply; the entry 076 fix is not committed, so no CI run includes it.
+
+## 078 — 2026-11-03 — Can the release be tested locally?
+
+### Exact input prompt
+
+```text
+Is there any way to test it locally?
+```
+
+### Change summary
+
+Explained local options for the release console step; no project files changed apart from this log.
+
+### Validation and outcome
+
+Checked local tooling and config files only; no commands from the answer were run.
+
+## 079 — 2026-11-03 — Push the release console fix
+
+### Exact input prompt
+
+```text
+okay push it
+```
+
+### Change summary
+
+Committed the `release.py` console-parsing fix and tests on a new branch `fix/release-console-parse` from `qa`, pushed it and opened a PR against `qa`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (16) before commit. CI not yet observed.
+
+## 080 — 2026-11-03 — Implement Stitch catalogue and device detail designs
+
+### Exact input prompt
+
+```text
+Starting with an worktreeeee clean from qa, implement the following designs into the app:
+
+## Stitch Instructions
+
+Get the images and code for the following Stitch project's screens:
+
+## Project
+Title: Campus Device Loan System
+ID: 9218650172162800934
+
+## Screens:
+1. Product Equipment Catalogue
+    ID: ce3c76c151314933a7f012d041e6d45f
+
+2. Device Detail & Reservation Picker
+    ID: c0343a748e4a4b8085597cd4929b237c
+
+Use a utility like `curl -L` to download the hosted URLs.
+```
+
+### Change summary
+
+In worktree branch `feat/frontend-stitch-catalogue` (from `origin/qa`), restyled the frontend to the Stitch violet glass design and rebuilt the catalogue (hero stats, category chips, search/availability filters, sort) and device detail (showcase, loan facts, rules, sticky reservation panel with loan-window calendar) in `frontend/src/components/{Catalogue,DeviceCard,AppHeader}.tsx`, `frontend/src/app/devices/[id]/*`, `frontend/src/app/page.tsx` and `globals.css`. Invented Stitch content (lockers, peripherals, costs, photos, date-range picking) was not implemented because the Loan API does not support it; reserve/subscribe behaviour is unchanged. Added `Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`npm run typecheck` passed; `npm test` 31/31 passed; `npm run build` and `npx playwright test` 11/11 passed against the fake Loan API. Visually checked both pages at desktop and mobile widths in the browser pane. Stitch hosted URLs needed auth, so the HTML came from the Stitch MCP; screenshots were not downloaded. Nothing committed.
+
+## 081 — 2026-11-03 — Commit and push the Stitch redesign
+
+### Exact input prompt
+
+```text
+Commit and push
+```
+
+### Change summary
+
+Committed the frontend redesign and the log as separate commits on `feat/frontend-stitch-catalogue` and pushed the branch to `origin`.
+
+### Validation and outcome
+
+Relied on entry 080's checks (typecheck, 31 unit, build, 11 e2e passed); no new checks run. No PR opened.
+
+## 082 — 2026-11-03 — Move the Stitch work back into the main checkout
+
+### Exact input prompt
+
+```text
+why did you create a new workplace for this task? I want the changes in the same old resource.center folder
+```
+
+### Change summary
+
+Explained that "worktree clean from qa" was read as a separate `git worktree`. Removed the clean, fully pushed `../resource.center-stitch` worktree and checked out `feat/frontend-stitch-catalogue` in this folder; untracked `frontend/AGENTS.md` was preserved. No project files changed apart from this log.
+
+### Validation and outcome
+
+Confirmed before removal that the worktree had no uncommitted or unpushed changes; `git worktree list` now shows this folder on the branch. This entry is not committed yet.
+
+## 083 — 2026-11-03 — Where did make dev go
+
+### Exact input prompt
+
+```text
+Great! What hapened to the make dev command it disapeared
+```
+
+### Change summary
+
+Found that `make dev` (commit `3926d56`, Makefile + `infra/scripts/dev.sh`) exists only on `frontend/phase-3-cloud-evidence`; it was pushed after PR #9 merged, so it never reached `qa` or any branch made from it. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked with `git branch -a --contains 3926d56` and compared Makefiles on the branches. Nothing restored yet.
+
+## 084 — 2026-11-03 — Restore make dev and stop reporting log entries
+
+### Exact input prompt
+
+```text
+Cherry pick it. And pls stop putting in the output the log entry. Add to the AI_LOG silently
+```
+
+### Change summary
+
+Cherry-picked `3926d56` onto `feat/frontend-stitch-catalogue` as `b2eeffc`, restoring `make dev` (`Makefile`, `infra/scripts/dev.sh`). Saved a user preference to keep AI_LOG updates out of replies.
+
+### Validation and outcome
+
+Cherry-pick applied cleanly; `bash -n infra/scripts/dev.sh` passed. `make dev` was not run. Not pushed.
+
+## 085 — 2026-11-03 — Refine frontend to the four Campus Device Hub screens
+
+### Exact input prompt
+
+`````text
+[4 attached images: catalogue, product detail, cart, admin panel]
+Okay, let's refine the frontend changes.
+
+Implement this:
+
+web application/stitch/projects/9218650172162800934/screens/011939faecd44e47b58af13fcb681646
+# Product Requirements Document (PRD): Campus Device Hub
+
+**Document Version:** 1.0.0  
+**Status:** Approved / In Implementation  
+**Product:** Campus Device Hub & Lending Management Operations  
+**Primary Users:** University Students, Faculty, IT Lab Specialists, Equipment Depot Staff  
+**Design System Reference:** Light Purple & Lavender (`#8b5cf6`), Rounded Components, Glassmorphism Backdrop Blurs, High-Legibility Status Badges
+
+---
+
+## 1. Executive Summary & Problem Statement
+
+### 1.1 Background
+University academic programs across Computer Science, Film & Media Arts, Engineering, and Architecture require high-performance hardware (Apple M3 Max workstations, cinema cameras, enterprise VR/AR headsets, audio broadcast units). Historically, hardware loaning has been fragmented across departmental checkout desks, paper sign-outs, and uncoordinated return schedules.
+
+### 1.2 Core Problem
+* **Lack of Centralized Inventory Visibility:** Students cannot easily ascertain real-time hardware availability or loan durations across disparate campus labs.
+* **Friction in Checkout & Return:** Manual hand-offs create long lines during project crunches; lack of after-hours pickup impedes student productivity.
+* **Administrative Burden for IT Staff:** Tracking overdue loans, managing calibration/maintenance queues, and vetting borrower academic standing consumes excessive staff hours.
+
+### 1.3 Solution Vision
+The **Campus Device Hub** is an integrated web platform unifying self-service equipment discovery, automated smart locker reservation, student identity verification, and an administrative staff cockpit for real-time approvals, inventory health checks, and locker dispatch.
+
+---
+
+## 2. Product Goals & Key Success Metrics (OKRs)
+
+### 2.1 Goals
+1. Provide a frictionless, transparent self-service hardware catalog for all enrolled university students.
+2. Automate equipment distribution via touchless 24/7 Smart Locker bays (PIN and QR code dispatch).
+3. Empower IT administrators with quick-triage approval workflows, borrower standing verification, and granular asset lifecycle management.
+
+### 2.2 Key Performance Indicators (KPIs)
+* **Average Loan Approval Latency:** < 2 hours during staff business hours; immediate instant clearance for pre-approved coursework tiers.
+* **Locker Pickup Fulfillment Rate:** ≥ 95% within assigned 24-hour pickup windows.
+* **Device Utilization Efficiency:** Maintain average active fleet utilization at 75–85% without overdue bottlenecks.
+* **Overdue Incidents:** < 3% of all active term checkouts through automated SMS/email reminders.
+
+---
+
+## 3. Target User Personas
+
+| Persona | Role & Context | Core Needs & Pain Points |
+| :--- | :--- | :--- |
+| **Maya Lin** (Student / Media Arts Senior) | Enrolled in CS 498 Capstone & Film Production. Needs high-spec MacBook Pro & Sony Cinema rigs for 3–7 day shoots. | Needs instant availability insight, transparent loan extension rules, zero-cost academic fee waivers, and after-hours smart locker pickup. |
+| **Alex Rivera** (IT Operations Specialist) | Manages 400+ campus hardware assets, calibration cycles, and loan approval queues across 4 campus hub locations. | Needs quick verification of student academic standing, one-click loan approvals, CSV batch imports, and maintenance status tracking. |
+| **Faculty Sponsor** (Department Lead) | Approves semester-long or specialized equipment loans for capstone teams. | Requires visibility into student project affiliations and faculty-vetted reservations. |
+
+---
+
+## 4. System Architecture & Information Architecture (IA)
+
+```
+Campus Device Hub
+├── Student Experience (Public / Student SSO)
+│   ├── 1. Equipment Catalog & Search
+│   │   ├── Faceted Department Filters (CS, Media Arts, Engineering, Architecture)
+│   │   ├── Hardware Specs, Loan Windows & Availability Badges
+│   │   └── Smart Locker Location Guides
+│   ├── 2. Device Detail & Reservation Builder
+│   │   ├── Multi-angle inspection gallery & technical specs
+│   │   ├── Interactive date range & calendar picker
+│   │   ├── Smart Locker Bay selector (Engineering B-12, Library, Arts Lab)
+│   │   └── Peripheral add-on bundling (chargers, dongles, cables)
+│   └── 3. Checkout & Reservation Review
+│       ├── Stepped booking flow (Cart -> Dates -> Governance -> Submit)
+│       ├── Student SSO profile & eligibility verification
+│       ├── Academic loan agreement & zero-deposit verification
+│       └── Touchless Locker PIN / Barcode dispatch notice
+└── Staff & Admin Portal (Restricted SSO)
+    ├── 1. Administrative Cockpit & Telemetry
+    │   └── Total Assets, Pending Approvals, Active Loans, In-Repair counts
+    ├── 2. Loan Request Approval Queue
+    │   ├── Borrower history & academic standing check
+    │   └── Instant Approve / Deny / Request Info actions with locker assignment
+    └── 3. Equipment Inventory Repository
+        ├── Real-time asset tags (EQ-8821, EQ-4412, etc.)
+        ├── Category filtering, stock counts, and maintenance flagging
+        └── Batch CSV import & asset onboarding
+```
+
+---
+
+## 5. Detailed Feature Specifications
+
+### 5.1 Student Device Catalog & Faceted Search
+* **Search & Filter Engine:** Instant keyword search with shortcut (`⌘K`), filterable by availability (*In Stock Only*, *Instant Locker Ready*), loan duration (*1–3 Days Rapid*, *7 Days Standard*, *14 Days Extended*), and department (*CompSci*, *Fine Arts*, *Engineering*, *Architecture*).
+* **Live Availability Badges:**
+  * Emerald (`Available / X in Stock`): Ready for instant locker assignment.
+  * Amber (`Low Stock / X Left`): High demand, impending waitlist.
+  * Soft Purple (`Reserved / Waitlist Queue`): Allows waitlist queue entry.
+* **Smart Locker Hub Status Panel:** Displays live readiness across campus hubs (e.g., Turing Hall North Bay, Main Library Atrium, Student Union South).
+
+### 5.2 Product Detail & Reservation Scheduler
+* **Visual & Technical Inspection:** Interactive multi-view hardware photography with verified spec sheets (RAM, GPU cores, storage, battery health percentage, OS version, preloaded software).
+* **Included Carry Kit Guarantee:** Visual itemization of bundled peripherals (MagSafe power supply, hard-shell pelican case, high-speed cables) to prevent missing return accessories.
+* **Interactive Date Picker:** Calendar component enforcing minimum and maximum loan duration rules, blackout dates during finals/campus breaks, and buffer windows for sanitization.
+* **Locker & Pickup Window Selection:** Flexible distribution point selection with operating hour indicators and slot reservation locks.
+
+### 5.3 Checkout, Verification & Locker Code Dispatch
+* **Single Sign-On (SSO) Integration:** Auto-populates student ID, verified department email, and disciplinary clearance (Good Standing status).
+* **Project Purpose Binding:** Dropdown linking reservation to authenticated course codes (e.g., *CS 498 Capstone*, *Studio 4 Revit Rendering*).
+* **Governance Agreement:** Explicit acknowledgment of campus hardware care policy, zero rental fees ($0.00 covered by Academic Tech Fund), and late penalty holds.
+* **Automated Locker Credentialing:** One-time 6-digit locker retrieval PIN and biometric barcode sent via SMS and Campus Authenticator app upon approval.
+
+### 5.4 Staff Operations & Inventory Management
+* **Executive Telemetry:** Four summary cards tracking Total Equipment Units, In-Use Rate (%), Pending Review Requests, Active Borrowers with On-time Return Rate (%), and Units in Calibration/Repair.
+* **High-Priority Approval Queue:** Context-rich triage cards featuring borrower avatar, student ID, loan purpose, requested timeline, and assigned locker bay with one-touch `Approve Loan` and `Deny / Request Details`.
+* **Asset Database & CRUD Controls:**
+  * Unique Asset Tag tracking (e.g., `EQ-8821`).
+  * In-place quick editing of specs, live stock counts, and maintenance status toggles.
+  * Batch CSV import utility for bulk onboarding of new semester inventory.
+
+---
+
+## 6. User Experience & Design System Standards
+
+* **Color Palette:**
+  * Primary / Accent: Vivid Lilac (`#8b5cf6` / `#7c3aed`)
+  * Surface Backgrounds: Soft tinted lavender-white (`#f8f9ff`), Container Lowest (`#ffffff`)
+  * Badges & Feedback: Emerald (`#10b981` / `#059669` for In-Stock), Amber (`#f59e0b` for Low Stock), Lilac (`#8b5cf6` for Waitlists)
+* **Typography:** Plus Jakarta Sans (`font-headline`, `font-body`, `font-label`).
+* **Visual Styling:** Generous corner radiuses (`rounded-2xl`, `rounded-3xl`), subtle glassmorphism backdrops (`backdrop-blur-md bg-surface/80`), fine border outlines (`border-outline-variant/30`), and card elevation shadows.
+
+---
+
+## 7. Non-Functional Requirements & Security
+* **Authentication & Role-Based Access Control (RBAC):** SSO Shibboleth / SAML 2.0 integration segregating Student Borrowers, Staff Operators, and System Admins.
+* **Data Privacy (FERPA Compliance):** Student borrower history and academic IDs encrypted in transit (TLS 1.3) and at rest (AES-256).
+* **Performance:** Sub-100ms catalog search filtering; 99.9% uptime for smart locker dispatch API webhooks.
+* **Accessibility:** WCAG 2.1 AA compliant contrast ratios across status badges and interactive buttons, full keyboard navigability for calendar pickers.
+
+---
+
+## 8. Release Roadmap
+
+* **Phase 1 (Current Baseline):** Desktop student catalog, product detail reservation scheduler, cart checkout flow, and core staff administration inventory portal.
+* **Phase 2:** Responsive mobile viewport optimization, student QR locker scanner interface, and SMS notification dispatch engine.
+* **Phase 3:** Automated late return penalty holds integration with university registrar systems and predictive equipment maintenance analytics.
+
+(Image1 is the catalogue; Image2 is the product detail, Image3 is the cart and Image4 is the admin panel)
+
+/plan
+`````
+
+### Change summary
+
+Matched the four screens on the real Loan API only (user's choice), adding a browser-side loan bag (`/bag`, `lib/bag.tsx`, `LoanBag.tsx`), a staff admin hub (telemetry, collection queue, inventory, CSV export in `StaffDesk.tsx`), a restyled catalogue/detail/header/nav and a new `Icon.tsx`. PRD features without API support were not built. Added tests, e2e flows, `docs/frontend/2026-11-03-campus-device-hub-redesign.md` and a `mem:frontend/plan` line.
+
+### Validation and outcome
+
+`npm run typecheck`, `npm test` (36/36), `npm run build` and `npx playwright test` (13/13) passed; `serena memories check` clean. Screens were reviewed from Playwright screenshots at desktop and mobile widths. A real bug (subscribe from the bag hid its confirmation) was found by the new test and fixed. Not committed.
+
+## 086 — 2026-11-03 — Why sign-in shows as not configured locally
+
+### Exact input prompt
+
+```text
+Okay, so in the frontend it shows sign-in not configured for local env, why is that? I have auth0 envs in env.local
+```
+
+### Change summary
+
+Found that `make dev` (`infra/scripts/dev.sh`) runs the web app in Docker and passes Auth0 settings only from the calling shell's environment; it never reads `frontend/.env.local`, so the container has no Auth0 settings and `lib/auth0.ts` reports sign-in as not configured. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked that all required keys in `frontend/.env.local` are non-empty (values not printed) and read the script. No fix applied yet.
+
+## 087 — 2026-11-03 — Auth0 callback "not authorized to access resource server"
+
+### Exact input prompt
+
+```text
+Got this error:
+
+http://localhost:3000/auth/callback?error=invalid_request&error_description=Client%20%22vDJ4vxu2kQ0Dyq8ifOIKN9DAFiKSXKSQ%22%20is%20not%20authorized%20to%20access%20resource%20server%20%22https%3A%2F%2Floan-test.resource-center.campu%22.&state=znmuuOSCXgWggbGojhBnSoRHmFwjV_9fzL_VGmrpfqk&iss=https%3A%2F%2Fdev-1mxf8h3b7mphavlc.eu.auth0.com%2F
+```
+
+### Change summary
+
+Explained that this is an Auth0 tenant setting: the web application is not authorized for user access to the Loan API (`https://loan-test.resource-center.campu`, which matches `.env.local` and `infra/environments/test/workloads.tfvars.example`). The fix is in the Auth0 dashboard. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked that the configured audience matches the repo's Test identifier. The Auth0 dashboard was not accessed.
+
+## 088 — 2026-11-03 — Remove the catalogue hero section
+
+### Exact input prompt
+
+```text
+Awesome! Pls remove this section
+```
+
+(Attached screenshot: catalogue breadcrumb and hero with "Academic Equipment & Tech Catalog" and three stat cards.)
+
+### Change summary
+
+Removed the catalogue hero (badge, title, subtitle, stat cards) from `frontend/src/components/Catalogue.tsx`, replaced it with a visually hidden page `h1`, and dropped the unused `.hero`/`.stats` CSS. Breadcrumbs kept. Updated `Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`npm run typecheck` and `npm test` passed. Not committed.
+
+## 089 — 2026-11-03 — make dev env loading, qa release failure, commit and PR
+
+### Exact input prompt
+
+`````text
+Awesome! 
+
+So now i need something from you.
+
+I need the standard make dev command to include the .env.local (set -a; source frontend/.env.local; set +a; make dev)
+
+The CI job on qa is still failling:
+
+This job failed because the release script hit a failed Azure Container App migration job and aborted the deployment.
+
+From the log:
+
+    release.py calls: wait_for(lambda: az("containerapp", "job", "execution", "show", "-g", group, "-n", job, "--job-execution-name", execution)["properties"]["status"], lambda status: status == "Succeeded", lambda status: status in {"Failed", "Canceled", "Stopped"})
+    In the failing run, that status was reported as "Failed".
+    The helper function wait_for() raises: RuntimeError: Release step failed: Failed
+    That bubbled up to the main script and the job exited with code 1.
+
+The relevant failure point is in infra/scripts/release.py around the migration execution check:
+
+    the script waits for the migration job execution to reach "Succeeded"
+    if the status becomes "Failed", "Canceled", or "Stopped", it immediately fails the release
+
+So the root cause shown by these logs is: the Azure migration/container job execution failed during the deploy step, and the script treated that as a hard release failure.
+
+Then commit, push and create a PR
+`````
+
+### Change summary
+
+`make dev` now sources `frontend/.env.local` (`infra/scripts/dev.sh`). Found the qa Deploy & Promote failure in the Azure job logs: `permission denied for database loan`, because migrations ran `CREATE SCHEMA IF NOT EXISTS loan` as a role with no database CREATE (by design). Changed `run_migrations` in `infrastructure.rs` to create the schema only when it is missing, and added a least-privilege Postgres regression test. Committed this with the pending redesign and opened a PR to `qa`.
+
+### Validation and outcome
+
+Read the failing run 41615871570 and the migration execution logs in Log Analytics (read-only `az`). The new test failed with the old code (same error) and passed with the fix; `make backend-test-postgres` passed 4/4, and `make backend-fmt backend-lint backend-test` passed. `bash -n` on dev.sh passed and the env file loads in bash; `make dev` itself was not run. The fix is not yet proven in Azure; that needs the qa deploy after merge.
+
+## 090 — 2026-11-03 — Catalogue e2e strict-mode failure in CI
+
+### Exact input prompt
+
+```text
+The job failed because a Playwright end-to-end test failed in the public catalogue flow.
+Evidence from the CI log:
+
+* 13 tests ran
+* 12 passed
+* 1 failed: e2e/flows.spec.ts:19:5 › public catalogue renders signed out
+
+The failing assertion is here:
+
+* frontend/e2e/flows.spec.ts:19-23
+* https://github.com/TeesideCoderProMax/resource.center/blob/f7970b51cf239b292432bab5996738e116786460/frontend/e2e/flows.spec.ts
+
+The exact problem is:
+
+* The test does: await expect(page.getByText("Dell Latitude 7440")).toBeVisible();
+* Playwright found 2 matching elements for that text, causing a strict-mode violation:
+   * one link to /devices/dell-latitude-7440
+   * another duplicate match for the same text
+* The log reports: Error: strict mode violation: getByText('Dell Latitude 7440') resolved to 2 elements
+* That makes the locator ambiguous, so the assertion fails and the whole job exits with code 1.
+
+In short: the CI job did not fail because of a backend crash or compile error; it failed because the test was looking for a single visible text match and found duplicate elements on the page.
+```
+
+### Change summary
+
+The CI page snapshot showed the second match was a hidden copy of the Dell link (no accessible role), most likely streamed HTML not yet swapped in; it is timing-dependent, so it passed locally. `frontend/e2e/flows.spec.ts` now uses a role query for the device link and `filter({ visible: true })` for the other text assertions. Committed and pushed to PR #11.
+
+### Validation and outcome
+
+Read CI run 41624993263 and its Playwright error context. The test could not be reproduced locally; `npx playwright test` passed 13/13 three times after the change. The CI result after the push was not yet observed.
+
+## 091 — 2026-11-03 — Release fails activating an already active revision
+
+### Exact input prompt
+
+```text
+Now we have thiss error: 
+
+The job failed because the release script tried to activate a Container App revision that was already active.
+The relevant log shows:
+
+* “migration_started”
+* then: “ERROR: (RevisionAlreadyInRequestedState) Revision rc-test-0330980f-loan-api--0000006 is already active!”
+* then: “subprocess.CalledProcessError: Command '('az', 'containerapp', 'revision', 'activate', ... '--revision', 'rc-test-0330980f-loan-api--0000006')' returned non-zero exit status 1.”
+
+This matches the code in infra/scripts/release.py, where the script does:
+
+* after the migration step, it plans/applies the release
+* then loops over apps and calls: az_action("containerapp", "revision", "activate", ...)
+
+The failure is specifically the Azure CLI returning a “RevisionAlreadyInRequestedState” error because the revision it was asked to activate was already the active revision. Since the Azure command exited with a non-zero status, Python raised CalledProcessError, and the workflow ended with exit code 1.
+
+Make the changes and push directly against qa
+```
+
+### Change summary
+
+`infra/scripts/release.py` now checks whether each app's latest revision is already active after the release apply, and skips `revision activate` (logging `revision_already_active`) instead of failing. Added a regression test in `infra/tests/test_release.py`. Committed and pushed directly to `qa` as the user asked.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed 17/17; the new test failed without the fix. Not yet verified by a real Test deploy. The prompt also shows the migration step now gets past `migration_started`.

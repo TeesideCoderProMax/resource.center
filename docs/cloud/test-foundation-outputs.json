@@ -30,6 +30,12 @@
       "id": "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-publisher",
       "name": "rc-test-0330980f-publisher",
       "principal_id": "16f78a70-a167-4406-b612-686764a101eb"
+    },
+    "web": {
+      "client_id": "2c1e9785-9454-462b-b818-18a028f5e9f1",
+      "id": "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-test-0330980f-platform-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rc-test-0330980f-web",
+      "name": "rc-test-0330980f-web",
+      "principal_id": "ba319349-130e-4a6d-9905-f0a5225d0a31"
     }
   },
   "location": "francecentral",
@@ -44,5 +50,6 @@
   "servicebus_queue": "notification-requests-v1",
   "subscription_id": "0330980f-85ea-4b38-8b9e-c871432c9d4f",
   "tenant_id": "43d2115b-a55e-46b6-9df7-b03388ecfc60",
+  "web_vault_uri": "https://rctest0330980fwkv.vault.azure.net/",
   "workload_resource_group": "rc-test-0330980f-workloads-rg"
 }

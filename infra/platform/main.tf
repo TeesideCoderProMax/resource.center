@@ -82,6 +82,18 @@ resource "azurerm_container_registry" "main" {
   admin_enabled       = false
   tags                = local.tags
 }
+# Web-owned vault for the server-side Auth0 client secret and session secret.
+resource "azurerm_key_vault" "web" {
+  name                       = "${local.compact}wkv"
+  resource_group_name        = azurerm_resource_group.platform.name
+  location                   = var.location
+  tenant_id                  = var.tenant_id
+  sku_name                   = "standard"
+  rbac_authorization_enabled = true
+  purge_protection_enabled   = true
+  soft_delete_retention_days = 30
+  tags                       = local.tags
+}
 resource "azurerm_key_vault" "notifications" {
   name                       = "${local.compact}nkv"
   resource_group_name        = azurerm_resource_group.platform.name

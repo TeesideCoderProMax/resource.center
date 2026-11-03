@@ -117,8 +117,14 @@ impl PostgresAdapter {
             .await
             .map_err(|e| ApplicationError::Persistence(format!("begin migration tx: {e}")))?;
 
+        // In Azure the platform bootstrap creates `loan` owned by the migrations role, which has
+        // no database-level CREATE. PostgreSQL checks that privilege even for
+        // `CREATE SCHEMA IF NOT EXISTS`, so only create the schema when it is really missing.
         tx.batch_execute(
-            "SELECT pg_advisory_xact_lock(73102401); CREATE SCHEMA IF NOT EXISTS loan;",
+            "SELECT pg_advisory_xact_lock(73102401);
+             DO $$ BEGIN
+               IF to_regnamespace('loan') IS NULL THEN CREATE SCHEMA loan; END IF;
+             END $$;",
         )
         .await
         .map_err(pg_error)?;

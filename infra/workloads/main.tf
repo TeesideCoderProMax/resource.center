@@ -1,6 +1,12 @@
 locals {
-  name_prefix            = var.name_prefix
-  resource_group_name    = var.handoff.workload_resource_group
+  name_prefix         = var.name_prefix
+  resource_group_name = var.handoff.workload_resource_group
+  # Older handoffs have no web identity/vault; fall back to the shared Loan identity without secrets.
+  web_identity_id = try(var.handoff.identities["web"].id, var.handoff.identities["loan"].id)
+  web_secrets = var.handoff.web_vault_uri == "" ? {} : {
+    "auth0-client-secret" = "AUTH0_CLIENT_SECRET"
+    "auth0-secret"        = "AUTH0_SECRET"
+  }
   servicebus_namespace   = replace(var.handoff.servicebus_namespace, ".servicebus.windows.net", "")
   loan_api_name          = "${local.name_prefix}-loan-api"
   loan_publisher_name    = "${local.name_prefix}-loan-publisher"
@@ -167,12 +173,22 @@ resource "azurerm_container_app" "web" {
 
   identity {
     type         = "UserAssigned"
-    identity_ids = [var.handoff.identities["loan"].id]
+    identity_ids = [local.web_identity_id]
   }
 
   registry {
     server   = var.handoff.registry_login_server
-    identity = var.handoff.identities["loan"].id
+    identity = local.web_identity_id
+  }
+
+  # Key Vault references: Terraform state holds only the secret URIs, never the values.
+  dynamic "secret" {
+    for_each = local.web_secrets
+    content {
+      name                = secret.key
+      key_vault_secret_id = "${var.handoff.web_vault_uri}secrets/${secret.key}"
+      identity            = local.web_identity_id
+    }
   }
 
   ingress {
@@ -226,9 +242,15 @@ resource "azurerm_container_app" "web" {
         name  = "NEXT_PUBLIC_LOAN_API_URL"
         value = "https://${azurerm_container_app.loan_api.ingress[0].fqdn}"
       }
-      # Server-side Auth0 web client (nextjs-auth0). AUTH0_CLIENT_SECRET and
-      # AUTH0_SECRET must be added as Container App secrets before sign-in works;
-      # without them the UI reports "Sign-in not configured".
+      # Server-side Auth0 web client (nextjs-auth0). Without the vault-backed
+      # AUTH0_CLIENT_SECRET and AUTH0_SECRET the UI reports "Sign-in not configured".
+      dynamic "env" {
+        for_each = local.web_secrets
+        content {
+          name        = env.value
+          secret_name = env.key
+        }
+      }
       env {
         name  = "AUTH0_DOMAIN"
         value = var.auth0_domain
@@ -269,7 +291,7 @@ resource "azurerm_container_app" "web" {
       readiness_probe {
         transport               = "HTTP"
         port                    = 3000
-        path                    = "/api/health"
+        path                    = "/api/ready"
         initial_delay           = 3
         interval_seconds        = 10
         timeout                 = 3

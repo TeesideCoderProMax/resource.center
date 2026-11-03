@@ -6,6 +6,7 @@ name_suffix              = "0330980f"
 postgres_admin_object_id = "80f9f7d7-5157-4edd-a0af-6487e3f7019d"
 postgres_admin_name      = "CABOZ, AFONSO (Student)"
 github_repository        = "TeesideCoderProMax/resource.center"
+github_immutable_subject_prefix = "repo:TeesideCoderProMax@346585383/resource.center@1432721449"
 state_storage_account_id = "/subscriptions/0330980f-85ea-4b38-8b9e-c871432c9d4f/resourceGroups/rc-staging-0330980f-state-rg/providers/Microsoft.Storage/storageAccounts/rcstaging0330980fstate"
 
 # Note: The single subscription Cosmos free-tier slot is occupied by Test (rc-test-0330980f-notifications).
