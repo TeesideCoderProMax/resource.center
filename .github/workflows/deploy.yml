@@ -46,6 +46,7 @@ jobs:
         with:
           terraform_version: "1.14.3"
       - run: npm --prefix frontend ci
+      - run: npm --prefix frontend exec playwright install -- --with-deps chromium
       - name: All checks including real PostgreSQL
         shell: bash
         run: |
