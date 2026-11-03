@@ -1586,3 +1586,52 @@ Committed the `release.py` console-parsing fix and tests on a new branch `fix/re
 ### Validation and outcome
 
 `python3 -m unittest discover -s infra/tests` passed (16) before commit. CI not yet observed.
+
+## 080 — 2026-11-03 — Implement Stitch catalogue and device detail designs
+
+### Exact input prompt
+
+```text
+Starting with an worktreeeee clean from qa, implement the following designs into the app:
+
+## Stitch Instructions
+
+Get the images and code for the following Stitch project's screens:
+
+## Project
+Title: Campus Device Loan System
+ID: 9218650172162800934
+
+## Screens:
+1. Product Equipment Catalogue
+    ID: ce3c76c151314933a7f012d041e6d45f
+
+2. Device Detail & Reservation Picker
+    ID: c0343a748e4a4b8085597cd4929b237c
+
+Use a utility like `curl -L` to download the hosted URLs.
+```
+
+### Change summary
+
+In worktree branch `feat/frontend-stitch-catalogue` (from `origin/qa`), restyled the frontend to the Stitch violet glass design and rebuilt the catalogue (hero stats, category chips, search/availability filters, sort) and device detail (showcase, loan facts, rules, sticky reservation panel with loan-window calendar) in `frontend/src/components/{Catalogue,DeviceCard,AppHeader}.tsx`, `frontend/src/app/devices/[id]/*`, `frontend/src/app/page.tsx` and `globals.css`. Invented Stitch content (lockers, peripherals, costs, photos, date-range picking) was not implemented because the Loan API does not support it; reserve/subscribe behaviour is unchanged. Added `Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`npm run typecheck` passed; `npm test` 31/31 passed; `npm run build` and `npx playwright test` 11/11 passed against the fake Loan API. Visually checked both pages at desktop and mobile widths in the browser pane. Stitch hosted URLs needed auth, so the HTML came from the Stitch MCP; screenshots were not downloaded. Nothing committed.
+
+## 081 — 2026-11-03 — Commit and push the Stitch redesign
+
+### Exact input prompt
+
+```text
+Commit and push
+```
+
+### Change summary
+
+Committed the frontend redesign and the log as separate commits on `feat/frontend-stitch-catalogue` and pushed the branch to `origin`.
+
+### Validation and outcome
+
+Relied on entry 080's checks (typecheck, 31 unit, build, 11 e2e passed); no new checks run. No PR opened.
