@@ -49,4 +49,17 @@ export function describe(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** What the UI should offer for a failed request, beyond the message. */
+export type ErrorHint = "sign-in" | "forbidden" | "subscribe" | "refresh" | "degraded" | null;
+
+export function errorHint(e: unknown): ErrorHint {
+  if (!(e instanceof ApiClientError)) return null;
+  if (e.status === 401) return "sign-in";
+  if (e.status === 403 && e.code === "ForbiddenRole") return "forbidden";
+  if (e.status === 409 && e.code === "NoAvailableUnits") return "subscribe";
+  if (e.status === 409 && e.code === "InvalidTransition") return "refresh";
+  if (e.status === 502 || e.status === 503) return "degraded";
+  return null;
+}
+
 export const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "—");
