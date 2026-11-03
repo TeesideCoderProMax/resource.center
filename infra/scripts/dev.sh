@@ -4,6 +4,14 @@
 # started. Without Auth0 env vars the stack is signed-out only (writes fail closed).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# Reuse the web's local settings (Auth0 etc.) so `make dev` signs in like `npm run dev`.
+# The containers still get their own LOAN_API_BASE_URL and APP_BASE_URL below.
+if [[ -f frontend/.env.local ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source frontend/.env.local
+  set +a
+fi
 prefix="rc-dev"
 api_port="${DEV_API_PORT:-8080}"
 web_port="${DEV_WEB_PORT:-3000}"
