@@ -14,7 +14,16 @@ def run(*args):
 
 
 def az(*args):
-    return json.loads(run("az", *args, "-o", "json") or "null")
+    out = run("az", *args, "-o", "json")
+    try:
+        return json.loads(out or "null")
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"az {' '.join(args[:3])} returned non-JSON output: {out[:200]!r}") from error
+
+
+def az_action(*args):
+    # Revision activate/deactivate print a plain message, not JSON; success is the exit code.
+    run("az", *args)
 
 
 def wait_for(read, done, failed, attempts=90):
@@ -76,7 +85,7 @@ def release(environment):
         for revision in az("containerapp", "revision", "list", "-g", group, "-n", app["name"]):
             name = revision["name"]
             if revision["properties"]["active"]:
-                az("containerapp", "revision", "deactivate", "-g", group, "-n", app["name"], "--revision", name)
+                az_action("containerapp", "revision", "deactivate", "-g", group, "-n", app["name"], "--revision", name)
             # An interrupted release can leave an inactive revision still draining.
             stopped.append((app["name"], name))
     for app, revision in stopped:
@@ -101,7 +110,7 @@ def release(environment):
     for suffix in ("loan-api", "notifications", "web"):
         app = prefix + "-" + suffix
         latest = az("containerapp", "show", "-g", group, "-n", app)["properties"]["latestRevisionName"]
-        az("containerapp", "revision", "activate", "-g", group, "-n", app, "--revision", latest)
+        az_action("containerapp", "revision", "activate", "-g", group, "-n", app, "--revision", latest)
     outputs = json.loads(run(*tf, "output", "-json"))
     os.environ["LOAN_API_URL"] = outputs["loan_api_url"]["value"]
     os.environ["WEB_URL"] = outputs["web_app_url"]["value"]

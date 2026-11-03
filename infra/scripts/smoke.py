@@ -40,6 +40,8 @@ def check(api, web, version, allow_unconfigured=False):
     assert code == 200 and health["status"] == "ok" and health["version"] == version, "Web health/version mismatch"
     if not allow_unconfigured:
         assert ready["auth0Configured"] and health["auth0Configured"], "Auth0 configuration is missing"
+        code, web_ready, _ = request(web + "/api/ready")
+        assert code == 200 and web_ready["loanApi"] == "reachable", "Web cannot reach the Loan API"
 
 
 def main():
