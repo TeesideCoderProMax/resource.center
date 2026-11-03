@@ -2008,3 +2008,87 @@ Make the changes and push directly against qa
 ### Validation and outcome
 
 `python3 -m unittest discover -s infra/tests` passed 17/17; the new test failed without the fix. Not yet verified by a real Test deploy. The prompt also shows the migration step now gets past `migration_started`.
+
+## 092 — 2026-11-03 — Live Test URL
+
+### Exact input prompt
+
+```text
+Okay, now it is deployed. Can you fetch the live URL of the test deploy so i can go check it?
+```
+
+### Change summary
+
+Read the Test Container Apps ingress hostnames with a read-only `az containerapp list` and gave the web and Loan API URLs. No project files changed apart from this log.
+
+### Validation and outcome
+
+Web `/api/ready` returned 200 after about 29 s (cold start; the first 30 s attempt timed out).
+
+## 093 — 2026-11-03 — Explain qa → dev → main promotion
+
+### Exact input prompt
+
+```text
+Great! Now that the deplyment works i want to merge qa into dev.
+
+CAn you explain to me wich steps are taken from qa to dev and dev to main?
+```
+
+### Change summary
+
+Explained the promotion path from `.github/workflows/deploy.yml`, `ci.yml` and `infra/scripts/promotion.py`. No merge done; no project files changed apart from this log.
+
+### Validation and outcome
+
+Read the workflow and script files only.
+
+## 094 — 2026-11-03 — PR description for #12
+
+### Exact input prompt
+
+```text
+Create a PR description for https://github.com/TeesideCoderProMax/resource.center/pull/12
+```
+
+### Change summary
+
+Wrote and set the description of PR #12 (`qa` → `dev`, 42 commits) from its commit list and the successful Test release run 41634002882. No project files changed apart from this log.
+
+### Validation and outcome
+
+`gh pr edit` applied the body. The PR title ("Implement frontend phase 1 routes…") was left unchanged.
+
+## 095 — 2026-11-03 — Staff e2e strict-mode failure on dev
+
+### Exact input prompt
+
+```text
+So now im running the workflow manually on dev, i got this error
+
+The job failed in the frontend E2E tests, specifically the Playwright test "staff admin shows telemetry and live inventory" in frontend/e2e/flows.spec.ts:119-125.
+The failing assertion was:
+
+* expect(page.getByLabel("Desk summary")).toContainText("Awaiting collection")
+
+Playwright reported:
+
+* "strict mode violation: getByLabel('Desk summary') resolved to 2 elements"
+* "Expected substring: 'Awaiting collection'"
+
+In other words, the page rendered two elements with the same accessible label "Desk summary", so the test failed because it expected a single matching element and the expected text was not present in the duplicated layout. That single failing test caused the suite to end with:
+
+* 1 failed, 12 passed
+* make: *** [Makefile:69: frontend-e2e] Error 1
+* Process completed with exit code 2
+
+So the root cause of the job failure was a duplicate/ambiguous UI locator in the E2E test, not a Rust or build-system failure.
+```
+
+### Change summary
+
+Same hidden-duplicate race as entry 090: `getByLabel` also matches hidden nodes. Made the staff summary a named `region` (`StaffDesk.tsx`) and switched all `getByLabel` locators in `frontend/e2e/flows.spec.ts` to role queries. Committed on `qa`, pushed (which redeploys Test) and opened a `qa` → `dev` PR.
+
+### Validation and outcome
+
+`npm test` 36/36; `npx playwright test` 13/13 in four consecutive runs. Not reproduced locally; the dev workflow rerun is not yet observed.
