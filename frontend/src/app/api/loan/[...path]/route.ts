@@ -2,33 +2,52 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { matchRoute, sameOrigin, sanitizeBody } from "@/lib/bff";
 import { loanApiBaseUrl } from "@/lib/loan";
+import { correlationId, logProxy, routeTemplate } from "@/lib/observability";
 
 export const dynamic = "force-dynamic";
 
-function error(status: number, code: string, message: string) {
-  return NextResponse.json({ error: code, message }, { status });
+function error(status: number, code: string, message: string, correlation: string) {
+  return NextResponse.json(
+    { error: code, message, correlationId: correlation },
+    { status, headers: { "x-correlation-id": correlation } }
+  );
 }
 
-async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+/** Wraps the proxy with one structured log line per request (no tokens, emails or bodies). */
+async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const started = performance.now();
+  const correlation = correlationId(req.headers.get("x-correlation-id"));
   const path = (await ctx.params).path.join("/");
+  const res = await forward(req, path, correlation);
+  logProxy({
+    method: req.method,
+    route: matchRoute(req.method, path) ? routeTemplate(path) : "unmatched",
+    status: res.status,
+    durationMs: performance.now() - started,
+    correlationId: res.headers.get("x-correlation-id") ?? correlation,
+  });
+  return res;
+}
+
+async function forward(req: NextRequest, path: string, correlation: string) {
   const route = matchRoute(req.method, path);
-  if (!route) return error(404, "NotFound", "unknown route");
+  if (!route) return error(404, "NotFound", "unknown route", correlation);
   if (!sameOrigin(req.method, req.headers.get("origin"), process.env.APP_BASE_URL ?? "")) {
-    return error(403, "CrossOriginRejected", "request origin is not allowed");
+    return error(403, "CrossOriginRejected", "request origin is not allowed", correlation);
   }
   const base = loanApiBaseUrl();
-  if (!base) return error(503, "LoanApiNotConfigured", "LOAN_API_BASE_URL is not set");
+  if (!base) return error(503, "LoanApiNotConfigured", "LOAN_API_BASE_URL is not set", correlation);
 
   const headers: Record<string, string> = {
-    "x-correlation-id": req.headers.get("x-correlation-id") ?? `web-${crypto.randomUUID()}`,
+    "x-correlation-id": correlation,
   };
   if (route.auth) {
-    if (!auth0) return error(503, "AuthNotConfigured", "sign-in is not configured");
+    if (!auth0) return error(503, "AuthNotConfigured", "sign-in is not configured", correlation);
     try {
       const { token } = await auth0.getAccessToken();
       headers.authorization = `Bearer ${token}`;
     } catch {
-      return error(401, "Unauthorized", "sign in to continue");
+      return error(401, "Unauthorized", "sign in to continue", correlation);
     }
   }
 
@@ -50,9 +69,9 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
       },
     });
   } catch {
-    return error(502, "LoanApiUnreachable", "the Loan API could not be reached");
+    return error(502, "LoanApiUnreachable", "the Loan API could not be reached", correlation);
   }
 }
 
-export const GET = forward;
-export const POST = forward;
+export const GET = handle;
+export const POST = handle;
