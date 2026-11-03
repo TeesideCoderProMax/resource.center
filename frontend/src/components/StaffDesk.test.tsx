@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import type { ReservationRow } from "@/lib/loan";
 import { fakeFetch } from "@/test/fake-fetch";
-import { StaffDesk } from "./StaffDesk";
+import { deskStats, StaffDesk } from "./StaffDesk";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -51,6 +51,27 @@ test("status filter and search narrow the list", async () => {
   fireEvent.change(screen.getByLabelText("Status"), { target: { value: "ALL" } });
   fireEvent.change(screen.getByLabelText("Find reservation"), { target: { value: "cam-u1" } });
   expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(2);
+});
+
+test("desk telemetry is derived from the catalogue and reservation rows", () => {
+  const now = Date.parse("2099-01-05T00:00:00Z");
+  const stats = deskStats([
+    row(),
+    row({ reservationId: "r2", status: "COLLECTED" }), // due 2099-01-03: overdue
+    row({ reservationId: "r3", status: "RETURNED", returnedAt: "2099-01-02T00:00:00Z" }),
+    row({ reservationId: "r4", status: "RETURNED", returnedAt: "2099-01-04T00:00:00Z" }),
+  ], [
+    { id: "dell", name: "Dell", category: "laptop", description: "", loanDurationDays: 2, totalUnits: 4, availableUnits: 1 },
+  ], now);
+  expect(stats).toEqual({ totalUnits: 4, inUsePct: 75, awaiting: 1, active: 1, onTimePct: 50, overdue: 2 });
+});
+
+test("inventory table shows live stock per model", async () => {
+  fakeFetch({ "GET reservations": { status: 200, body: [] } });
+  render(<StaffDesk catalogue={[{ id: "cam", name: "Canon", category: "camera", description: "c", loanDurationDays: 2, totalUnits: 2, availableUnits: 0 }]} />);
+  const inv = await screen.findByRole("table", { name: "Equipment inventory" });
+  expect(within(inv).getByText("Canon")).toBeInTheDocument();
+  expect(within(inv).getByText("Waitlist")).toBeInTheDocument();
 });
 
 test("a 403 on the list is explicit", async () => {

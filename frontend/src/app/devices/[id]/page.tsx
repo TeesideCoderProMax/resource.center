@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeviceDetail } from "./DeviceDetail";
 import { canBorrow } from "@/lib/roles";
@@ -14,13 +13,6 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
   const item = items.find((i) => i.id === id);
   if (!item) notFound();
   const canAct = viewer.signedIn && canBorrow(viewer);
-  return (
-    <>
-      <p><Link href="/">← All devices</Link></p>
-      <DeviceDetail item={item} canAct={canAct} />
-      {!viewer.signedIn && viewer.authConfigured && (
-        <p className="muted"><a href={`/auth/login?returnTo=${encodeURIComponent(`/devices/${id}`)}`}>Sign in</a> to reserve or subscribe.</p>
-      )}
-    </>
-  );
+  const signInHref = !viewer.signedIn && viewer.authConfigured ? `/auth/login?returnTo=${encodeURIComponent(`/devices/${id}`)}` : null;
+  return <DeviceDetail item={item} canAct={canAct} signInHref={signInHref} />;
 }
