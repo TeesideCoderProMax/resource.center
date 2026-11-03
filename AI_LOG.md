@@ -1635,3 +1635,307 @@ Committed the frontend redesign and the log as separate commits on `feat/fronten
 ### Validation and outcome
 
 Relied on entry 080's checks (typecheck, 31 unit, build, 11 e2e passed); no new checks run. No PR opened.
+
+## 082 — 2026-11-03 — Move the Stitch work back into the main checkout
+
+### Exact input prompt
+
+```text
+why did you create a new workplace for this task? I want the changes in the same old resource.center folder
+```
+
+### Change summary
+
+Explained that "worktree clean from qa" was read as a separate `git worktree`. Removed the clean, fully pushed `../resource.center-stitch` worktree and checked out `feat/frontend-stitch-catalogue` in this folder; untracked `frontend/AGENTS.md` was preserved. No project files changed apart from this log.
+
+### Validation and outcome
+
+Confirmed before removal that the worktree had no uncommitted or unpushed changes; `git worktree list` now shows this folder on the branch. This entry is not committed yet.
+
+## 083 — 2026-11-03 — Where did make dev go
+
+### Exact input prompt
+
+```text
+Great! What hapened to the make dev command it disapeared
+```
+
+### Change summary
+
+Found that `make dev` (commit `3926d56`, Makefile + `infra/scripts/dev.sh`) exists only on `frontend/phase-3-cloud-evidence`; it was pushed after PR #9 merged, so it never reached `qa` or any branch made from it. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked with `git branch -a --contains 3926d56` and compared Makefiles on the branches. Nothing restored yet.
+
+## 084 — 2026-11-03 — Restore make dev and stop reporting log entries
+
+### Exact input prompt
+
+```text
+Cherry pick it. And pls stop putting in the output the log entry. Add to the AI_LOG silently
+```
+
+### Change summary
+
+Cherry-picked `3926d56` onto `feat/frontend-stitch-catalogue` as `b2eeffc`, restoring `make dev` (`Makefile`, `infra/scripts/dev.sh`). Saved a user preference to keep AI_LOG updates out of replies.
+
+### Validation and outcome
+
+Cherry-pick applied cleanly; `bash -n infra/scripts/dev.sh` passed. `make dev` was not run. Not pushed.
+
+## 085 — 2026-11-03 — Refine frontend to the four Campus Device Hub screens
+
+### Exact input prompt
+
+`````text
+[4 attached images: catalogue, product detail, cart, admin panel]
+Okay, let's refine the frontend changes.
+
+Implement this:
+
+web application/stitch/projects/9218650172162800934/screens/011939faecd44e47b58af13fcb681646
+# Product Requirements Document (PRD): Campus Device Hub
+
+**Document Version:** 1.0.0  
+**Status:** Approved / In Implementation  
+**Product:** Campus Device Hub & Lending Management Operations  
+**Primary Users:** University Students, Faculty, IT Lab Specialists, Equipment Depot Staff  
+**Design System Reference:** Light Purple & Lavender (`#8b5cf6`), Rounded Components, Glassmorphism Backdrop Blurs, High-Legibility Status Badges
+
+---
+
+## 1. Executive Summary & Problem Statement
+
+### 1.1 Background
+University academic programs across Computer Science, Film & Media Arts, Engineering, and Architecture require high-performance hardware (Apple M3 Max workstations, cinema cameras, enterprise VR/AR headsets, audio broadcast units). Historically, hardware loaning has been fragmented across departmental checkout desks, paper sign-outs, and uncoordinated return schedules.
+
+### 1.2 Core Problem
+* **Lack of Centralized Inventory Visibility:** Students cannot easily ascertain real-time hardware availability or loan durations across disparate campus labs.
+* **Friction in Checkout & Return:** Manual hand-offs create long lines during project crunches; lack of after-hours pickup impedes student productivity.
+* **Administrative Burden for IT Staff:** Tracking overdue loans, managing calibration/maintenance queues, and vetting borrower academic standing consumes excessive staff hours.
+
+### 1.3 Solution Vision
+The **Campus Device Hub** is an integrated web platform unifying self-service equipment discovery, automated smart locker reservation, student identity verification, and an administrative staff cockpit for real-time approvals, inventory health checks, and locker dispatch.
+
+---
+
+## 2. Product Goals & Key Success Metrics (OKRs)
+
+### 2.1 Goals
+1. Provide a frictionless, transparent self-service hardware catalog for all enrolled university students.
+2. Automate equipment distribution via touchless 24/7 Smart Locker bays (PIN and QR code dispatch).
+3. Empower IT administrators with quick-triage approval workflows, borrower standing verification, and granular asset lifecycle management.
+
+### 2.2 Key Performance Indicators (KPIs)
+* **Average Loan Approval Latency:** < 2 hours during staff business hours; immediate instant clearance for pre-approved coursework tiers.
+* **Locker Pickup Fulfillment Rate:** ≥ 95% within assigned 24-hour pickup windows.
+* **Device Utilization Efficiency:** Maintain average active fleet utilization at 75–85% without overdue bottlenecks.
+* **Overdue Incidents:** < 3% of all active term checkouts through automated SMS/email reminders.
+
+---
+
+## 3. Target User Personas
+
+| Persona | Role & Context | Core Needs & Pain Points |
+| :--- | :--- | :--- |
+| **Maya Lin** (Student / Media Arts Senior) | Enrolled in CS 498 Capstone & Film Production. Needs high-spec MacBook Pro & Sony Cinema rigs for 3–7 day shoots. | Needs instant availability insight, transparent loan extension rules, zero-cost academic fee waivers, and after-hours smart locker pickup. |
+| **Alex Rivera** (IT Operations Specialist) | Manages 400+ campus hardware assets, calibration cycles, and loan approval queues across 4 campus hub locations. | Needs quick verification of student academic standing, one-click loan approvals, CSV batch imports, and maintenance status tracking. |
+| **Faculty Sponsor** (Department Lead) | Approves semester-long or specialized equipment loans for capstone teams. | Requires visibility into student project affiliations and faculty-vetted reservations. |
+
+---
+
+## 4. System Architecture & Information Architecture (IA)
+
+```
+Campus Device Hub
+├── Student Experience (Public / Student SSO)
+│   ├── 1. Equipment Catalog & Search
+│   │   ├── Faceted Department Filters (CS, Media Arts, Engineering, Architecture)
+│   │   ├── Hardware Specs, Loan Windows & Availability Badges
+│   │   └── Smart Locker Location Guides
+│   ├── 2. Device Detail & Reservation Builder
+│   │   ├── Multi-angle inspection gallery & technical specs
+│   │   ├── Interactive date range & calendar picker
+│   │   ├── Smart Locker Bay selector (Engineering B-12, Library, Arts Lab)
+│   │   └── Peripheral add-on bundling (chargers, dongles, cables)
+│   └── 3. Checkout & Reservation Review
+│       ├── Stepped booking flow (Cart -> Dates -> Governance -> Submit)
+│       ├── Student SSO profile & eligibility verification
+│       ├── Academic loan agreement & zero-deposit verification
+│       └── Touchless Locker PIN / Barcode dispatch notice
+└── Staff & Admin Portal (Restricted SSO)
+    ├── 1. Administrative Cockpit & Telemetry
+    │   └── Total Assets, Pending Approvals, Active Loans, In-Repair counts
+    ├── 2. Loan Request Approval Queue
+    │   ├── Borrower history & academic standing check
+    │   └── Instant Approve / Deny / Request Info actions with locker assignment
+    └── 3. Equipment Inventory Repository
+        ├── Real-time asset tags (EQ-8821, EQ-4412, etc.)
+        ├── Category filtering, stock counts, and maintenance flagging
+        └── Batch CSV import & asset onboarding
+```
+
+---
+
+## 5. Detailed Feature Specifications
+
+### 5.1 Student Device Catalog & Faceted Search
+* **Search & Filter Engine:** Instant keyword search with shortcut (`⌘K`), filterable by availability (*In Stock Only*, *Instant Locker Ready*), loan duration (*1–3 Days Rapid*, *7 Days Standard*, *14 Days Extended*), and department (*CompSci*, *Fine Arts*, *Engineering*, *Architecture*).
+* **Live Availability Badges:**
+  * Emerald (`Available / X in Stock`): Ready for instant locker assignment.
+  * Amber (`Low Stock / X Left`): High demand, impending waitlist.
+  * Soft Purple (`Reserved / Waitlist Queue`): Allows waitlist queue entry.
+* **Smart Locker Hub Status Panel:** Displays live readiness across campus hubs (e.g., Turing Hall North Bay, Main Library Atrium, Student Union South).
+
+### 5.2 Product Detail & Reservation Scheduler
+* **Visual & Technical Inspection:** Interactive multi-view hardware photography with verified spec sheets (RAM, GPU cores, storage, battery health percentage, OS version, preloaded software).
+* **Included Carry Kit Guarantee:** Visual itemization of bundled peripherals (MagSafe power supply, hard-shell pelican case, high-speed cables) to prevent missing return accessories.
+* **Interactive Date Picker:** Calendar component enforcing minimum and maximum loan duration rules, blackout dates during finals/campus breaks, and buffer windows for sanitization.
+* **Locker & Pickup Window Selection:** Flexible distribution point selection with operating hour indicators and slot reservation locks.
+
+### 5.3 Checkout, Verification & Locker Code Dispatch
+* **Single Sign-On (SSO) Integration:** Auto-populates student ID, verified department email, and disciplinary clearance (Good Standing status).
+* **Project Purpose Binding:** Dropdown linking reservation to authenticated course codes (e.g., *CS 498 Capstone*, *Studio 4 Revit Rendering*).
+* **Governance Agreement:** Explicit acknowledgment of campus hardware care policy, zero rental fees ($0.00 covered by Academic Tech Fund), and late penalty holds.
+* **Automated Locker Credentialing:** One-time 6-digit locker retrieval PIN and biometric barcode sent via SMS and Campus Authenticator app upon approval.
+
+### 5.4 Staff Operations & Inventory Management
+* **Executive Telemetry:** Four summary cards tracking Total Equipment Units, In-Use Rate (%), Pending Review Requests, Active Borrowers with On-time Return Rate (%), and Units in Calibration/Repair.
+* **High-Priority Approval Queue:** Context-rich triage cards featuring borrower avatar, student ID, loan purpose, requested timeline, and assigned locker bay with one-touch `Approve Loan` and `Deny / Request Details`.
+* **Asset Database & CRUD Controls:**
+  * Unique Asset Tag tracking (e.g., `EQ-8821`).
+  * In-place quick editing of specs, live stock counts, and maintenance status toggles.
+  * Batch CSV import utility for bulk onboarding of new semester inventory.
+
+---
+
+## 6. User Experience & Design System Standards
+
+* **Color Palette:**
+  * Primary / Accent: Vivid Lilac (`#8b5cf6` / `#7c3aed`)
+  * Surface Backgrounds: Soft tinted lavender-white (`#f8f9ff`), Container Lowest (`#ffffff`)
+  * Badges & Feedback: Emerald (`#10b981` / `#059669` for In-Stock), Amber (`#f59e0b` for Low Stock), Lilac (`#8b5cf6` for Waitlists)
+* **Typography:** Plus Jakarta Sans (`font-headline`, `font-body`, `font-label`).
+* **Visual Styling:** Generous corner radiuses (`rounded-2xl`, `rounded-3xl`), subtle glassmorphism backdrops (`backdrop-blur-md bg-surface/80`), fine border outlines (`border-outline-variant/30`), and card elevation shadows.
+
+---
+
+## 7. Non-Functional Requirements & Security
+* **Authentication & Role-Based Access Control (RBAC):** SSO Shibboleth / SAML 2.0 integration segregating Student Borrowers, Staff Operators, and System Admins.
+* **Data Privacy (FERPA Compliance):** Student borrower history and academic IDs encrypted in transit (TLS 1.3) and at rest (AES-256).
+* **Performance:** Sub-100ms catalog search filtering; 99.9% uptime for smart locker dispatch API webhooks.
+* **Accessibility:** WCAG 2.1 AA compliant contrast ratios across status badges and interactive buttons, full keyboard navigability for calendar pickers.
+
+---
+
+## 8. Release Roadmap
+
+* **Phase 1 (Current Baseline):** Desktop student catalog, product detail reservation scheduler, cart checkout flow, and core staff administration inventory portal.
+* **Phase 2:** Responsive mobile viewport optimization, student QR locker scanner interface, and SMS notification dispatch engine.
+* **Phase 3:** Automated late return penalty holds integration with university registrar systems and predictive equipment maintenance analytics.
+
+(Image1 is the catalogue; Image2 is the product detail, Image3 is the cart and Image4 is the admin panel)
+
+/plan
+`````
+
+### Change summary
+
+Matched the four screens on the real Loan API only (user's choice), adding a browser-side loan bag (`/bag`, `lib/bag.tsx`, `LoanBag.tsx`), a staff admin hub (telemetry, collection queue, inventory, CSV export in `StaffDesk.tsx`), a restyled catalogue/detail/header/nav and a new `Icon.tsx`. PRD features without API support were not built. Added tests, e2e flows, `docs/frontend/2026-11-03-campus-device-hub-redesign.md` and a `mem:frontend/plan` line.
+
+### Validation and outcome
+
+`npm run typecheck`, `npm test` (36/36), `npm run build` and `npx playwright test` (13/13) passed; `serena memories check` clean. Screens were reviewed from Playwright screenshots at desktop and mobile widths. A real bug (subscribe from the bag hid its confirmation) was found by the new test and fixed. Not committed.
+
+## 086 — 2026-11-03 — Why sign-in shows as not configured locally
+
+### Exact input prompt
+
+```text
+Okay, so in the frontend it shows sign-in not configured for local env, why is that? I have auth0 envs in env.local
+```
+
+### Change summary
+
+Found that `make dev` (`infra/scripts/dev.sh`) runs the web app in Docker and passes Auth0 settings only from the calling shell's environment; it never reads `frontend/.env.local`, so the container has no Auth0 settings and `lib/auth0.ts` reports sign-in as not configured. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked that all required keys in `frontend/.env.local` are non-empty (values not printed) and read the script. No fix applied yet.
+
+## 087 — 2026-11-03 — Auth0 callback "not authorized to access resource server"
+
+### Exact input prompt
+
+```text
+Got this error:
+
+http://localhost:3000/auth/callback?error=invalid_request&error_description=Client%20%22vDJ4vxu2kQ0Dyq8ifOIKN9DAFiKSXKSQ%22%20is%20not%20authorized%20to%20access%20resource%20server%20%22https%3A%2F%2Floan-test.resource-center.campu%22.&state=znmuuOSCXgWggbGojhBnSoRHmFwjV_9fzL_VGmrpfqk&iss=https%3A%2F%2Fdev-1mxf8h3b7mphavlc.eu.auth0.com%2F
+```
+
+### Change summary
+
+Explained that this is an Auth0 tenant setting: the web application is not authorized for user access to the Loan API (`https://loan-test.resource-center.campu`, which matches `.env.local` and `infra/environments/test/workloads.tfvars.example`). The fix is in the Auth0 dashboard. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked that the configured audience matches the repo's Test identifier. The Auth0 dashboard was not accessed.
+
+## 088 — 2026-11-03 — Remove the catalogue hero section
+
+### Exact input prompt
+
+```text
+Awesome! Pls remove this section
+```
+
+(Attached screenshot: catalogue breadcrumb and hero with "Academic Equipment & Tech Catalog" and three stat cards.)
+
+### Change summary
+
+Removed the catalogue hero (badge, title, subtitle, stat cards) from `frontend/src/components/Catalogue.tsx`, replaced it with a visually hidden page `h1`, and dropped the unused `.hero`/`.stats` CSS. Breadcrumbs kept. Updated `Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`npm run typecheck` and `npm test` passed. Not committed.
+
+## 089 — 2026-11-03 — make dev env loading, qa release failure, commit and PR
+
+### Exact input prompt
+
+`````text
+Awesome! 
+
+So now i need something from you.
+
+I need the standard make dev command to include the .env.local (set -a; source frontend/.env.local; set +a; make dev)
+
+The CI job on qa is still failling:
+
+This job failed because the release script hit a failed Azure Container App migration job and aborted the deployment.
+
+From the log:
+
+    release.py calls: wait_for(lambda: az("containerapp", "job", "execution", "show", "-g", group, "-n", job, "--job-execution-name", execution)["properties"]["status"], lambda status: status == "Succeeded", lambda status: status in {"Failed", "Canceled", "Stopped"})
+    In the failing run, that status was reported as "Failed".
+    The helper function wait_for() raises: RuntimeError: Release step failed: Failed
+    That bubbled up to the main script and the job exited with code 1.
+
+The relevant failure point is in infra/scripts/release.py around the migration execution check:
+
+    the script waits for the migration job execution to reach "Succeeded"
+    if the status becomes "Failed", "Canceled", or "Stopped", it immediately fails the release
+
+So the root cause shown by these logs is: the Azure migration/container job execution failed during the deploy step, and the script treated that as a hard release failure.
+
+Then commit, push and create a PR
+`````
+
+### Change summary
+
+`make dev` now sources `frontend/.env.local` (`infra/scripts/dev.sh`). Found the qa Deploy & Promote failure in the Azure job logs: `permission denied for database loan`, because migrations ran `CREATE SCHEMA IF NOT EXISTS loan` as a role with no database CREATE (by design). Changed `run_migrations` in `infrastructure.rs` to create the schema only when it is missing, and added a least-privilege Postgres regression test. Committed this with the pending redesign and opened a PR to `qa`.
+
+### Validation and outcome
+
+Read the failing run 41615871570 and the migration execution logs in Log Analytics (read-only `az`). The new test failed with the old code (same error) and passed with the fix; `make backend-test-postgres` passed 4/4, and `make backend-fmt backend-lint backend-test` passed. `bash -n` on dev.sh passed and the env file loads in bash; `make dev` itself was not run. The fix is not yet proven in Azure; that needs the qa deploy after merge.
