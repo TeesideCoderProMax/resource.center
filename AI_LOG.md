@@ -1976,3 +1976,35 @@ The CI page snapshot showed the second match was a hidden copy of the Dell link 
 ### Validation and outcome
 
 Read CI run 41624993263 and its Playwright error context. The test could not be reproduced locally; `npx playwright test` passed 13/13 three times after the change. The CI result after the push was not yet observed.
+
+## 091 — 2026-11-03 — Release fails activating an already active revision
+
+### Exact input prompt
+
+```text
+Now we have thiss error: 
+
+The job failed because the release script tried to activate a Container App revision that was already active.
+The relevant log shows:
+
+* “migration_started”
+* then: “ERROR: (RevisionAlreadyInRequestedState) Revision rc-test-0330980f-loan-api--0000006 is already active!”
+* then: “subprocess.CalledProcessError: Command '('az', 'containerapp', 'revision', 'activate', ... '--revision', 'rc-test-0330980f-loan-api--0000006')' returned non-zero exit status 1.”
+
+This matches the code in infra/scripts/release.py, where the script does:
+
+* after the migration step, it plans/applies the release
+* then loops over apps and calls: az_action("containerapp", "revision", "activate", ...)
+
+The failure is specifically the Azure CLI returning a “RevisionAlreadyInRequestedState” error because the revision it was asked to activate was already the active revision. Since the Azure command exited with a non-zero status, Python raised CalledProcessError, and the workflow ended with exit code 1.
+
+Make the changes and push directly against qa
+```
+
+### Change summary
+
+`infra/scripts/release.py` now checks whether each app's latest revision is already active after the release apply, and skips `revision activate` (logging `revision_already_active`) instead of failing. Added a regression test in `infra/tests/test_release.py`. Committed and pushed directly to `qa` as the user asked.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed 17/17; the new test failed without the fix. Not yet verified by a real Test deploy. The prompt also shows the migration step now gets past `migration_started`.
