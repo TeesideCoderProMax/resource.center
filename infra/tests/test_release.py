@@ -131,3 +131,11 @@ class PromotionTests(unittest.TestCase):
                 promotion.validate_release({**run, key: value}, record, "owner/repo", "1")
         with self.assertRaises(ValueError):
             promotion.validate_release(run, {**record, "backend_image": "r.test/backend:latest"}, "owner/repo", "1")
+
+
+class AzureOutputTests(unittest.TestCase):
+    def test_revision_actions_accept_plain_text_and_json_reads_fail_clearly(self):
+        with patch.object(release, "run", return_value="Deactivate succeeded"):
+            release.az_action("containerapp", "revision", "deactivate")
+            with self.assertRaisesRegex(RuntimeError, "non-JSON output"):
+                release.az("containerapp", "show")
