@@ -1375,3 +1375,214 @@ Committed the phase 3 work and the release JSON fix in logical groups on `fronte
 ### Validation and outcome
 
 No new checks; entries 065–066 record the local results. PR CI not yet observed.
+
+## 068 — 2026-11-03 — How to run all services locally
+
+### Exact input prompt
+
+```text
+Great! How to run all services locally?
+```
+
+### Change summary
+
+Answered from the repository's run tooling and docs; no project files changed apart from this log.
+
+### Validation and outcome
+
+Commands were read from the repo, not executed in this turn.
+
+## 069 — 2026-11-03 — Add make dev
+
+### Exact input prompt
+
+```text
+Great make one global make dev that runs all that things at once
+```
+
+### Change summary
+
+Added `make dev` (Makefile) running `infra/scripts/dev.sh`: rebuilds images, starts PostgreSQL 17 with TLS, migrates/seeds, runs Loan API on :8080 and web on :3000, follows logs and removes everything on exit. Auth0 vars pass through when set; otherwise `ALLOW_UNCONFIGURED_AUTH=true` for a signed-out local stack. Publisher and Notifications are not started (need Azure Service Bus/Cosmos).
+
+### Validation and outcome
+
+Ran `make dev` (first run exposed a cleanup-order bug, fixed) and the script again: migrations ran, `/api/ready` ready with Loan API reachable, catalogue served, web `/` 200. Interactive Ctrl-C cleanup was not exercised from this non-interactive shell; containers were removed manually.
+
+## 070 — 2026-11-03 — Commit and push make dev
+
+### Exact input prompt
+
+```text
+Commit and push
+```
+
+### Change summary
+
+Committed `make dev` and the AI_LOG updates to `frontend/phase-3-cloud-evidence` and pushed. Left the untracked `frontend/AGENTS.md` alone.
+
+### Validation and outcome
+
+No new checks; entry 069 records the `make dev` run.
+
+## 071 — 2026-11-03 — Stitch MCP access
+
+### Exact input prompt
+
+```text
+Do you have acess to stitch MCP?
+```
+
+### Change summary
+
+No. This session has no Stitch MCP tools (connected: Claude Docs, scheduled-tasks, plus built-in browser and Chrome tools), and the registry search found no Google Stitch connector. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked session connector status and searched the MCP registry; Stitch was not found.
+
+## 072 — 2026-11-03 — Stitch MCP added but not showing
+
+### Exact input prompt
+
+```text
+claude mcp add stitch \
+  --transport http \
+  https://stitch.googleapis.com/mcp \
+  --header "X-Goog-Api-Key: (...)"
+
+I used this command, why it did not setup stitch? Do i need to restart this client?
+```
+
+### Change summary
+
+No `stitch` entry exists in `~/.claude.json` (user or this project) or a project `.mcp.json`, so the `claude mcp add` did not persist where this session reads. No project files changed apart from the log.
+
+### Validation and outcome
+
+Inspected the config files and session connector status (Stitch absent). `claude mcp list` hung past 120s and was not used as evidence. Restart need is unverified.
+
+## 073 — 2026-11-03 — claude mcp get stitch result
+
+### Exact input prompt
+
+```text
+claude mcp get stitch
+```
+
+### Change summary
+
+The user's output shows `stitch` is not configured (only claude.ai Claude Docs and Google Docs), confirming the earlier add did not persist. No project files changed apart from the log.
+
+### Validation and outcome
+
+Based on the user-supplied command output; I did not run it myself.
+
+## 074 — 2026-11-03 — Stitch exists in local config; check desktop app config
+
+### Exact input prompt
+
+```text
+MCP server stitch already exists in local config 
+
+Check if claude desktop has the same config has claude. This is a linux version of claude, it may not share the files
+```
+
+### Change summary
+
+Found `stitch` in `~/.claude.json` only under local scope for project `/home/cabozzz` (the add was run from the home directory), so it does not apply to this repo. `claude_desktop_config.json` has no MCP servers. No project files changed apart from the log.
+
+### Validation and outcome
+
+Inspected the config files (key values not printed). Did not modify any config.
+
+## 075 — 2026-11-03 — Re-added stitch at user scope
+
+### Exact input prompt
+
+```text
+cd ~ && claude mcp remove stitch && claude mcp add stitch --scope user --transport http https://stitch.googleapis.com/mcp --header "X-Goog-Api-Key: YOUR_KEY"
+```
+
+### Change summary
+
+The user's command removed the local `stitch` entry and added it at user scope, but with the literal placeholder `YOUR_KEY` as the API key, so the old real key is gone and the new one is invalid. No project files changed apart from the log.
+
+### Validation and outcome
+
+Based on the user-supplied output; I did not run it. Whether Stitch connects was not verified.
+
+## 076 — 2026-11-03 — Release JSON error seen again on CI
+
+### Exact input prompt
+
+```text
+Ive got this issue on the CI:
+
+his job failed in the final deployment/release step, not in the earlier verification checks.
+
+The relevant workflow step is the one that runs:
+
+python3 infra/scripts/release.py "$TARGET_ENV"
+
+in the “Drain, migrate and seed, activate, then smoke” phase of the release job.
+
+The log shows the decisive error:
+
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+```
+
+### Change summary
+
+The CI run 41556892657 traceback (read with `/usr/bin/gh`) shows the failure is in `release.py` `value()` parsing `terraform console` output for `var.handoff.workload_resource_group`, not the `az` calls fixed in entry 066. `value()` now uses the last stdout line that decodes and otherwise raises with the console stdout/stderr; two tests added in `infra/tests/test_release.py`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (16). Exact console output on CI (Terraform 1.14.3) is still unknown: downloading 1.14.3 locally was blocked by the permission classifier. Not committed or re-run on GitHub.
+
+## 077 — 2026-11-03 — Does CI run to the end now?
+
+### Exact input prompt
+
+```text
+DOes the CI now run untill the end?
+```
+
+### Change summary
+
+Checked the latest `qa` deploy runs; no project files changed apart from this log.
+
+### Validation and outcome
+
+See the run list in the reply; the entry 076 fix is not committed, so no CI run includes it.
+
+## 078 — 2026-11-03 — Can the release be tested locally?
+
+### Exact input prompt
+
+```text
+Is there any way to test it locally?
+```
+
+### Change summary
+
+Explained local options for the release console step; no project files changed apart from this log.
+
+### Validation and outcome
+
+Checked local tooling and config files only; no commands from the answer were run.
+
+## 079 — 2026-11-03 — Push the release console fix
+
+### Exact input prompt
+
+```text
+okay push it
+```
+
+### Change summary
+
+Committed the `release.py` console-parsing fix and tests on a new branch `fix/release-console-parse` from `qa`, pushed it and opened a PR against `qa`.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed (16) before commit. CI not yet observed.

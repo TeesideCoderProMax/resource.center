@@ -139,3 +139,37 @@ class AzureOutputTests(unittest.TestCase):
             release.az_action("containerapp", "revision", "deactivate")
             with self.assertRaisesRegex(RuntimeError, "non-JSON output"):
                 release.az("containerapp", "show")
+
+
+class ConsoleOutputTests(unittest.TestCase):
+    def run_until_azure(self, outputs):
+        # Drive release() through the console reads; stop at the first Azure call.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "infra/environments/test"
+            config.mkdir(parents=True)
+            for name in ("workloads.tfvars", "workloads.backend.hcl"):
+                (config / name).touch()
+            env = {"TF_VAR_backend_image": "registry.test/backend@sha256:" + "a"*64,
+                   "TF_VAR_web_image": "registry.test/web@sha256:" + "b"*64, "TF_VAR_service_version": "sha"}
+            results = iter(outputs)
+            console = lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=next(results), stderr="")
+            cwd = Path.cwd()
+            try:
+                with patch.object(release.Path, "resolve", return_value=root / "infra/scripts/release.py"), \
+                     patch.object(release, "run", return_value="{}"), \
+                     patch.object(release.subprocess, "run", side_effect=console), \
+                     patch.object(release, "az", side_effect=RuntimeError("reached azure")), patch.dict(os.environ, env):
+                    release.release("test")
+            finally:
+                os.chdir(cwd)
+
+    def test_console_noise_around_value_is_ignored(self):
+        encoded = lambda v: json.dumps(json.dumps(v))
+        outputs = [f"Warning: noise\n{encoded(v)}\n" for v in ("rg", "rc", "test", True)]
+        with self.assertRaisesRegex(RuntimeError, "reached azure"):
+            self.run_until_azure(outputs)
+
+    def test_non_json_console_output_is_reported(self):
+        with self.assertRaisesRegex(RuntimeError, "no JSON.*only noise"):
+            self.run_until_azure(["Warning: only noise\n"])

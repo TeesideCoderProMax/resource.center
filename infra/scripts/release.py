@@ -67,8 +67,15 @@ def release(environment):
         out = result.stdout.strip()
         if result.returncode or not out:
             raise RuntimeError(f"terraform console failed for {expression}: {result.stderr.strip() or 'no output'}")
-        # Console prints the encoded string as an HCL string literal.
-        return json.loads(json.loads(out))
+        # Console prints the encoded string as an HCL string literal. Some Terraform versions
+        # also print warnings or prompts on stdout, so use the last line that decodes.
+        for line in reversed(out.splitlines()):
+            try:
+                return json.loads(json.loads(line.strip()))
+            except (json.JSONDecodeError, TypeError):
+                continue
+        raise RuntimeError(f"terraform console returned no JSON for {expression}: "
+                           f"stdout={out[:500]!r} stderr={result.stderr.strip()[:500]!r}")
     group = value("var.handoff.workload_resource_group")
     prefix = value("var.name_prefix")
     if value("var.handoff.environment") != environment:
