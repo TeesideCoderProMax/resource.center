@@ -1939,3 +1939,40 @@ Then commit, push and create a PR
 ### Validation and outcome
 
 Read the failing run 41615871570 and the migration execution logs in Log Analytics (read-only `az`). The new test failed with the old code (same error) and passed with the fix; `make backend-test-postgres` passed 4/4, and `make backend-fmt backend-lint backend-test` passed. `bash -n` on dev.sh passed and the env file loads in bash; `make dev` itself was not run. The fix is not yet proven in Azure; that needs the qa deploy after merge.
+
+## 090 — 2026-11-03 — Catalogue e2e strict-mode failure in CI
+
+### Exact input prompt
+
+```text
+The job failed because a Playwright end-to-end test failed in the public catalogue flow.
+Evidence from the CI log:
+
+* 13 tests ran
+* 12 passed
+* 1 failed: e2e/flows.spec.ts:19:5 › public catalogue renders signed out
+
+The failing assertion is here:
+
+* frontend/e2e/flows.spec.ts:19-23
+* https://github.com/TeesideCoderProMax/resource.center/blob/f7970b51cf239b292432bab5996738e116786460/frontend/e2e/flows.spec.ts
+
+The exact problem is:
+
+* The test does: await expect(page.getByText("Dell Latitude 7440")).toBeVisible();
+* Playwright found 2 matching elements for that text, causing a strict-mode violation:
+   * one link to /devices/dell-latitude-7440
+   * another duplicate match for the same text
+* The log reports: Error: strict mode violation: getByText('Dell Latitude 7440') resolved to 2 elements
+* That makes the locator ambiguous, so the assertion fails and the whole job exits with code 1.
+
+In short: the CI job did not fail because of a backend crash or compile error; it failed because the test was looking for a single visible text match and found duplicate elements on the page.
+```
+
+### Change summary
+
+The CI page snapshot showed the second match was a hidden copy of the Dell link (no accessible role), most likely streamed HTML not yet swapped in; it is timing-dependent, so it passed locally. `frontend/e2e/flows.spec.ts` now uses a role query for the device link and `filter({ visible: true })` for the other text assertions. Committed and pushed to PR #11.
+
+### Validation and outcome
+
+Read CI run 41624993263 and its Playwright error context. The test could not be reproduced locally; `npx playwright test` passed 13/13 three times after the change. The CI result after the push was not yet observed.
