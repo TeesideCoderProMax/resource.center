@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AvailabilityPill, monogram, ReserveActions } from "@/components/DeviceCard";
+import { useState } from "react";
+import { AddToBag, AvailabilityPill, DevicePreview, ReserveActions } from "@/components/DeviceCard";
+import { Icon, type IconName } from "@/components/Icon";
 import type { DeviceModelSummary } from "@/lib/loan";
 
-const DAY = 86_400_000;
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -13,26 +14,33 @@ const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), 
 const fmtDay = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
 /**
- * Month view of the loan window if reserved today. Illustrative only: the API sets the real
- * due time when the reservation is created and the confirmation shows it.
+ * Month view of the loan window if reserved today. Illustrative only: reservations start
+ * immediately and the API sets the real due time, which the confirmation shows.
  */
 function LoanCalendar({ days }: { days: number }) {
   const today = startOfDay(new Date());
   const due = addDays(today, days);
-  const first = new Date(today.getFullYear(), today.getMonth(), 1);
+  const [offset, setOffset] = useState(0);
+  const first = new Date(today.getFullYear(), today.getMonth() + offset, 1);
   const lead = (first.getDay() + 6) % 7;
-  const monthDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const monthDays = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
   const cells = Array.from({ length: Math.ceil((lead + monthDays) / 7) * 7 }, (_, i) => addDays(first, i - lead));
 
   return (
     <div className="calendar">
-      <strong className="small">{today.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</strong>
+      <div className="row">
+        <strong className="small">{first.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</strong>
+        <span className="row-start">
+          <button className="icon-btn sm" disabled={offset === 0} onClick={() => setOffset(offset - 1)} aria-label="Previous month"><Icon name="chevronLeft" size={16} /></button>
+          <button className="icon-btn sm" disabled={offset >= 1} onClick={() => setOffset(offset + 1)} aria-label="Next month"><Icon name="chevronRight" size={16} /></button>
+        </span>
+      </div>
       <div className="cal-grid" aria-hidden="true">
         {WEEKDAYS.map((w) => <span key={w} className="cal-head">{w}</span>)}
         {cells.map((d) => {
           const t = d.getTime();
           const cls = [
-            d.getMonth() !== today.getMonth() && "cal-out",
+            d.getMonth() !== first.getMonth() && "cal-out",
             t < today.getTime() && "cal-past",
             t === today.getTime() && "cal-start",
             t === due.getTime() && "cal-end",
@@ -42,9 +50,18 @@ function LoanCalendar({ days }: { days: number }) {
         })}
       </div>
       <p className="cal-summary">
-        <span>{fmtDay(today)} – {fmtDay(due)}</span>
-        <span className="muted small">Exact due time is confirmed when you reserve.</span>
+        <span><span className="dot accent-dot" aria-hidden="true" /> {fmtDay(today)} – {fmtDay(due)}</span>
+        <span className="muted small">Starts when you reserve; exact due time is confirmed then.</span>
       </p>
+    </div>
+  );
+}
+
+function Fact({ icon, label, value, tone }: { icon: IconName; label: string; value: string; tone?: string }) {
+  return (
+    <div>
+      <dt><Icon name={icon} size={16} /> {label}</dt>
+      <dd className={tone}>{value}</dd>
     </div>
   );
 }
@@ -56,8 +73,9 @@ export function DeviceDetail({ item, canAct, signInHref }: { item: DeviceModelSu
   return (
     <>
       <nav aria-label="Breadcrumb" className="crumbs">
-        <Link href="/">Catalogue</Link><span aria-hidden="true">›</span>
-        <span>{item.category}</span><span aria-hidden="true">›</span>
+        <Link href="/"><Icon name="home" size={14} /> Home</Link><span aria-hidden="true">›</span>
+        <Link href="/">Catalog</Link><span aria-hidden="true">›</span>
+        <span className="cap">{item.category}</span><span aria-hidden="true">›</span>
         <span aria-current="page">{item.name}</span>
       </nav>
 
@@ -65,57 +83,79 @@ export function DeviceDetail({ item, canAct, signInHref }: { item: DeviceModelSu
         <div className="detail-main">
           <article className="glass panel-lg">
             <div className="row row-wrap">
-              <AvailabilityPill item={item} />
-              <span className="tag">ID {item.id}</span>
+              <span className={`status-pill ${available ? "status-ok" : "status-wait"}`}>
+                <span className="pulse" aria-hidden="true" />
+                {available ? "Available for immediate reservation" : "Fully reserved: join the waitlist"}
+              </span>
+              <span className="tag">MODEL {item.id}</span>
             </div>
             <h1>{item.name}</h1>
             <p className="muted">{item.description}</p>
-            <div className="showcase" aria-hidden="true"><span className="mono">{monogram(item.name)}</span></div>
+            <DevicePreview item={item} large />
+            <div className="pills"><AvailabilityPill item={item} /><span className="pill pill-plain">{item.category}</span></div>
           </article>
 
           <section className="glass panel-lg" aria-labelledby="facts-h">
-            <h2 id="facts-h">Loan details</h2>
+            <div className="row">
+              <h2 id="facts-h"><Icon name="chip" /> Device facts</h2>
+              <span className="pill pill-accent">From the live catalogue</span>
+            </div>
             <dl className="facts">
-              <div><dt>Category</dt><dd>{item.category}</dd></div>
-              <div><dt>Loan length</dt><dd>{item.loanDurationDays} days</dd></div>
-              <div><dt>Available now</dt><dd className={available ? "good-text" : "warn-text"}>{item.availableUnits} units</dd></div>
-              <div><dt>Fleet size</dt><dd>{item.totalUnits} units</dd></div>
+              <Fact icon="box" label="Category" value={item.category} />
+              <Fact icon="clock" label="Loan length" value={`${item.loanDurationDays} days`} />
+              <Fact icon="check" label="Available now" value={`${item.availableUnits} units`} tone={available ? "good-text" : "warn-text"} />
+              <Fact icon="grid" label="Fleet size" value={`${item.totalUnits} units`} />
+              <Fact icon="pin" label="Collection" value="Resource Center desk" />
+              <Fact icon="shield" label="Hand-over" value="Recorded by staff" />
             </dl>
           </section>
 
           <section className="glass panel-lg rules" aria-labelledby="rules-h">
-            <h2 id="rules-h">How loans work</h2>
+            <h2 id="rules-h"><Icon name="shield" /> Eligibility &amp; loan rules</h2>
             <ul>
-              <li><strong>Who can borrow</strong><span className="muted">Signed-in students and staff.</span></li>
-              <li><strong>Collect and return</strong><span className="muted">At the Resource Center desk; staff record each hand-over.</span></li>
-              <li><strong>Fully reserved?</strong><span className="muted">Subscribe and you are emailed when a unit comes back.</span></li>
+              <li><span className="rule-icon"><Icon name="user" /></span><div><strong>Who can borrow</strong><span className="muted">Signed-in students and staff.</span></div></li>
+              <li><span className="rule-icon"><Icon name="clock" /></span><div><strong>Maximum loan</strong><span className="muted">{item.loanDurationDays} days from reservation.</span></div></li>
+              <li><span className="rule-icon"><Icon name="bag" /></span><div><strong>Waitlist</strong><span className="muted">Subscribe when fully reserved; you are emailed on return.</span></div></li>
             </ul>
           </section>
         </div>
 
         <aside className="glass panel-lg reserve-panel" aria-labelledby="reserve-h">
-          <span className="eyebrow">Reservation</span>
-          <h2 id="reserve-h">{available ? "Reserve this device" : "Currently unavailable"}</h2>
           <div className="row">
-            <span className="field-label">Loan window</span>
-            <span className="pill pill-accent">{item.loanDurationDays}-day loan</span>
+            <div>
+              <span className="eyebrow">Instant loan</span>
+              <h2 id="reserve-h">Configure reservation</h2>
+            </div>
+            <span className="accent"><Icon name="calendar" size={26} /></span>
+          </div>
+          <div className="row">
+            <span className="field-label"><Icon name="calendar" size={16} /> Loan window</span>
+            <span className="pill pill-accent">{item.loanDurationDays} days duration</span>
           </div>
           <LoanCalendar days={item.loanDurationDays} />
-          <div className="pickup">
-            <span className="field-label">Pickup and return</span>
-            <strong>Resource Center desk</strong>
-            <span className="muted small">Staff mark the device collected and returned.</span>
+          <div>
+            <span className="field-label"><Icon name="pin" size={16} /> Pickup &amp; return hub</span>
+            <div className="pickup">
+              <div className="row">
+                <strong>Resource Center desk</strong>
+                <span className="pill pill-in">Staffed</span>
+              </div>
+              <span className="muted small">Show your campus account; staff mark the device collected and returned.</span>
+            </div>
           </div>
           <div className="reserve-actions">
             {canAct ? (
-              <ReserveActions item={item} wide onChanged={() => router.refresh()} />
+              <>
+                <AddToBag item={item} wide />
+                <ReserveActions item={item} wide onChanged={() => router.refresh()} />
+              </>
             ) : signInHref ? (
               <a className="btn primary wide" href={signInHref}>Sign in to reserve or subscribe</a>
             ) : (
               <p className="muted small">Reserving needs a student or staff account.</p>
             )}
           </div>
-          <p className="muted small policy">Return the device by its due time; overdue loans are flagged to staff.</p>
+          <p className="muted small policy"><Icon name="warning" size={14} /> Return the device by its due time; overdue loans are flagged to desk staff.</p>
         </aside>
       </div>
     </>

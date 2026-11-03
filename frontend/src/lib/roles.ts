@@ -29,8 +29,8 @@ export function roleLabel(v: Viewer): string {
 }
 
 export function navLinks(v: Viewer): { href: string; label: string }[] {
-  const links = [{ href: "/", label: "Catalogue" }];
-  if (v.signedIn && canBorrow(v)) links.push({ href: "/reservations", label: isStaff(v) ? "Reservations" : "My reservations" });
-  if (isStaff(v)) links.push({ href: "/staff", label: "Staff desk" });
+  const links = [{ href: "/", label: "Catalog" }];
+  if (v.signedIn && canBorrow(v)) links.push({ href: "/reservations", label: isStaff(v) ? "All Loans" : "My Loans" });
+  if (isStaff(v)) links.push({ href: "/staff", label: "Staff Admin" });
   return links;
 }

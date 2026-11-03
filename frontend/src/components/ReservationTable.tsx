@@ -66,8 +66,13 @@ export function MyReservations({ title, showStudent = false }: { title: string; 
   const { rows, error } = useReservations("/reservations");
   return (
     <section aria-labelledby="my-res-h">
-      <h1 id="my-res-h">{title}</h1>
-      {!showStudent && <p className="muted">Collect reserved devices at the desk and return them by the due date.</p>}
+      <div className="page-head">
+        <div>
+          <span className="eyebrow">{showStudent ? "Staff view" : "Your loans"}</span>
+          <h1 id="my-res-h">{title}</h1>
+          <p className="muted">{showStudent ? "Every borrower's reservations, newest first." : "Collect reserved devices at the desk and return them by the due date."}</p>
+        </div>
+      </div>
       <Notice notice={error} />
       {rows === null && !error ? <p className="muted" role="status">Loading…</p> : rows && <ReservationTable rows={rows} showStudent={showStudent} />}
     </section>

@@ -88,12 +88,40 @@ test("student gets 403 on /staff and on a forced collect call", async ({ page, c
   await signIn(context, "student");
   await page.goto("/staff");
   await expect(page.getByRole("heading", { name: "403 — staff only" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Staff desk" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Staff Admin" })).toHaveCount(0);
 
   const res = await page.request.post(`/api/loan/reservations/${row.reservationId}/collect`, { headers: { origin: BASE_URL } });
   expect(res.status()).toBe(403);
   expect((await res.json()).error).toBe("ForbiddenRole");
   expect(res.headers()["x-correlation-id"]).toBeTruthy();
+});
+
+test("loan bag reserves several devices and reports each result", async ({ page, context }) => {
+  await signIn(context, "student");
+  await page.goto("/");
+  await page.getByRole("article").filter({ hasText: "Dell Latitude 7440" }).getByRole("button", { name: "Add to loan bag" }).click();
+  await page.getByRole("article").filter({ hasText: "iPad Air M2" }).getByRole("button", { name: "Add to loan bag" }).click();
+  await page.getByRole("link", { name: "Loan bag, 2 items" }).click();
+  await expect(page.getByRole("heading", { name: "Checkout & Reservation Review" })).toBeVisible();
+  const submit = page.getByRole("button", { name: "Reserve all (2)" });
+  await expect(submit).toBeDisabled();
+  for (const box of await page.getByRole("checkbox").all()) await box.check();
+  await submit.click();
+  const done = page.getByRole("region", { name: "Done" });
+  await expect(done).toContainText(/Reserved Dell Latitude 7440 \(unit .*\)\. Due back/);
+  await expect(done).toContainText(/Reserved iPad Air M2/);
+  await expect(page.getByRole("link", { name: "Loan bag, 0 items" })).toBeVisible();
+  await page.getByRole("link", { name: "My Loans", exact: true }).click();
+  await expect(page.getByRole("cell", { name: "RESERVED" })).toHaveCount(2);
+});
+
+test("staff admin shows telemetry and live inventory", async ({ page, context }) => {
+  await seed({ modelId: "dell-latitude-7440", sub: "auth0|student-1", email: "student1@campus.test" });
+  await signIn(context, "staff");
+  await page.goto("/staff");
+  await expect(page.getByLabel("Desk summary")).toContainText("Awaiting collection");
+  await expect(page.getByRole("heading", { name: "Collection queue" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Equipment inventory" })).toContainText("Canon EOS R50");
 });
 
 test("cross-origin POST is rejected by the proxy", async ({ page, context }) => {
