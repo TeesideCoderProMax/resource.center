@@ -117,6 +117,11 @@ def release(environment):
     for suffix in ("loan-api", "notifications", "web"):
         app = prefix + "-" + suffix
         latest = az("containerapp", "show", "-g", group, "-n", app)["properties"]["latestRevisionName"]
+        # The apply may already have made the latest revision active (e.g. a new revision in
+        # single-revision mode); activating it again fails with RevisionAlreadyInRequestedState.
+        if az("containerapp", "revision", "show", "-g", group, "-n", app, "--revision", latest)["properties"]["active"]:
+            print(json.dumps({"stage": "revision_already_active", "app": app, "revision": latest}), flush=True)
+            continue
         az_action("containerapp", "revision", "activate", "-g", group, "-n", app, "--revision", latest)
     outputs = json.loads(run(*tf, "output", "-json"))
     os.environ["LOAN_API_URL"] = outputs["loan_api_url"]["value"]

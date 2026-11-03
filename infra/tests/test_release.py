@@ -18,7 +18,7 @@ release = load("release")
 promotion = load("promotion")
 
 class ReleaseTests(unittest.TestCase):
-    def scenario(self, status="Succeeded", replicas=None, seed=True, state_environment=None, active=True):
+    def scenario(self, status="Succeeded", replicas=None, seed=True, state_environment=None, active=True, latest_active=False):
         calls = []
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -50,6 +50,8 @@ class ReleaseTests(unittest.TestCase):
                     return {"name": "migration-1"}
                 if args[1:4] == ("job", "execution", "show"):
                     return {"properties": {"status": status}}
+                if args[1:3] == ("revision", "show"):
+                    return {"properties": {"active": latest_active}}
                 if args[1] == "show":
                     return {"properties": {"latestRevisionName": "new"}}
             env = {"TF_VAR_backend_image": "registry.test/backend@sha256:" + "a"*64,
@@ -105,6 +107,12 @@ class ReleaseTests(unittest.TestCase):
         for c in calls:
             if "plan" in c:
                 self.assertTrue(any(x.startswith("-var=backend_image=") for x in c))
+
+    def test_already_active_latest_revision_is_not_activated_again(self):
+        calls, error = self.scenario(latest_active=True)
+        self.assertIsNone(error)
+        self.assertFalse(any("activate" in c for c in calls))
+        self.assertTrue(any("./infra/scripts/smoke-test.sh" in c for c in calls))
 
 class PromotionTests(unittest.TestCase):
     def test_gate_rejects_missing_self_approval_and_admin_bypass(self):
