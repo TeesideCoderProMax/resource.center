@@ -1370,8 +1370,56 @@ Yeas create a PR and include all these changes from the 3rd phase
 
 ### Change summary
 
-Committed the phase 3 work and the release JSON fix in logical groups on `frontend/phase-3-cloud-evidence`, pushed and opened a PR against `qa`. Left the untracked `frontend/AGENTS.md` alone.
+Committed the phase 3 work and the release JSON fix in 4 commits on `frontend/phase-3-cloud-evidence` and pushed. `gh pr create` hung locally (mise shim), so no PR was created; the user was given the compare link. Left the untracked `frontend/AGENTS.md` alone.
 
 ### Validation and outcome
 
 No new checks; entries 065–066 record the local results. PR CI not yet observed.
+
+## 068 — 2026-11-03 — How to run all services locally
+
+### Exact input prompt
+
+```text
+Great! How to run all services locally?
+```
+
+### Change summary
+
+Answered from the repository's run tooling and docs; no project files changed apart from this log.
+
+### Validation and outcome
+
+Commands were read from the repo, not executed in this turn.
+
+## 069 — 2026-11-03 — Add make dev
+
+### Exact input prompt
+
+```text
+Great make one global make dev that runs all that things at once
+```
+
+### Change summary
+
+Added `make dev` (Makefile) running `infra/scripts/dev.sh`: rebuilds images, starts PostgreSQL 17 with TLS, migrates/seeds, runs Loan API on :8080 and web on :3000, follows logs and removes everything on exit. Auth0 vars pass through when set; otherwise `ALLOW_UNCONFIGURED_AUTH=true` for a signed-out local stack. Publisher and Notifications are not started (need Azure Service Bus/Cosmos).
+
+### Validation and outcome
+
+Ran `make dev` (first run exposed a cleanup-order bug, fixed) and the script again: migrations ran, `/api/ready` ready with Loan API reachable, catalogue served, web `/` 200. Interactive Ctrl-C cleanup was not exercised from this non-interactive shell; containers were removed manually.
+
+## 070 — 2026-11-03 — Commit and push make dev
+
+### Exact input prompt
+
+```text
+Commit and push
+```
+
+### Change summary
+
+Committed `make dev` and the AI_LOG updates to `frontend/phase-3-cloud-evidence` and pushed. Left the untracked `frontend/AGENTS.md` alone.
+
+### Validation and outcome
+
+No new checks; entry 069 records the `make dev` run.
