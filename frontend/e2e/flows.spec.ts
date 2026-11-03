@@ -60,7 +60,7 @@ test("staff collects and returns with confirm, timestamps and refresh", async ({
   await seed({ modelId: "dell-latitude-7440", sub: "auth0|student-1", email: "student1@campus.test" });
   await signIn(context, "staff");
   await page.goto("/staff");
-  await page.getByLabel("Status").selectOption("RESERVED");
+  await page.getByRole("combobox", { name: "Status" }).selectOption("RESERVED");
   await page.getByRole("button", { name: "Mark collected" }).click();
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Mark collected" }).click();
@@ -68,12 +68,12 @@ test("staff collects and returns with confirm, timestamps and refresh", async ({
   await expect(page.getByRole("status")).toContainText(/Collected dell-latitude-7440-u1 at .* Confirmation email queued/);
   await expect(page.getByText("No reservations.").filter({ visible: true })).toBeVisible();
 
-  await page.getByLabel("Status").selectOption("COLLECTED");
-  await page.getByLabel("Find reservation").fill("student1");
+  await page.getByRole("combobox", { name: "Status" }).selectOption("COLLECTED");
+  await page.getByRole("searchbox", { name: "Find reservation" }).fill("student1");
   await page.getByRole("button", { name: "Mark returned" }).click();
   await page.getByRole("button", { name: "Confirm return" }).click();
   await expect(page.getByRole("status")).toContainText(/Returned dell-latitude-7440-u1 at .*subscribers will be notified/);
-  await page.getByLabel("Status").selectOption("RETURNED");
+  await page.getByRole("combobox", { name: "Status" }).selectOption("RETURNED");
   await expect(page.getByRole("cell", { name: "RETURNED" })).toBeVisible();
 });
 
@@ -120,7 +120,7 @@ test("staff admin shows telemetry and live inventory", async ({ page, context })
   await seed({ modelId: "dell-latitude-7440", sub: "auth0|student-1", email: "student1@campus.test" });
   await signIn(context, "staff");
   await page.goto("/staff");
-  await expect(page.getByLabel("Desk summary")).toContainText("Awaiting collection");
+  await expect(page.getByRole("region", { name: "Desk summary" })).toContainText("Awaiting collection");
   await expect(page.getByRole("heading", { name: "Collection queue" })).toBeVisible();
   await expect(page.getByRole("table", { name: "Equipment inventory" })).toContainText("Canon EOS R50");
 });

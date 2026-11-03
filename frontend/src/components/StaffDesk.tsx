@@ -144,7 +144,7 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
           </div>
         </section>
 
-        <div className="stat-grid" aria-label="Desk summary">
+        <div className="stat-grid" role="region" aria-label="Desk summary">
           <StatCard icon="laptop" label="Total equipment" value={stats.totalUnits} unit="units"
             foot={<><span className="bar"><span style={{ width: `${stats.inUsePct}%` }} /></span> <span className="accent">{stats.inUsePct}% in use</span></>} />
           <StatCard icon="clock" label="Awaiting collection" value={stats.awaiting} unit="reserved" tone="accent" foot={<span className="muted">Reserved, not yet handed over</span>} />
