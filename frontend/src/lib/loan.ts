@@ -4,7 +4,11 @@ export interface DeviceModelSummary {
   name: string;
   category: string;
   description: string;
+  /** Maximum period; the borrower chooses the actual reservation length. */
   loanDurationDays: number;
+  imageUrl?: string | null;
+  imageAlt?: string | null;
+  specifications?: { label: string; value: string }[];
   totalUnits: number;
   availableUnits: number;
 }

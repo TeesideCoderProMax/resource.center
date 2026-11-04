@@ -128,13 +128,13 @@ test("staff admin shows telemetry and live inventory", async ({ page, context })
 test("cross-origin POST is rejected by the proxy", async ({ page, context }) => {
   await signIn(context, "staff");
   await page.goto("/");
-  const res = await page.request.post("/api/loan/reservations", { headers: { origin: "https://evil.example" }, data: { modelId: "dell-latitude-7440" } });
+  const res = await page.request.post("/api/loan/reservations", { headers: { origin: "https://evil.example" }, data: { loanDurationDays: 1, modelId: "dell-latitude-7440" } });
   expect(res.status()).toBe(403);
   expect((await res.json()).error).toBe("CrossOriginRejected");
 });
 
 test("signed-out proxy call returns 401 and pages prompt sign-in", async ({ page }) => {
-  const res = await page.request.post("/api/loan/reservations", { headers: { origin: BASE_URL }, data: { modelId: "dell-latitude-7440" } });
+  const res = await page.request.post("/api/loan/reservations", { headers: { origin: BASE_URL }, data: { loanDurationDays: 1, modelId: "dell-latitude-7440" } });
   expect(res.status()).toBe(401);
   await page.goto("/reservations");
   await expect(page.getByRole("link", { name: "Sign in" }).last()).toHaveAttribute("href", "/auth/login?returnTo=%2Freservations");
@@ -145,9 +145,42 @@ test("identity in the request body is ignored; the token decides", async ({ page
   await page.goto("/");
   const res = await page.request.post("/api/loan/reservations", {
     headers: { origin: BASE_URL },
-    data: { modelId: "ipad-air-m2", studentEmail: "attacker@evil.example", roles: ["staff"] },
+    data: { loanDurationDays: 1, modelId: "ipad-air-m2", studentEmail: "attacker@evil.example", roles: ["staff"] },
   });
   expect(res.status()).toBe(201);
   const rows = await (await page.request.get("/api/loan/reservations")).json();
   expect(rows[0].studentEmail).toBe("student1@campus.test");
+});
+
+test("chosen loan period controls the calendar and the recorded due date", async ({ page, context }) => {
+  await signIn(context, "student");
+  await page.goto("/devices/dell-latitude-7440");
+  await expect(page.getByRole("heading", { name: "Device facts" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Loan details" })).toBeVisible();
+  const period = page.getByRole("combobox", { name: "Loan period for Dell Latitude 7440" });
+  await expect(period).toHaveValue("1");
+  const initialWindow = await page.locator(".cal-summary").textContent();
+  await period.selectOption("14");
+  await expect(page.locator(".cal-summary")).not.toHaveText(initialWindow!);
+  await page.getByRole("button", { name: "Reserve" }).click();
+  await expect(page.getByRole("status")).toContainText("Reserved Dell Latitude 7440");
+  const response = await page.request.get("/api/loan/reservations");
+  const rows = await response.json();
+  expect(Date.parse(rows[0].dueAt) - Date.parse(rows[0].reservedAt)).toBe(14 * 86400000);
+});
+
+test("catalogue images and loan controls fit a phone screen", async ({ page, context }) => {
+  await signIn(context, "student");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.getByRole("img", { name: "Dell Latitude 7440" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Loan period for Dell Latitude 7440" })).toHaveValue("1");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.goto("/devices/dell-latitude-7440");
+  await expect(page.getByRole("heading", { name: "Loan details" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: "/tmp/rc-detail-mobile.png", fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  await page.screenshot({ path: "/tmp/rc-catalogue-desktop.png", fullPage: true });
 });

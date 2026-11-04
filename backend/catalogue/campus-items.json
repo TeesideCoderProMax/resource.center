@@ -1,0 +1,1522 @@
+[
+  {
+    "id": "dell-latitude-7440",
+    "name": "Dell Latitude 7440",
+    "category": "Laptop",
+    "description": "14-inch business laptop with 16 GB RAM, a 512 GB SSD, and Thunderbolt 4 for USB-C docking.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/dell-latitude-7440.webp",
+    "imageAlt": "Dell Latitude 7440 loan equipment",
+    "specifications": [
+      {
+        "label": "Display",
+        "value": "14-inch Full HD+"
+      },
+      {
+        "label": "Memory",
+        "value": "16 GB RAM"
+      },
+      {
+        "label": "Storage",
+        "value": "512 GB SSD"
+      },
+      {
+        "label": "Connections",
+        "value": "Thunderbolt 4 / USB-C"
+      },
+      {
+        "label": "Included",
+        "value": "USB-C charger"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "unit-lat-001",
+        "serialNumber": "DEMO-UNIT-LAT-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "unit-lat-002",
+        "serialNumber": "DEMO-UNIT-LAT-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "macbook-air-m3",
+    "name": "Apple MacBook Air 13-inch (M3)",
+    "category": "Laptop",
+    "description": "Light 13.6-inch macOS laptop with an Apple M3 chip, 16 GB memory, and a 512 GB SSD for study and media work.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/macbook-air-m3.webp",
+    "imageAlt": "Apple MacBook Air 13-inch (M3) loan equipment",
+    "specifications": [
+      {
+        "label": "Display",
+        "value": "13.6-inch Liquid Retina"
+      },
+      {
+        "label": "Processor",
+        "value": "Apple M3"
+      },
+      {
+        "label": "Memory",
+        "value": "16 GB unified memory"
+      },
+      {
+        "label": "Storage",
+        "value": "512 GB SSD"
+      },
+      {
+        "label": "Included",
+        "value": "MagSafe charger"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "unit-mba-001",
+        "serialNumber": "DEMO-UNIT-MBA-001",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "thinkpad-t14",
+    "name": "Lenovo ThinkPad T14 Gen 4",
+    "category": "Laptop",
+    "description": "14-inch Windows laptop with an Intel Core i5, 16 GB RAM, and a 512 GB SSD for coding and coursework.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/thinkpad-t14.webp",
+    "imageAlt": "Lenovo ThinkPad T14 Gen 4 loan equipment",
+    "specifications": [
+      {
+        "label": "Display",
+        "value": "14-inch WUXGA"
+      },
+      {
+        "label": "Processor",
+        "value": "Intel Core i5-1335U"
+      },
+      {
+        "label": "Memory",
+        "value": "16 GB RAM"
+      },
+      {
+        "label": "Storage",
+        "value": "512 GB SSD"
+      },
+      {
+        "label": "Included",
+        "value": "USB-C charger"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-thinkpad-t14-001",
+        "serialNumber": "DEMO-CAMPUS-THINKPAD-T14-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-thinkpad-t14-002",
+        "serialNumber": "DEMO-CAMPUS-THINKPAD-T14-002",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-thinkpad-t14-003",
+        "serialNumber": "DEMO-CAMPUS-THINKPAD-T14-003",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "hp-probook-450",
+    "name": "HP ProBook 450 G10",
+    "category": "Laptop",
+    "description": "15.6-inch Windows laptop with an Intel Core i5, 16 GB RAM, and a 512 GB SSD for office and data tasks.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/hp-probook-450.webp",
+    "imageAlt": "HP ProBook 450 G10 loan equipment",
+    "specifications": [
+      {
+        "label": "Display",
+        "value": "15.6-inch Full HD"
+      },
+      {
+        "label": "Processor",
+        "value": "Intel Core i5-1335U"
+      },
+      {
+        "label": "Memory",
+        "value": "16 GB RAM"
+      },
+      {
+        "label": "Storage",
+        "value": "512 GB SSD"
+      },
+      {
+        "label": "Included",
+        "value": "Power adapter"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-hp-probook-450-001",
+        "serialNumber": "DEMO-CAMPUS-HP-PROBOOK-450-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-hp-probook-450-002",
+        "serialNumber": "DEMO-CAMPUS-HP-PROBOOK-450-002",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-hp-probook-450-003",
+        "serialNumber": "DEMO-CAMPUS-HP-PROBOOK-450-003",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "surface-laptop-5",
+    "name": "Microsoft Surface Laptop 5",
+    "category": "Laptop",
+    "description": "13.5-inch touchscreen laptop with an Intel Core i5, 8 GB RAM, and a 256 GB SSD for notes and coursework.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/surface-laptop-5.webp",
+    "imageAlt": "Microsoft Surface Laptop 5 loan equipment",
+    "specifications": [
+      {
+        "label": "Display",
+        "value": "13.5-inch PixelSense touchscreen"
+      },
+      {
+        "label": "Processor",
+        "value": "Intel Core i5-1235U"
+      },
+      {
+        "label": "Memory",
+        "value": "8 GB RAM"
+      },
+      {
+        "label": "Storage",
+        "value": "256 GB SSD"
+      },
+      {
+        "label": "Included",
+        "value": "Surface Connect charger"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-surface-laptop-5-001",
+        "serialNumber": "DEMO-CAMPUS-SURFACE-LAPTOP-5-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-surface-laptop-5-002",
+        "serialNumber": "DEMO-CAMPUS-SURFACE-LAPTOP-5-002",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-surface-laptop-5-003",
+        "serialNumber": "DEMO-CAMPUS-SURFACE-LAPTOP-5-003",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "ipad-air-m2",
+    "name": "iPad Air 11-inch (M2) + Apple Pencil Pro",
+    "category": "Tablet",
+    "description": "11-inch iPad Air with an M2 chip, 128 GB storage, and Apple Pencil Pro for sketching and handwritten notes.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/ipad-air-m2.webp",
+    "imageAlt": "iPad Air 11-inch (M2) + Apple Pencil Pro loan equipment",
+    "specifications": [
+      {
+        "label": "Display",
+        "value": "11-inch Liquid Retina"
+      },
+      {
+        "label": "Processor",
+        "value": "Apple M2"
+      },
+      {
+        "label": "Storage",
+        "value": "128 GB"
+      },
+      {
+        "label": "Connection",
+        "value": "Wi-Fi / USB-C"
+      },
+      {
+        "label": "Included",
+        "value": "Apple Pencil Pro and USB-C charger"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "unit-ipad-001",
+        "serialNumber": "DEMO-UNIT-IPAD-001",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "samsung-tab-s9",
+    "name": "Samsung Galaxy Tab S9",
+    "category": "Tablet",
+    "description": "11-inch Android tablet with 128 GB storage and an S Pen for reading, annotation, and design work.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/samsung-tab-s9.webp",
+    "imageAlt": "Samsung Galaxy Tab S9 loan equipment",
+    "specifications": [
+      {
+        "label": "Display",
+        "value": "11-inch Dynamic AMOLED 2X"
+      },
+      {
+        "label": "Memory",
+        "value": "8 GB RAM"
+      },
+      {
+        "label": "Storage",
+        "value": "128 GB"
+      },
+      {
+        "label": "Connection",
+        "value": "Wi-Fi / USB-C"
+      },
+      {
+        "label": "Included",
+        "value": "S Pen and USB-C charger"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-samsung-tab-s9-001",
+        "serialNumber": "DEMO-CAMPUS-SAMSUNG-TAB-S9-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-samsung-tab-s9-002",
+        "serialNumber": "DEMO-CAMPUS-SAMSUNG-TAB-S9-002",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-samsung-tab-s9-003",
+        "serialNumber": "DEMO-CAMPUS-SAMSUNG-TAB-S9-003",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "surface-pro-9",
+    "name": "Microsoft Surface Pro 9",
+    "category": "Tablet",
+    "description": "13-inch Windows tablet with an Intel Core i5, 8 GB RAM, and a 256 GB SSD. Includes a keyboard cover for typing.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/surface-pro-9.webp",
+    "imageAlt": "Microsoft Surface Pro 9 loan equipment",
+    "specifications": [
+      {
+        "label": "Display",
+        "value": "13-inch PixelSense touchscreen"
+      },
+      {
+        "label": "Processor",
+        "value": "Intel Core i5-1235U"
+      },
+      {
+        "label": "Memory",
+        "value": "8 GB RAM"
+      },
+      {
+        "label": "Storage",
+        "value": "256 GB SSD"
+      },
+      {
+        "label": "Included",
+        "value": "Keyboard cover and charger"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-surface-pro-9-001",
+        "serialNumber": "DEMO-CAMPUS-SURFACE-PRO-9-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-surface-pro-9-002",
+        "serialNumber": "DEMO-CAMPUS-SURFACE-PRO-9-002",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-surface-pro-9-003",
+        "serialNumber": "DEMO-CAMPUS-SURFACE-PRO-9-003",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "sony-alpha-a6400",
+    "name": "Sony Alpha a6400 Kit",
+    "category": "Camera",
+    "description": "24.2 MP mirrorless camera with a 16–50 mm zoom lens, 4K video, and a 64 GB SD card for photo and film projects.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/sony-alpha-a6400.webp",
+    "imageAlt": "Sony Alpha a6400 Kit loan equipment",
+    "specifications": [
+      {
+        "label": "Sensor",
+        "value": "24.2 MP APS-C"
+      },
+      {
+        "label": "Lens",
+        "value": "Sony E 16–50 mm"
+      },
+      {
+        "label": "Video",
+        "value": "4K up to 30 fps"
+      },
+      {
+        "label": "Included",
+        "value": "64 GB SD card, battery and charger"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "unit-sony-001",
+        "serialNumber": "DEMO-UNIT-SONY-001",
+        "status": "MAINTENANCE"
+      }
+    ]
+  },
+  {
+    "id": "canon-eos-r50",
+    "name": "Canon EOS R50 Kit",
+    "category": "Camera",
+    "description": "24.2 MP mirrorless camera with an RF-S 18–45 mm lens and 4K video for student film and photography.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/canon-eos-r50.webp",
+    "imageAlt": "Canon EOS R50 Kit loan equipment",
+    "specifications": [
+      {
+        "label": "Sensor",
+        "value": "24.2 MP APS-C"
+      },
+      {
+        "label": "Lens",
+        "value": "Canon RF-S 18–45 mm"
+      },
+      {
+        "label": "Video",
+        "value": "4K up to 30 fps"
+      },
+      {
+        "label": "Included",
+        "value": "64 GB SD card, battery and charger"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-canon-eos-r50-001",
+        "serialNumber": "DEMO-CAMPUS-CANON-EOS-R50-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-canon-eos-r50-002",
+        "serialNumber": "DEMO-CAMPUS-CANON-EOS-R50-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "nikon-z50",
+    "name": "Nikon Z50 Kit",
+    "category": "Camera",
+    "description": "20.9 MP mirrorless camera with a DX 16–50 mm lens, 4K video, and a 64 GB SD card for field photography.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/nikon-z50.webp",
+    "imageAlt": "Nikon Z50 Kit loan equipment",
+    "specifications": [
+      {
+        "label": "Sensor",
+        "value": "20.9 MP DX"
+      },
+      {
+        "label": "Lens",
+        "value": "Nikkor Z DX 16–50 mm"
+      },
+      {
+        "label": "Video",
+        "value": "4K up to 30 fps"
+      },
+      {
+        "label": "Included",
+        "value": "64 GB SD card, battery and charger"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-nikon-z50-001",
+        "serialNumber": "DEMO-CAMPUS-NIKON-Z50-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-nikon-z50-002",
+        "serialNumber": "DEMO-CAMPUS-NIKON-Z50-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "gopro-hero12",
+    "name": "GoPro HERO12 Black",
+    "category": "Camera",
+    "description": "Compact action camera with 5.3K video and HyperSmooth 6.0 stabilization for sport and outdoor filming.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/gopro-hero12.webp",
+    "imageAlt": "GoPro HERO12 Black loan equipment",
+    "specifications": [
+      {
+        "label": "Video",
+        "value": "5.3K up to 60 fps"
+      },
+      {
+        "label": "Stabilization",
+        "value": "HyperSmooth 6.0"
+      },
+      {
+        "label": "Water resistance",
+        "value": "10 m without housing"
+      },
+      {
+        "label": "Included",
+        "value": "64 GB microSD card, mount and USB-C cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-gopro-hero12-001",
+        "serialNumber": "DEMO-CAMPUS-GOPRO-HERO12-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-gopro-hero12-002",
+        "serialNumber": "DEMO-CAMPUS-GOPRO-HERO12-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "dji-osmo-pocket-3",
+    "name": "DJI Osmo Pocket 3",
+    "category": "Camera",
+    "description": "Pocket camera with a 1-inch sensor and a three-axis gimbal for steady interviews and campus video.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/dji-osmo-pocket-3.webp",
+    "imageAlt": "DJI Osmo Pocket 3 loan equipment",
+    "specifications": [
+      {
+        "label": "Sensor",
+        "value": "1-inch CMOS"
+      },
+      {
+        "label": "Video",
+        "value": "4K up to 60 fps in standard mode"
+      },
+      {
+        "label": "Stabilization",
+        "value": "Three-axis mechanical gimbal"
+      },
+      {
+        "label": "Included",
+        "value": "64 GB microSD card, cover and USB-C cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-dji-osmo-pocket-3-001",
+        "serialNumber": "DEMO-CAMPUS-DJI-OSMO-POCKET-3-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-dji-osmo-pocket-3-002",
+        "serialNumber": "DEMO-CAMPUS-DJI-OSMO-POCKET-3-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "manfrotto-befree",
+    "name": "Manfrotto Befree Advanced Tripod",
+    "category": "Camera accessory",
+    "description": "Aluminium travel tripod with a ball head and a 1/4-inch camera screw for stable photo and video work.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/manfrotto-befree.webp",
+    "imageAlt": "Manfrotto Befree Advanced Tripod loan equipment",
+    "specifications": [
+      {
+        "label": "Material",
+        "value": "Aluminium"
+      },
+      {
+        "label": "Head",
+        "value": "Ball head"
+      },
+      {
+        "label": "Camera mount",
+        "value": "1/4-inch screw"
+      },
+      {
+        "label": "Maximum height",
+        "value": "150 cm"
+      },
+      {
+        "label": "Included",
+        "value": "Quick-release plate and carry bag"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-manfrotto-befree-001",
+        "serialNumber": "DEMO-CAMPUS-MANFROTTO-BEFREE-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-manfrotto-befree-002",
+        "serialNumber": "DEMO-CAMPUS-MANFROTTO-BEFREE-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "zoom-h5",
+    "name": "Zoom H5 Recorder",
+    "category": "Audio",
+    "description": "Portable audio recorder with an XY microphone capsule and two XLR/TRS inputs for interviews and location sound.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/zoom-h5.webp",
+    "imageAlt": "Zoom H5 Recorder loan equipment",
+    "specifications": [
+      {
+        "label": "Recording",
+        "value": "Up to 24-bit / 96 kHz WAV"
+      },
+      {
+        "label": "Inputs",
+        "value": "Two XLR/TRS combo inputs"
+      },
+      {
+        "label": "Microphone",
+        "value": "XY stereo capsule"
+      },
+      {
+        "label": "Included",
+        "value": "32 GB SD card, AA batteries and case"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-zoom-h5-001",
+        "serialNumber": "DEMO-CAMPUS-ZOOM-H5-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-zoom-h5-002",
+        "serialNumber": "DEMO-CAMPUS-ZOOM-H5-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "rode-wireless-go-ii",
+    "name": "Rode Wireless GO II",
+    "category": "Audio",
+    "description": "Two-person wireless microphone kit with two transmitters and one receiver for interviews and video projects.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/rode-wireless-go-ii.webp",
+    "imageAlt": "Rode Wireless GO II loan equipment",
+    "specifications": [
+      {
+        "label": "Channels",
+        "value": "Two transmitters / one receiver"
+      },
+      {
+        "label": "Wireless band",
+        "value": "2.4 GHz"
+      },
+      {
+        "label": "Outputs",
+        "value": "3.5 mm TRS and USB-C"
+      },
+      {
+        "label": "Included",
+        "value": "Windshields, TRS cable and USB cables"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-rode-wireless-go-ii-001",
+        "serialNumber": "DEMO-CAMPUS-RODE-WIRELESS-GO-II-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-rode-wireless-go-ii-002",
+        "serialNumber": "DEMO-CAMPUS-RODE-WIRELESS-GO-II-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "shure-sm58",
+    "name": "Shure SM58 Microphone Kit",
+    "category": "Audio",
+    "description": "Dynamic cardioid vocal microphone with an XLR cable and a desk stand for speech, singing, and recording.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/shure-sm58.webp",
+    "imageAlt": "Shure SM58 Microphone Kit loan equipment",
+    "specifications": [
+      {
+        "label": "Type",
+        "value": "Dynamic microphone"
+      },
+      {
+        "label": "Pickup pattern",
+        "value": "Cardioid"
+      },
+      {
+        "label": "Connection",
+        "value": "Three-pin XLR"
+      },
+      {
+        "label": "Included",
+        "value": "XLR cable, clip and desk stand"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-shure-sm58-001",
+        "serialNumber": "DEMO-CAMPUS-SHURE-SM58-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-shure-sm58-002",
+        "serialNumber": "DEMO-CAMPUS-SHURE-SM58-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "blue-yeti",
+    "name": "Blue Yeti USB Microphone",
+    "category": "Audio",
+    "description": "USB condenser microphone with four pickup patterns and a headphone output for podcasts and online talks.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/blue-yeti.webp",
+    "imageAlt": "Blue Yeti USB Microphone loan equipment",
+    "specifications": [
+      {
+        "label": "Type",
+        "value": "USB condenser microphone"
+      },
+      {
+        "label": "Patterns",
+        "value": "Cardioid, stereo, omnidirectional and bidirectional"
+      },
+      {
+        "label": "Recording",
+        "value": "16-bit / 48 kHz"
+      },
+      {
+        "label": "Included",
+        "value": "Desk stand and USB cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-blue-yeti-001",
+        "serialNumber": "DEMO-CAMPUS-BLUE-YETI-001",
+        "status": "MAINTENANCE"
+      },
+      {
+        "unitId": "campus-blue-yeti-002",
+        "serialNumber": "DEMO-CAMPUS-BLUE-YETI-002",
+        "status": "MAINTENANCE"
+      }
+    ]
+  },
+  {
+    "id": "scarlett-2i2",
+    "name": "Focusrite Scarlett 2i2 (3rd Gen)",
+    "category": "Audio",
+    "description": "Two-input USB audio interface with microphone preamps and 48 V phantom power for music and voice recording.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/scarlett-2i2.webp",
+    "imageAlt": "Focusrite Scarlett 2i2 (3rd Gen) loan equipment",
+    "specifications": [
+      {
+        "label": "Inputs",
+        "value": "Two XLR/TRS combo inputs"
+      },
+      {
+        "label": "Recording",
+        "value": "Up to 24-bit / 192 kHz"
+      },
+      {
+        "label": "Phantom power",
+        "value": "48 V"
+      },
+      {
+        "label": "Included",
+        "value": "USB cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-scarlett-2i2-001",
+        "serialNumber": "DEMO-CAMPUS-SCARLETT-2I2-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-scarlett-2i2-002",
+        "serialNumber": "DEMO-CAMPUS-SCARLETT-2I2-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "ath-m50x",
+    "name": "Audio-Technica ATH-M50x Headphones",
+    "category": "Audio",
+    "description": "Closed-back studio headphones with 45 mm drivers and a wired connection for editing and recording.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/ath-m50x.webp",
+    "imageAlt": "Audio-Technica ATH-M50x Headphones loan equipment",
+    "specifications": [
+      {
+        "label": "Design",
+        "value": "Closed-back over-ear"
+      },
+      {
+        "label": "Drivers",
+        "value": "45 mm"
+      },
+      {
+        "label": "Impedance",
+        "value": "38 ohms"
+      },
+      {
+        "label": "Included",
+        "value": "Detachable cable, 6.35 mm adapter and pouch"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-ath-m50x-001",
+        "serialNumber": "DEMO-CAMPUS-ATH-M50X-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-ath-m50x-002",
+        "serialNumber": "DEMO-CAMPUS-ATH-M50X-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "epson-eb-fh52",
+    "name": "Epson EB-FH52 Projector",
+    "category": "Presentation",
+    "description": "Full HD 3LCD projector rated at 4,000 lumens for classroom talks and group presentations.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/epson-eb-fh52.webp",
+    "imageAlt": "Epson EB-FH52 Projector loan equipment",
+    "specifications": [
+      {
+        "label": "Resolution",
+        "value": "1920 × 1080"
+      },
+      {
+        "label": "Brightness",
+        "value": "4,000 lumens"
+      },
+      {
+        "label": "Technology",
+        "value": "3LCD"
+      },
+      {
+        "label": "Inputs",
+        "value": "HDMI"
+      },
+      {
+        "label": "Included",
+        "value": "Remote, HDMI cable and power lead"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-epson-eb-fh52-001",
+        "serialNumber": "DEMO-CAMPUS-EPSON-EB-FH52-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-epson-eb-fh52-002",
+        "serialNumber": "DEMO-CAMPUS-EPSON-EB-FH52-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "logitech-spotlight",
+    "name": "Logitech Spotlight Remote",
+    "category": "Presentation",
+    "description": "Wireless presentation remote with a digital pointer and USB receiver for lectures and assessed talks.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/logitech-spotlight.webp",
+    "imageAlt": "Logitech Spotlight Remote loan equipment",
+    "specifications": [
+      {
+        "label": "Connection",
+        "value": "USB receiver or Bluetooth"
+      },
+      {
+        "label": "Range",
+        "value": "Up to 30 m"
+      },
+      {
+        "label": "Charging",
+        "value": "USB-C"
+      },
+      {
+        "label": "Included",
+        "value": "USB receiver and charging cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-logitech-spotlight-001",
+        "serialNumber": "DEMO-CAMPUS-LOGITECH-SPOTLIGHT-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-logitech-spotlight-002",
+        "serialNumber": "DEMO-CAMPUS-LOGITECH-SPOTLIGHT-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "logitech-c920",
+    "name": "Logitech C920 Webcam",
+    "category": "Presentation",
+    "description": "Full HD USB webcam with autofocus and stereo microphones for video calls and recorded presentations.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/logitech-c920.webp",
+    "imageAlt": "Logitech C920 Webcam loan equipment",
+    "specifications": [
+      {
+        "label": "Video",
+        "value": "1080p up to 30 fps"
+      },
+      {
+        "label": "Focus",
+        "value": "Autofocus"
+      },
+      {
+        "label": "Audio",
+        "value": "Built-in stereo microphones"
+      },
+      {
+        "label": "Connection",
+        "value": "USB-A"
+      },
+      {
+        "label": "Included",
+        "value": "Monitor clip"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-logitech-c920-001",
+        "serialNumber": "DEMO-CAMPUS-LOGITECH-C920-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-logitech-c920-002",
+        "serialNumber": "DEMO-CAMPUS-LOGITECH-C920-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "ipevo-v4k",
+    "name": "IPEVO V4K Document Camera",
+    "category": "Presentation",
+    "description": "8 MP USB document camera with an adjustable arm for showing books, handwritten notes, and small objects.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/ipevo-v4k.webp",
+    "imageAlt": "IPEVO V4K Document Camera loan equipment",
+    "specifications": [
+      {
+        "label": "Camera",
+        "value": "8 MP"
+      },
+      {
+        "label": "Maximum resolution",
+        "value": "3264 × 2448"
+      },
+      {
+        "label": "Focus",
+        "value": "Autofocus"
+      },
+      {
+        "label": "Connection",
+        "value": "USB-A"
+      },
+      {
+        "label": "Included",
+        "value": "Integrated stand and USB cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-ipevo-v4k-001",
+        "serialNumber": "DEMO-CAMPUS-IPEVO-V4K-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-ipevo-v4k-002",
+        "serialNumber": "DEMO-CAMPUS-IPEVO-V4K-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "dell-wd19s",
+    "name": "Dell WD19S USB-C Dock",
+    "category": "Accessory",
+    "description": "USB-C desk dock with DisplayPort, HDMI, Ethernet, and USB ports. Includes a 180 W power adapter.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/dell-wd19s.webp",
+    "imageAlt": "Dell WD19S USB-C Dock loan equipment",
+    "specifications": [
+      {
+        "label": "Host connection",
+        "value": "USB-C with DisplayPort Alt Mode"
+      },
+      {
+        "label": "Display outputs",
+        "value": "DisplayPort and HDMI"
+      },
+      {
+        "label": "Network",
+        "value": "Gigabit Ethernet"
+      },
+      {
+        "label": "Power supply",
+        "value": "180 W adapter"
+      },
+      {
+        "label": "Included",
+        "value": "Attached host cable and power adapter"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-dell-wd19s-001",
+        "serialNumber": "DEMO-CAMPUS-DELL-WD19S-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-dell-wd19s-002",
+        "serialNumber": "DEMO-CAMPUS-DELL-WD19S-002",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-dell-wd19s-003",
+        "serialNumber": "DEMO-CAMPUS-DELL-WD19S-003",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "dell-p2422h",
+    "name": "Dell P2422H Monitor",
+    "category": "Accessory",
+    "description": "23.8-inch Full HD IPS monitor with an adjustable stand for a second-screen study setup.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/dell-p2422h.webp",
+    "imageAlt": "Dell P2422H Monitor loan equipment",
+    "specifications": [
+      {
+        "label": "Display",
+        "value": "23.8-inch IPS"
+      },
+      {
+        "label": "Resolution",
+        "value": "1920 × 1080 at 60 Hz"
+      },
+      {
+        "label": "Inputs",
+        "value": "HDMI, DisplayPort and VGA"
+      },
+      {
+        "label": "Stand",
+        "value": "Height, tilt, swivel and pivot"
+      },
+      {
+        "label": "Included",
+        "value": "HDMI cable and power lead"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-dell-p2422h-001",
+        "serialNumber": "DEMO-CAMPUS-DELL-P2422H-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-dell-p2422h-002",
+        "serialNumber": "DEMO-CAMPUS-DELL-P2422H-002",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-dell-p2422h-003",
+        "serialNumber": "DEMO-CAMPUS-DELL-P2422H-003",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "logitech-mk270",
+    "name": "Logitech MK270 Keyboard and Mouse",
+    "category": "Accessory",
+    "description": "Full-size wireless keyboard and mouse with one USB receiver for shared study desks.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/logitech-mk270.webp",
+    "imageAlt": "Logitech MK270 Keyboard and Mouse loan equipment",
+    "specifications": [
+      {
+        "label": "Keyboard",
+        "value": "Full-size with number pad"
+      },
+      {
+        "label": "Connection",
+        "value": "2.4 GHz USB-A receiver"
+      },
+      {
+        "label": "Power",
+        "value": "Replaceable batteries"
+      },
+      {
+        "label": "Included",
+        "value": "Keyboard, mouse, receiver and batteries"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-logitech-mk270-001",
+        "serialNumber": "DEMO-CAMPUS-LOGITECH-MK270-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-logitech-mk270-002",
+        "serialNumber": "DEMO-CAMPUS-LOGITECH-MK270-002",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-logitech-mk270-003",
+        "serialNumber": "DEMO-CAMPUS-LOGITECH-MK270-003",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "wacom-intuos-m",
+    "name": "Wacom Intuos M Drawing Tablet",
+    "category": "Accessory",
+    "description": "Medium pen tablet with an active area of 216 × 135 mm and a battery-free pen for drawing and photo editing.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/wacom-intuos-m.webp",
+    "imageAlt": "Wacom Intuos M Drawing Tablet loan equipment",
+    "specifications": [
+      {
+        "label": "Active area",
+        "value": "216 × 135 mm"
+      },
+      {
+        "label": "Pressure levels",
+        "value": "4,096"
+      },
+      {
+        "label": "Pen",
+        "value": "Battery-free Wacom Pen 4K"
+      },
+      {
+        "label": "Connection",
+        "value": "USB"
+      },
+      {
+        "label": "Included",
+        "value": "Pen and USB cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-wacom-intuos-m-001",
+        "serialNumber": "DEMO-CAMPUS-WACOM-INTUOS-M-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-wacom-intuos-m-002",
+        "serialNumber": "DEMO-CAMPUS-WACOM-INTUOS-M-002",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-wacom-intuos-m-003",
+        "serialNumber": "DEMO-CAMPUS-WACOM-INTUOS-M-003",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "samsung-t7",
+    "name": "Samsung T7 Portable SSD 1 TB",
+    "category": "Accessory",
+    "description": "1 TB portable SSD with USB 3.2 Gen 2 for moving project files and video footage between computers.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/samsung-t7.webp",
+    "imageAlt": "Samsung T7 Portable SSD 1 TB loan equipment",
+    "specifications": [
+      {
+        "label": "Capacity",
+        "value": "1 TB"
+      },
+      {
+        "label": "Interface",
+        "value": "USB 3.2 Gen 2"
+      },
+      {
+        "label": "Connector",
+        "value": "USB-C"
+      },
+      {
+        "label": "Rated read speed",
+        "value": "Up to 1,050 MB/s"
+      },
+      {
+        "label": "Included",
+        "value": "USB-C to C and USB-C to A cables"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-samsung-t7-001",
+        "serialNumber": "DEMO-CAMPUS-SAMSUNG-T7-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-samsung-t7-002",
+        "serialNumber": "DEMO-CAMPUS-SAMSUNG-T7-002",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-samsung-t7-003",
+        "serialNumber": "DEMO-CAMPUS-SAMSUNG-T7-003",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "anker-555",
+    "name": "Anker 555 USB-C Hub",
+    "category": "Accessory",
+    "description": "Eight-port USB-C hub with HDMI, Ethernet, card readers, and power pass-through for compatible laptops.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/anker-555.webp",
+    "imageAlt": "Anker 555 USB-C Hub loan equipment",
+    "specifications": [
+      {
+        "label": "Host connection",
+        "value": "USB-C"
+      },
+      {
+        "label": "Display output",
+        "value": "HDMI up to 4K at 60 Hz with a compatible host"
+      },
+      {
+        "label": "Network",
+        "value": "Gigabit Ethernet"
+      },
+      {
+        "label": "Card readers",
+        "value": "SD and microSD"
+      },
+      {
+        "label": "Power input",
+        "value": "USB-C PD up to 100 W"
+      },
+      {
+        "label": "Included",
+        "value": "Attached USB-C cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-anker-555-001",
+        "serialNumber": "DEMO-CAMPUS-ANKER-555-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-anker-555-002",
+        "serialNumber": "DEMO-CAMPUS-ANKER-555-002",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-anker-555-003",
+        "serialNumber": "DEMO-CAMPUS-ANKER-555-003",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "arduino-uno-kit",
+    "name": "Arduino Uno Rev3 Starter Kit",
+    "category": "Lab equipment",
+    "description": "Arduino Uno Rev3 kit with a breadboard, LEDs, sensors, and jumper wires for entry-level electronics projects.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/arduino-uno-kit.webp",
+    "imageAlt": "Arduino Uno Rev3 Starter Kit loan equipment",
+    "specifications": [
+      {
+        "label": "Board",
+        "value": "Arduino Uno Rev3"
+      },
+      {
+        "label": "Microcontroller",
+        "value": "ATmega328P"
+      },
+      {
+        "label": "Logic voltage",
+        "value": "5 V"
+      },
+      {
+        "label": "Included",
+        "value": "Breadboard, LEDs, sensors, jumper wires and USB cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-arduino-uno-kit-001",
+        "serialNumber": "DEMO-CAMPUS-ARDUINO-UNO-KIT-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-arduino-uno-kit-002",
+        "serialNumber": "DEMO-CAMPUS-ARDUINO-UNO-KIT-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "raspberry-pi-5",
+    "name": "Raspberry Pi 5 8 GB Kit",
+    "category": "Lab equipment",
+    "description": "8 GB Raspberry Pi 5 kit with active cooling and a 64 GB microSD card for Linux and computing projects.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/raspberry-pi-5.webp",
+    "imageAlt": "Raspberry Pi 5 8 GB Kit loan equipment",
+    "specifications": [
+      {
+        "label": "Processor",
+        "value": "Quad-core Arm Cortex-A76 at 2.4 GHz"
+      },
+      {
+        "label": "Memory",
+        "value": "8 GB RAM"
+      },
+      {
+        "label": "Storage",
+        "value": "64 GB microSD card"
+      },
+      {
+        "label": "Included",
+        "value": "Case, active cooler, 27 W USB-C supply and micro-HDMI cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-raspberry-pi-5-001",
+        "serialNumber": "DEMO-CAMPUS-RASPBERRY-PI-5-001",
+        "status": "MAINTENANCE"
+      },
+      {
+        "unitId": "campus-raspberry-pi-5-002",
+        "serialNumber": "DEMO-CAMPUS-RASPBERRY-PI-5-002",
+        "status": "MAINTENANCE"
+      }
+    ]
+  },
+  {
+    "id": "microbit-v2",
+    "name": "BBC micro:bit V2 Kit",
+    "category": "Lab equipment",
+    "description": "Pocket coding board with a 5 × 5 LED display, microphone, and speaker for interactive computing lessons.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/microbit-v2.webp",
+    "imageAlt": "BBC micro:bit V2 Kit loan equipment",
+    "specifications": [
+      {
+        "label": "Board",
+        "value": "BBC micro:bit V2"
+      },
+      {
+        "label": "Display",
+        "value": "5 × 5 LED matrix"
+      },
+      {
+        "label": "Sensors",
+        "value": "Accelerometer, compass and microphone"
+      },
+      {
+        "label": "Included",
+        "value": "USB cable, battery holder, batteries and crocodile leads"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-microbit-v2-001",
+        "serialNumber": "DEMO-CAMPUS-MICROBIT-V2-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-microbit-v2-002",
+        "serialNumber": "DEMO-CAMPUS-MICROBIT-V2-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "ti-84-plus-ce",
+    "name": "Texas Instruments TI-84 Plus CE",
+    "category": "Lab equipment",
+    "description": "Colour graphing calculator for algebra, statistics, and graph work. Includes a USB charging cable.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/ti-84-plus-ce.webp",
+    "imageAlt": "Texas Instruments TI-84 Plus CE loan equipment",
+    "specifications": [
+      {
+        "label": "Display",
+        "value": "320 × 240 colour screen"
+      },
+      {
+        "label": "Functions",
+        "value": "Graphing, statistics and scientific calculations"
+      },
+      {
+        "label": "Power",
+        "value": "Rechargeable battery"
+      },
+      {
+        "label": "Included",
+        "value": "Slide cover and USB charging cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-ti-84-plus-ce-001",
+        "serialNumber": "DEMO-CAMPUS-TI-84-PLUS-CE-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-ti-84-plus-ce-002",
+        "serialNumber": "DEMO-CAMPUS-TI-84-PLUS-CE-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "fluke-115",
+    "name": "Fluke 115 Digital Multimeter",
+    "category": "Lab equipment",
+    "description": "True-RMS digital multimeter for supervised electronics work, with voltage, resistance, and continuity measurement.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/fluke-115.webp",
+    "imageAlt": "Fluke 115 Digital Multimeter loan equipment",
+    "specifications": [
+      {
+        "label": "Measurement",
+        "value": "True-RMS AC voltage and current"
+      },
+      {
+        "label": "Maximum voltage",
+        "value": "600 V AC/DC"
+      },
+      {
+        "label": "Safety rating",
+        "value": "CAT III 600 V"
+      },
+      {
+        "label": "Included",
+        "value": "Test leads, 9 V battery and case"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-fluke-115-001",
+        "serialNumber": "DEMO-CAMPUS-FLUKE-115-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-fluke-115-002",
+        "serialNumber": "DEMO-CAMPUS-FLUKE-115-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "celestron-microscope",
+    "name": "Celestron Handheld Digital Microscope Pro",
+    "category": "Lab equipment",
+    "description": "USB handheld digital microscope with a 5 MP sensor and an adjustable stand for viewing small samples.",
+    "loanDurationDays": 14,
+    "imageUrl": "/catalogue/celestron-microscope.webp",
+    "imageAlt": "Celestron Handheld Digital Microscope Pro loan equipment",
+    "specifications": [
+      {
+        "label": "Sensor",
+        "value": "5 MP"
+      },
+      {
+        "label": "Magnification",
+        "value": "20× to 200× depending on screen size"
+      },
+      {
+        "label": "Lighting",
+        "value": "Adjustable LEDs"
+      },
+      {
+        "label": "Connection",
+        "value": "USB"
+      },
+      {
+        "label": "Included",
+        "value": "Adjustable stand and USB cable"
+      }
+    ],
+    "units": [
+      {
+        "unitId": "campus-celestron-microscope-001",
+        "serialNumber": "DEMO-CAMPUS-CELESTRON-MICROSCOPE-001",
+        "status": "AVAILABLE"
+      },
+      {
+        "unitId": "campus-celestron-microscope-002",
+        "serialNumber": "DEMO-CAMPUS-CELESTRON-MICROSCOPE-002",
+        "status": "AVAILABLE"
+      }
+    ]
+  }
+]

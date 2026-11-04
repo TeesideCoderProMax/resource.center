@@ -33,3 +33,17 @@ export LOAN_API_URL="http://127.0.0.1:$api_port" WEB_URL="http://127.0.0.1:$web_
 # This isolated local check has no Auth0 tenant and sends no email.
 EXPECTED_VERSION=phase4-local ALLOW_UNCONFIGURED_AUTH=true ./infra/scripts/smoke-test.sh
 python3 infra/scripts/load-check.py "$LOAN_API_URL/api/v1/catalogue" --requests 40 --concurrency 5
+
+# Verify all 36 catalogue assets in the actual frontend runtime container.
+python3 - <<'CHECK_CATALOGUE'
+import json, os, urllib.request
+items = json.load(urllib.request.urlopen(os.environ['LOAN_API_URL'] + '/api/v1/catalogue'))['items']
+assert len(items) == 36
+for item in items:
+    assert item['loanDurationDays'] == 14
+    assert len(item['specifications']) >= 3
+    with urllib.request.urlopen(os.environ['WEB_URL'] + item['imageUrl']) as response:
+        assert response.status == 200
+        assert response.read(4) == b'RIFF', item['id']
+print('PASS: 36 runtime catalogue records and product images')
+CHECK_CATALOGUE

@@ -1,6 +1,6 @@
 .PHONY: dev check backend-fmt backend-lint backend-test frontend-typecheck frontend-test frontend-build frontend-audit frontend-e2e docker-build smoke-test infra-fmt infra-validate infra-init infra-plan infra-apply
 
-check: release-test backend-fmt backend-lint backend-test frontend-typecheck frontend-test frontend-build frontend-audit frontend-e2e infra-fmt
+check: catalogue-check release-test backend-fmt backend-lint backend-test frontend-typecheck frontend-test frontend-build frontend-audit frontend-e2e infra-fmt
 	$(MAKE) infra-validate ENV=test
 	$(MAKE) infra-validate ENV=staging
 	$(MAKE) infra-validate ENV=production
@@ -71,3 +71,7 @@ frontend-e2e:
 # Local stack: PostgreSQL + Loan API + web (images rebuilt first). Ctrl-C stops it.
 dev: docker-build
 	./infra/scripts/dev.sh
+
+.PHONY: catalogue-check
+catalogue-check:
+	python3 scripts/catalogue.py --check

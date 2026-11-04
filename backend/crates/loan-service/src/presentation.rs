@@ -46,6 +46,7 @@ pub struct ApiErrorResponse {
 #[serde(rename_all = "camelCase")]
 pub struct CreateReservationRequest {
     pub model_id: String,
+    pub loan_duration_days: i32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -228,12 +229,24 @@ async fn list_reservations(State(state): State<AppState>, headers: HeaderMap) ->
 async fn create_reservation(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<CreateReservationRequest>,
+    payload: Result<Json<CreateReservationRequest>, axum::extract::rejection::JsonRejection>,
 ) -> impl IntoResponse {
     let correlation_id = extract_correlation_id(&headers);
     let actor = match authenticate_request(&state.auth, &headers).await {
         Ok(a) => a,
         Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
+    };
+    let payload = match payload {
+        Ok(Json(payload)) => payload,
+        Err(_) => {
+            return map_app_error(
+                ApplicationError::Domain(DomainError::InvalidInput(
+                    "modelId and whole-number loanDurationDays are required",
+                )),
+                &correlation_id,
+            )
+            .into_response()
+        }
     };
     if let Err(err) = crate::application::validate_reserve_request(&actor, &payload.model_id) {
         return map_app_error(ApplicationError::Domain(err), &correlation_id).into_response();
@@ -241,7 +254,12 @@ async fn create_reservation(
 
     match state
         .repo
-        .reserve_device(actor, payload.model_id, correlation_id.clone())
+        .reserve_device(
+            actor,
+            payload.model_id,
+            payload.loan_duration_days,
+            correlation_id.clone(),
+        )
         .await
     {
         Ok(receipt) => {
@@ -491,7 +509,9 @@ mod tests {
                     .method(Method::POST)
                     .uri("/api/v1/reservations")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"modelId":"dell-latitude-7440"}"#))
+                    .body(Body::from(
+                        r#"{"loanDurationDays":2,"modelId":"dell-latitude-7440"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -541,6 +561,38 @@ mod contract_tests {
         (status, serde_json::from_slice(&body).unwrap())
     }
     #[tokio::test]
+    async fn invalid_or_missing_periods_return_400_without_writes() {
+        let store = Arc::new(FakeStore::with_units(1));
+        let app = build_router(
+            AppState {
+                repo: store.clone(),
+                auth: Auth0JwtVerifier::with_test_jwks(),
+                environment: "test".into(),
+                service_version: "test".into(),
+            },
+            &[],
+        );
+        let owner = token("owner", "student");
+        for body in [
+            json!({"modelId":"model"}),
+            json!({"modelId":"model","loanDurationDays":null}),
+            json!({"modelId":"model","loanDurationDays":1.5}),
+            json!({"modelId":"model","loanDurationDays":"7"}),
+            json!({"modelId":"model","loanDurationDays":0}),
+            json!({"modelId":"model","loanDurationDays":15}),
+        ] {
+            let (status, error) =
+                request(&app, "POST", "/api/v1/reservations", Some(&owner), body).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+            assert_eq!(error["error"], "InvalidInput");
+        }
+        let data = store.data.lock().await;
+        assert_eq!(data.available, 1);
+        assert!(data.reservations.is_empty());
+        assert!(data.outbox.is_empty());
+    }
+
+    #[tokio::test]
     async fn authenticated_routes_due_date_errors_and_owner_reads() {
         let store = Arc::new(FakeStore::with_units(1));
         let app = build_router(
@@ -557,13 +609,25 @@ mod contract_tests {
         let other = token("other", "student");
         let route = "/api/v1/reservations";
         assert_eq!(
-            request(&app, "POST", route, None, json!({"modelId":"model"}))
-                .await
-                .0,
+            request(
+                &app,
+                "POST",
+                route,
+                None,
+                json!({"loanDurationDays":2,"modelId":"model"})
+            )
+            .await
+            .0,
             StatusCode::UNAUTHORIZED
         );
-        let (status, body) =
-            request(&app, "POST", route, Some(&owner), json!({"modelId":""})).await;
+        let (status, body) = request(
+            &app,
+            "POST",
+            route,
+            Some(&owner),
+            json!({"loanDurationDays":2,"modelId":""}),
+        )
+        .await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(body["error"], "InvalidInput");
         let (status, body) = request(
@@ -571,7 +635,7 @@ mod contract_tests {
             "POST",
             route,
             Some(&owner),
-            json!({"modelId":"missing"}),
+            json!({"loanDurationDays":2,"modelId":"missing"}),
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND);
@@ -581,7 +645,7 @@ mod contract_tests {
             "POST",
             route,
             Some(&owner),
-            json!({"modelId":"model"}),
+            json!({"loanDurationDays":2,"modelId":"model"}),
         )
         .await;
         assert_eq!(status, StatusCode::CREATED);
@@ -604,7 +668,7 @@ mod contract_tests {
             "POST",
             route,
             Some(&other),
-            json!({"modelId":"model"}),
+            json!({"loanDurationDays":2,"modelId":"model"}),
         )
         .await;
         assert_eq!(status, StatusCode::CONFLICT);
@@ -614,7 +678,7 @@ mod contract_tests {
             "POST",
             "/api/v1/subscriptions",
             Some(&other),
-            json!({"modelId":"model"}),
+            json!({"loanDurationDays":2,"modelId":"model"}),
         )
         .await;
         assert_eq!(status, StatusCode::CREATED);
@@ -623,7 +687,7 @@ mod contract_tests {
             "POST",
             "/api/v1/subscriptions",
             Some(&other),
-            json!({"modelId":"model"}),
+            json!({"loanDurationDays":2,"modelId":"model"}),
         )
         .await;
         assert_eq!(sub["subscriptionId"], duplicate["subscriptionId"]);

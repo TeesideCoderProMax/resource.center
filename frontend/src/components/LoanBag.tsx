@@ -6,7 +6,7 @@ import { useState } from "react";
 import { call, fmt } from "@/lib/api-client";
 import { useBag } from "@/lib/bag";
 import type { DeviceModelSummary } from "@/lib/loan";
-import { AvailabilityPill, DevicePreview, devicePath } from "./DeviceCard";
+import { AvailabilityPill, DevicePreview, devicePath, LoanPeriod } from "./DeviceCard";
 import { Icon } from "./Icon";
 import { errorNotice, Notice, type NoticeValue } from "./Notice";
 
@@ -27,6 +27,7 @@ export function LoanBag({ catalogue, catalogueError, email, role }: {
   const router = useRouter();
   const [ackReturn, setAckReturn] = useState(false);
   const [ackCare, setAckCare] = useState(false);
+  const [periods, setPeriods] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<Record<string, NoticeValue>>({});
   const [reserved, setReserved] = useState<DeviceModelSummary[]>([]);
@@ -34,7 +35,7 @@ export function LoanBag({ catalogue, catalogueError, email, role }: {
   const ids = bag?.ids ?? [];
   const items = ids.map((id) => catalogue.find((m) => m.id === id)).filter((m): m is DeviceModelSummary => Boolean(m));
   const missing = catalogueError ? [] : ids.filter((id) => !catalogue.some((m) => m.id === id));
-  const latestDue = items.length ? estDue(Math.max(...items.map((i) => i.loanDurationDays))) : "—";
+  const latestDue = items.length ? estDue(Math.max(...items.map((i) => periods[i.id] ?? 1))) : "—";
   const canSubmit = items.length > 0 && ackReturn && ackCare && !busy;
 
   async function reserveAll() {
@@ -44,7 +45,7 @@ export function LoanBag({ catalogue, catalogueError, email, role }: {
     const done: DeviceModelSummary[] = [];
     for (const item of items) {
       try {
-        const r = await call<{ dueAt: string; unitId: string }>("POST", "reservations", { modelId: item.id });
+        const r = await call<{ dueAt: string; unitId: string }>("POST", "reservations", { modelId: item.id, loanDurationDays: periods[item.id] ?? 1 });
         setResults((p) => ({ ...p, [item.id]: { kind: "ok", text: `Reserved ${item.name} (unit ${r.unitId}). Due back ${fmt(r.dueAt)}.` } }));
         done.push(item);
         bag.remove(item.id);
@@ -120,8 +121,9 @@ export function LoanBag({ catalogue, catalogueError, email, role }: {
                   <AvailabilityPill item={item} />
                 </div>
                 <span className="tag">MODEL {item.id}</span>
+                <LoanPeriod item={item} days={periods[item.id] ?? 1} onChange={(days) => setPeriods((p) => ({ ...p, [item.id]: days }))} disabled={busy} />
                 <div className="bag-facts">
-                  <div><Icon name="calendar" size={16} /><span><span className="muted block small">Loan length ({item.loanDurationDays} days)</span>Due about {estDue(item.loanDurationDays)}</span></div>
+                  <div><Icon name="calendar" size={16} /><span><span className="muted block small">Chosen loan: {periods[item.id] ?? 1} {(periods[item.id] ?? 1) === 1 ? "day" : "days"}</span>Due about {estDue(periods[item.id] ?? 1)}</span></div>
                   <div><Icon name="pin" size={16} /><span><span className="muted block small">Pickup</span>Resource Center desk</span></div>
                 </div>
                 <Notice notice={results[item.id] ?? null} />

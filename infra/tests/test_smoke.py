@@ -12,7 +12,7 @@ class SmokeTests(unittest.TestCase):
         if url.endswith("/api/ready"):
             return 200, {"status": "ready", "loanApi": "reachable", "auth0Configured": True}, {}
         if url.endswith("/catalogue"):
-            return 200, {"items": [{"loanDurationDays": 2}]}, {}
+            return 200, {"items": [{"loanDurationDays": 14}]}, {}
         if body:
             return 401, {}, {}
         return 200, {"status": "ok", "version": "sha", "auth0Configured": True}, {}
@@ -33,3 +33,13 @@ class SmokeTests(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 smoke.check("https://api", "https://web", "sha")
             smoke.check("https://api", "https://web", "sha", True)
+
+    def test_rejects_invalid_catalogue_maxima(self):
+        for maximum in [0, 15, 1.5, True]:
+            def invalid(url, body=None, correlation=None):
+                if url.endswith('/catalogue'):
+                    return 200, {"items": [{"loanDurationDays": maximum}]}, {}
+                return self.response(url, body, correlation)
+            with patch.object(smoke, "request", side_effect=invalid):
+                with self.assertRaises(AssertionError):
+                    smoke.check("https://api", "https://web", "sha")

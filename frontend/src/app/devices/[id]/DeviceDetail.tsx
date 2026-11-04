@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { AddToBag, AvailabilityPill, DevicePreview, ReserveActions } from "@/components/DeviceCard";
+import { AddToBag, AvailabilityPill, DevicePreview, LoanPeriod, ReserveActions } from "@/components/DeviceCard";
 import { Icon, type IconName } from "@/components/Icon";
 import type { DeviceModelSummary } from "@/lib/loan";
 
@@ -69,6 +69,7 @@ function Fact({ icon, label, value, tone }: { icon: IconName; label: string; val
 export function DeviceDetail({ item, canAct, signInHref }: { item: DeviceModelSummary; canAct: boolean; signInHref: string | null }) {
   const router = useRouter();
   const available = item.availableUnits > 0;
+  const [days, setDays] = useState(1);
 
   return (
     <>
@@ -98,11 +99,18 @@ export function DeviceDetail({ item, canAct, signInHref }: { item: DeviceModelSu
           <section className="glass panel-lg" aria-labelledby="facts-h">
             <div className="row">
               <h2 id="facts-h"><Icon name="chip" /> Device facts</h2>
-              <span className="pill pill-accent">From the live catalogue</span>
+              <span className="pill pill-accent">Item specifications</span>
             </div>
+            {(item.specifications?.length ?? 0) > 0 ? <dl className="facts">
+              {item.specifications!.map((spec) => <Fact key={spec.label} icon="chip" label={spec.label} value={spec.value} />)}
+            </dl> : <p className="muted">Specifications have not been added for this item.</p>}
+          </section>
+
+          <section className="glass panel-lg" aria-labelledby="loan-facts-h">
+            <h2 id="loan-facts-h"><Icon name="clock" /> Loan details</h2>
             <dl className="facts">
               <Fact icon="box" label="Category" value={item.category} />
-              <Fact icon="clock" label="Loan length" value={`${item.loanDurationDays} days`} />
+              <Fact icon="clock" label="Maximum loan" value={`${item.loanDurationDays} days`} />
               <Fact icon="check" label="Available now" value={`${item.availableUnits} units`} tone={available ? "good-text" : "warn-text"} />
               <Fact icon="grid" label="Fleet size" value={`${item.totalUnits} units`} />
               <Fact icon="pin" label="Collection" value="Resource Center desk" />
@@ -114,7 +122,7 @@ export function DeviceDetail({ item, canAct, signInHref }: { item: DeviceModelSu
             <h2 id="rules-h"><Icon name="shield" /> Eligibility &amp; loan rules</h2>
             <ul>
               <li><span className="rule-icon"><Icon name="user" /></span><div><strong>Who can borrow</strong><span className="muted">Signed-in students and staff.</span></div></li>
-              <li><span className="rule-icon"><Icon name="clock" /></span><div><strong>Maximum loan</strong><span className="muted">{item.loanDurationDays} days from reservation.</span></div></li>
+              <li><span className="rule-icon"><Icon name="clock" /></span><div><strong>Maximum loan</strong><span className="muted">Choose 1–{item.loanDurationDays} days from reservation.</span></div></li>
               <li><span className="rule-icon"><Icon name="bag" /></span><div><strong>Waitlist</strong><span className="muted">Subscribe when fully reserved; you are emailed on return.</span></div></li>
             </ul>
           </section>
@@ -130,9 +138,10 @@ export function DeviceDetail({ item, canAct, signInHref }: { item: DeviceModelSu
           </div>
           <div className="row">
             <span className="field-label"><Icon name="calendar" size={16} /> Loan window</span>
-            <span className="pill pill-accent">{item.loanDurationDays} days duration</span>
+            <span className="pill pill-accent">Up to {item.loanDurationDays} days</span>
           </div>
-          <LoanCalendar days={item.loanDurationDays} />
+          <LoanPeriod item={item} days={days} onChange={setDays} />
+          <LoanCalendar days={days} />
           <div>
             <span className="field-label"><Icon name="pin" size={16} /> Pickup &amp; return hub</span>
             <div className="pickup">
@@ -147,7 +156,7 @@ export function DeviceDetail({ item, canAct, signInHref }: { item: DeviceModelSu
             {canAct ? (
               <>
                 <AddToBag item={item} wide />
-                <ReserveActions item={item} wide onChanged={() => router.refresh()} />
+                <ReserveActions item={item} wide days={days} onDaysChange={setDays} showPeriod={false} onChanged={() => router.refresh()} />
               </>
             ) : signInHref ? (
               <a className="btn primary wide" href={signInHref}>Sign in to reserve or subscribe</a>

@@ -29,3 +29,8 @@ test("client cannot inject identity, email or role", () => {
   assert.equal(body, JSON.stringify({ modelId: "m1" }));
   assert.equal(sanitizeBody(`reservations/${id}/collect`, { studentEmail: "x@y" }), undefined);
 });
+
+test("forwards the chosen reservation period without forwarding identity", () => {
+  assert.deepEqual(JSON.parse(sanitizeBody("reservations", { modelId: "m1", loanDurationDays: 14, studentEmail: "x@y", roles: ["staff"] })!), { modelId: "m1", loanDurationDays: 14 });
+  assert.equal(sanitizeBody("subscriptions", { modelId: "m1", loanDurationDays: 14 }), JSON.stringify({ modelId: "m1" }));
+});
