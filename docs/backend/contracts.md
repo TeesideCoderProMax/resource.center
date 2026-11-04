@@ -21,14 +21,14 @@ A student cannot collect or return even their own reservation. The read use case
 
 ## Routes and payloads
 
-- `GET /api/v1/catalogue`: public. Returns `{items: [...], correlationId, auth0Configured}`. Each item has `id`, `name`, `category`, `description`, `loanDurationDays`, `totalUnits`, `availableUnits`. The existing `name` holds the brand/model label; no separate brand field exists.
-- `POST /api/v1/reservations`: body `{"modelId":"dell-latitude-7440"}`. Returns `reservationId`, `modelId`, `unitId`, `status`, `reservedAt`, **`dueAt`**, `correlationId`.
-- `POST /api/v1/subscriptions`: same body. Returns `subscriptionId`, `modelId`, `status`, `createdAt`. Repeated active subscription returns the original ID/time with 201 and refreshes the trusted email. This is the existing route; `/api/v1/availability-subscriptions` in older documents is not an alias.
+- `GET /api/v1/catalogue`: public. Returns `{items: [...], correlationId, auth0Configured}`. Each item has `id`, `name`, `category`, `description`, `loanDurationDays`, `totalUnits`, `availableUnits`, nullable `imageUrl` and `imageAlt`, and `specifications` (an ordered array of `{label, value}` strings). `loanDurationDays` is the maximum allowed period, not the chosen reservation period. The existing `name` holds the brand/model label; no separate brand field exists.
+- `POST /api/v1/reservations`: body `{"modelId":"dell-latitude-7440","loanDurationDays":7}`. The chosen period must be an integer from 1 to the locked model maximum (at most 14); missing, fractional or invalid periods return 400 `InvalidInput`. Returns `reservationId`, `modelId`, `unitId`, `status`, `reservedAt`, **`dueAt`**, `correlationId`.
+- `POST /api/v1/subscriptions`: body `{"modelId":"dell-latitude-7440"}`. Returns `subscriptionId`, `modelId`, `status`, `createdAt`. Repeated active subscription returns the original ID/time with 201 and refreshes the trusted email. This is the existing route; `/api/v1/availability-subscriptions` in older documents is not an alias.
 - `POST /api/v1/reservations/{id}/collect`: no body needed. Returns `reservationId`, `unitId`, `status`, `collectedAt`, `dueAt`, `outboxEventId`.
 - `POST /api/v1/reservations/{id}/return`: no body needed. Returns `reservationId`, `unitId`, `modelId`, `status`, `returnedAt`, `outboxEventIds`.
 - `GET /api/v1/reservations`: protected. Returns a JSON array with the owner's rows, or all owners for staff. Each row has `reservationId`, `modelId`, `unitId`, `studentSub`, `studentEmail`, `status`, `reservedAt`, `dueAt`, nullable `collectedAt`/`returnedAt`, and `correlationId`. PostgreSQL returns at most 200 rows, newest first (`reservedAt`, then ID). This is the initial screen contract; no paging or history export yet.
 
-Reservation captures one UTC time at microsecond precision. `dueAt = reservedAt + 48 hours`. Collection does not extend it, even if collection occurs late. Cancellation, expiry, renewal and per-student loan limits are outside phase 1. Repeated reserve calls can create separate loans if units remain; no request-idempotency key exists.
+Reservation captures one UTC time at microsecond precision. `dueAt = reservedAt + the chosen whole-day period`. Collection does not extend it, even if collection occurs late. Cancellation, expiry, renewal and per-student loan limits are outside phase 1. Repeated reserve calls can create separate loans if units remain; no request-idempotency key exists.
 
 Return selects every ACTIVE subscription for the model under the model lock. Active status is the current eligibility rule; it does not impose a new per-student loan limit. Distinct email addresses receive separate events. Two subjects with the same email receive one availability event; all their active subscriptions become NOTIFIED. A student can subscribe again in a later zero-availability cycle. Past subscriptions remain stored.
 
@@ -46,7 +46,7 @@ Application errors use `{error, message, correlationId}` and the correlation hea
 | 500 | `InternalError` |
 | 503 | `AuthNotConfigured`, `AuthUnavailable` (no usable JWKS), or readiness `DatabaseUnreachable` |
 
-Axum handles malformed JSON, wrong content type and invalid UUID path syntax before the handler; these extractor errors still use Axum's default response format. Phase 1 does not claim a single envelope for these transport errors. Missing Auth0 config fails closed with 503. Auth error messages are fixed text; the detail goes only to logs. The web app calls these routes through its server-side `/api/loan/*` proxy (see phase 3 handoff). Test JWTs prove local signature/claim checks, not live Auth0 setup or sign-in.
+Reservation JSON extraction errors use the 400 `InvalidInput` envelope. For other routes, Axum handles malformed JSON, wrong content type and invalid UUID path syntax before the handler; these extractor errors still use Axum's default response format. Phase 1 does not claim a single envelope for these transport errors. Missing Auth0 config fails closed with 503. Auth error messages are fixed text; the detail goes only to logs. The web app calls these routes through its server-side `/api/loan/*` proxy (see phase 3 handoff). Test JWTs prove local signature/claim checks, not live Auth0 setup or sign-in.
 
 ## Transaction and storage contract
 
@@ -94,3 +94,20 @@ The migration aborts on nonfinite dates or a recorded due date before reservatio
 Old API revisions omit due dates and use the old subscription conflict target. **They are not write-compatible with migration 0002.** Before deployment, pause Loan writes, drain old API revisions, apply the migration, then activate the matching image and check it. Do not send old and new write traffic together. A rollback to the old image requires an explicit reviewed schema rollback; do not drop constraints or reset data as an automatic recovery. Phase 4 must enforce this release order. This phase does not deploy or alter the cloud database.
 
 Validation and next inputs: [phase 1 handoff](phase-1-handoff.md).
+
+## Catalogue and selectable periods (2026-11-04)
+
+Migration 0003 adds optional image metadata and a validated JSONB specification
+array. It replaces the fixed two-day model limit with 1–14 days and sets existing
+model maxima to 14. It never changes recorded reservation due dates. Migration
+0002's 48-hour backfill remains historical upgrade behaviour for missing dates.
+
+The reservation use case reads the maximum under the model lock, validates the
+chosen period, and computes dueAt from the server reservation time plus that
+many 24-hour days. Browser dates are estimates. Existing collect/return and
+notification flows use the saved due date.
+
+Deploy the matching API and frontend together using the maintenance release
+process. Old frontends omit the required period; old APIs always calculate two
+days. Neither is compatible with the new reservation contract. See
+`docs/backend/catalogue-and-loan-periods.md` for release evidence.

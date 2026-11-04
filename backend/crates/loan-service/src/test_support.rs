@@ -53,7 +53,10 @@ impl LoanStorePort for FakeStore {
                 name: "Test Laptop".into(),
                 category: "Laptop".into(),
                 description: "Test".into(),
-                loan_duration_days: 2,
+                loan_duration_days: 14,
+                image_url: None,
+                image_alt: None,
+                specifications: vec![],
                 total_units: data.units.len() as i32,
                 available_units: data.available,
             }])
@@ -98,6 +101,7 @@ impl LoanTransactionPort for Data {
                 id,
                 name: "Test Laptop".into(),
                 available_units: self.available,
+                loan_duration_days: 14,
             })
         })
     }
@@ -222,7 +226,7 @@ async fn rules_due_dates_roles_ownership_duplicates_and_rollback() {
         ))
     ));
     let r = store
-        .reserve_device(student("owner"), "model".into(), "corr".into())
+        .reserve_device(student("owner"), "model".into(), 2, "corr".into())
         .await
         .unwrap();
     assert_eq!((r.due_at - r.reserved_at).num_hours(), 48);
@@ -333,7 +337,7 @@ async fn fake_last_unit_has_one_winner() {
         let store = store.clone();
         tasks.push(tokio::spawn(async move {
             store
-                .reserve_device(student(&format!("s{i}")), "model".into(), "c".into())
+                .reserve_device(student(&format!("s{i}")), "model".into(), 2, "c".into())
                 .await
         }));
     }
@@ -352,11 +356,11 @@ async fn fake_last_unit_has_one_winner() {
 async fn fake_allocates_distinct_units_and_restores_only_returned_unit() {
     let store = FakeStore::with_units(2);
     let first = store
-        .reserve_device(student("one"), "model".into(), "c".into())
+        .reserve_device(student("one"), "model".into(), 2, "c".into())
         .await
         .unwrap();
     let second = store
-        .reserve_device(student("two"), "model".into(), "c".into())
+        .reserve_device(student("two"), "model".into(), 2, "c".into())
         .await
         .unwrap();
     assert_ne!(first.unit_id, second.unit_id);
@@ -369,9 +373,37 @@ async fn fake_allocates_distinct_units_and_restores_only_returned_unit() {
         .await
         .unwrap();
     let third = store
-        .reserve_device(student("three"), "model".into(), "c".into())
+        .reserve_device(student("three"), "model".into(), 2, "c".into())
         .await
         .unwrap();
     assert_eq!(first.unit_id, third.unit_id);
     assert_eq!(store.list_catalogue().await.unwrap()[0].available_units, 0);
+}
+
+#[tokio::test]
+async fn selected_periods_set_due_dates_and_invalid_periods_leave_no_writes() {
+    let store = FakeStore::with_units(3);
+    for days in [0, -1, 15, i32::MAX] {
+        assert!(store
+            .reserve_device(student("bad"), "model".into(), days, "invalid".into())
+            .await
+            .is_err());
+    }
+    {
+        let data = store.data.lock().await;
+        assert_eq!(data.available, 3);
+        assert!(data.reservations.is_empty());
+        assert!(data.outbox.is_empty());
+    }
+    for days in [1, 14] {
+        let receipt = store
+            .reserve_device(student("valid"), "model".into(), days, "period".into())
+            .await
+            .unwrap();
+        assert_eq!(
+            receipt.due_at - receipt.reserved_at,
+            chrono::Duration::days(i64::from(days))
+        );
+    }
+    assert!(compute_due_at(store.now(), 4, 3).is_err());
 }

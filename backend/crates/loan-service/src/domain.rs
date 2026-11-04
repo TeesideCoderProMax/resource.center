@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
-pub const STANDARD_LOAN_DURATION_DAYS: i64 = 2;
+pub const MAX_LOAN_DURATION_DAYS: i32 = 14;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,6 +15,18 @@ pub struct DeviceModelSummary {
     pub loan_duration_days: i32,
     pub total_units: i32,
     pub available_units: i32,
+    #[serde(default)]
+    pub image_url: Option<String>,
+    #[serde(default)]
+    pub image_alt: Option<String>,
+    #[serde(default)]
+    pub specifications: Vec<DeviceSpecification>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceSpecification {
+    pub label: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,9 +64,18 @@ pub enum DomainError {
     InvalidInput(&'static str),
 }
 
-/// Computes the two-day return due timestamp from the reservation timestamp.
-pub fn compute_two_day_due_at(reserved_at: DateTime<Utc>) -> DateTime<Utc> {
-    reserved_at + Duration::days(STANDARD_LOAN_DURATION_DAYS)
+/// Computes the return timestamp after validating the chosen whole-day period.
+pub fn compute_due_at(
+    reserved_at: DateTime<Utc>,
+    days: i32,
+    maximum: i32,
+) -> Result<DateTime<Utc>, DomainError> {
+    if !(1..=MAX_LOAN_DURATION_DAYS).contains(&maximum) || !(1..=maximum).contains(&days) {
+        return Err(DomainError::InvalidInput(
+            "loanDurationDays must be a whole number from 1 to the model maximum (at most 14)",
+        ));
+    }
+    Ok(reserved_at + Duration::days(i64::from(days)))
 }
 
 /// Validates that an actor is authorized to reserve a device or subscribe to alerts.
@@ -94,7 +115,7 @@ mod tests {
         let now = DateTime::parse_from_rfc3339("2026-10-31T10:00:00Z")
             .unwrap()
             .with_timezone(&Utc);
-        let due = compute_two_day_due_at(now);
+        let due = compute_due_at(now, 2, 14).unwrap();
         assert_eq!(due.to_rfc3339(), "2026-11-02T10:00:00+00:00");
     }
 
@@ -128,6 +149,7 @@ pub struct LockedModel {
     pub id: String,
     pub name: String,
     pub available_units: i32,
+    pub loan_duration_days: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

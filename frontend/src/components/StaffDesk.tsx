@@ -144,7 +144,7 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
           </div>
         </section>
 
-        <div className="stat-grid" aria-label="Desk summary">
+        <div className="stat-grid" role="region" aria-label="Desk summary">
           <StatCard icon="laptop" label="Total equipment" value={stats.totalUnits} unit="units"
             foot={<><span className="bar"><span style={{ width: `${stats.inUsePct}%` }} /></span> <span className="accent">{stats.inUsePct}% in use</span></>} />
           <StatCard icon="clock" label="Awaiting collection" value={stats.awaiting} unit="reserved" tone="accent" foot={<span className="muted">Reserved, not yet handed over</span>} />
@@ -228,7 +228,7 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
                     return (
                       <tr key={m.id}>
                         <td><span className="tag">{m.id}</span></td>
-                        <td><strong className="block">{m.name}</strong><span className="muted small">{m.description} · {m.loanDurationDays}-day loan</span></td>
+                        <td><strong className="block">{m.name}</strong><span className="muted small">{m.description} · Up to {m.loanDurationDays} days</span></td>
                         <td><span className="pill pill-plain"><Icon name={categoryIcon(m.category)} size={14} /> {m.category}</span></td>
                         <td>
                           <strong>{m.availableUnits}</strong> <span className="muted small">/ {m.totalUnits} available</span>

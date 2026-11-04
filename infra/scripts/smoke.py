@@ -33,8 +33,8 @@ def check(api, web, version, allow_unconfigured=False):
     assert code == 200, "Catalogue failed"
     # Catalogue wraps model rows in the items array.
     models = catalogue["items"]
-    assert models and all(m["loanDurationDays"] == 2 for m in models), "Invalid or empty catalogue"
-    code, _, _ = request(api + "/api/v1/reservations", b'{"modelId":"dell-latitude-7440"}')
+    assert models and all(type(m["loanDurationDays"]) is int and 1 <= m["loanDurationDays"] <= 14 for m in models), "Invalid or empty catalogue"
+    code, _, _ = request(api + "/api/v1/reservations", b'{"modelId":"dell-latitude-7440","loanDurationDays":1}')
     assert code == 401 or (allow_unconfigured and code == 503), "Unauthenticated write did not fail closed"
     code, health, _ = request(web + "/api/health")
     assert code == 200 and health["status"] == "ok" and health["version"] == version, "Web health/version mismatch"

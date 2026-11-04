@@ -56,3 +56,19 @@ test("reserves each item separately and reports a mixed outcome", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Notify me when available instead" }));
   await waitFor(() => expect(screen.getByText(/emailed when iPad Air is available/)).toBeInTheDocument());
 });
+
+test("submits a separate chosen period for each bag item", async () => {
+  const fetch = fakeFetch({ "POST reservations": [
+    { status: 201, body: { unitId: "u1", dueAt: "2099-01-02T00:00:00Z" } },
+    { status: 201, body: { unitId: "u2", dueAt: "2099-01-03T00:00:00Z" } },
+  ] });
+  renderBag();
+  await screen.findByRole("heading", { name: "Dell Latitude" });
+  fireEvent.change(screen.getByRole("combobox", { name: "Loan period for iPad Air" }), { target: { value: "2" } });
+  acknowledge();
+  fireEvent.click(screen.getByRole("button", { name: "Reserve all (2)" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  expect(fetch.mock.calls.map((c) => JSON.parse(String(c[1]?.body)))).toEqual([
+    { modelId: "dell", loanDurationDays: 1 }, { modelId: "ipad", loanDurationDays: 2 },
+  ]);
+});

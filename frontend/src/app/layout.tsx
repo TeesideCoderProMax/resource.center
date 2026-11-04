@@ -31,6 +31,7 @@ export default async function RootLayout({
           <footer className="foot">
             <div className="foot-inner">
               <span className="foot-brand">Campus Device Hub</span>
+              <a className="small" href="/image-credits">Image credits</a>
               <span className="muted small">Resource Center device loans · environment: {envName}</span>
             </div>
           </footer>

@@ -50,8 +50,13 @@ async fn postgres_tests_migrations_transactions_contention_and_recovery() {
     for i in 0..5 {
         let pg = pg.clone();
         tasks.push(tokio::spawn(async move {
-            pg.reserve_device(student(&format!("s{i}")), "model".into(), "reserve".into())
-                .await
+            pg.reserve_device(
+                student(&format!("s{i}")),
+                "model".into(),
+                2,
+                "reserve".into(),
+            )
+            .await
         }));
     }
     let mut winners = vec![];
@@ -152,7 +157,7 @@ async fn postgres_tests_migrations_transactions_contention_and_recovery() {
     }
     // Re-subscription after a notification must survive a second return.
     let second = pg
-        .reserve_device(student("owner2"), "model".into(), "second".into())
+        .reserve_device(student("owner2"), "model".into(), 2, "second".into())
         .await
         .unwrap();
     pg.subscribe_availability(student("wait1"), "model".into())
@@ -251,6 +256,7 @@ async fn postgres_tests_seed_preserves_live_inventory_and_reservations() {
         .reserve_device(
             student("seed-user"),
             "dell-latitude-7440".into(),
+            2,
             "seed-rerun".into(),
         )
         .await
@@ -320,4 +326,101 @@ async fn postgres_tests_migrations_run_without_database_create_privilege() {
     );
     migrator.run_migrations(true).await.unwrap();
     migrator.run_migrations(true).await.unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_campus_catalogue_and_selected_periods() {
+    let pg = database("campus_catalogue").await;
+    pg.run_migrations(true).await.unwrap();
+    let items = pg.list_catalogue().await.unwrap();
+    assert_eq!(items.len(), 36);
+    assert!(items.iter().all(|i| i.loan_duration_days == 14
+        && i.image_url.is_some()
+        && i.image_alt.is_some()
+        && (3..=6).contains(&i.specifications.len())));
+    let (client, _permit) = pg.connect_client().await.unwrap();
+    let inconsistent: i64 = client.query_one("SELECT count(*) FROM loan.device_models m WHERE total_units <> (SELECT count(*) FROM loan.device_units u WHERE u.model_id=m.id) OR available_units <> (SELECT count(*) FROM loan.device_units u WHERE u.model_id=m.id AND u.status='AVAILABLE')", &[]).await.unwrap().get(0);
+    assert_eq!(inconsistent, 0);
+    assert_eq!(
+        client
+            .query_one(
+                "SELECT count(*) FROM loan.device_units WHERE status IN ('RESERVED','COLLECTED')",
+                &[]
+            )
+            .await
+            .unwrap()
+            .get::<_, i64>(0),
+        0
+    );
+    for days in [0, -1, 15] {
+        assert!(pg
+            .reserve_device(
+                student("bad"),
+                "dell-latitude-7440".into(),
+                days,
+                "bad".into()
+            )
+            .await
+            .is_err());
+    }
+    assert!(pg.list_reservations(staff()).await.unwrap().is_empty());
+    assert_eq!(pg.list_catalogue().await.unwrap(), items);
+    assert_eq!(
+        client
+            .query_one("SELECT count(*) FROM loan.outbox_events", &[])
+            .await
+            .unwrap()
+            .get::<_, i64>(0),
+        0
+    );
+    for (model, days) in [("dell-latitude-7440", 1), ("macbook-air-m3", 14)] {
+        let r = pg
+            .reserve_device(student("borrower"), model.into(), days, "valid".into())
+            .await
+            .unwrap();
+        assert_eq!(
+            r.due_at - r.reserved_at,
+            chrono::Duration::days(i64::from(days))
+        );
+    }
+    let before = pg.list_reservations(staff()).await.unwrap();
+    pg.run_migrations(true).await.unwrap();
+    let after = pg.list_reservations(staff()).await.unwrap();
+    assert_eq!(
+        serde_json::to_value(before).unwrap(),
+        serde_json::to_value(after).unwrap()
+    );
+    assert!(client
+        .batch_execute(
+            "UPDATE loan.device_models SET specifications='[1]' WHERE id='dell-latitude-7440'"
+        )
+        .await
+        .is_err());
+    assert!(client
+        .batch_execute(
+            "UPDATE loan.device_models SET loan_duration_days=15 WHERE id='dell-latitude-7440'"
+        )
+        .await
+        .is_err());
+}
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_campus_metadata_backfill_preserves_staff_edits() {
+    let pg = database("campus_backfill").await;
+    pg.run_migrations(false).await.unwrap();
+    let (client, _permit) = pg.connect_client().await.unwrap();
+    client.batch_execute("INSERT INTO loan.device_models (id,name,category,description,total_units,available_units) VALUES ('dell-latitude-7440','Dell Latitude 7440','Laptop','14-inch business laptop with 16 GB RAM and USB-C dock support for 2-day campus loans.',0,0), ('ipad-air-m2','Staff tablet','Tablet','Staff custom configuration',0,0), ('unrelated','Other equipment','Other','Staff item',0,0)").await.unwrap();
+    pg.run_migrations(true).await.unwrap();
+    let items = pg.list_catalogue().await.unwrap();
+    let dell = items.iter().find(|i| i.id == "dell-latitude-7440").unwrap();
+    assert_eq!(dell.total_units, 0);
+    assert_eq!(dell.specifications.len(), 5);
+    assert!(dell.description.contains("512 GB"));
+    let ipad = items.iter().find(|i| i.id == "ipad-air-m2").unwrap();
+    assert_eq!(ipad.description, "Staff custom configuration");
+    assert!(ipad.specifications.is_empty());
+    assert!(ipad.image_url.is_none());
+    assert!(items.iter().any(|i| i.id == "unrelated"));
 }
