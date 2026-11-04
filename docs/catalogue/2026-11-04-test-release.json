@@ -1,0 +1,11 @@
+{
+  "environment": "test",
+  "sha": "b7062ee1ae72ad9cbbf61a67d2701189e09466ed",
+  "workflow_sha": "b7062ee1ae72ad9cbbf61a67d2701189e09466ed",
+  "run_id": "41855299241",
+  "version": "b7062ee1ae72ad9cbbf61a67d2701189e09466ed",
+  "backend_image": "rctest0330980facr.azurecr.io/rc-backend@sha256:b4ba550b0627c4cff0ea873a9e6385a36657fa1de7f71d28b53a604b961aac3d",
+  "web_image": "rctest0330980facr.azurecr.io/rc-web@sha256:a4e1177a7010b190bc3d861e7a50e7107a8f162ef2841a45cd40dcd929571893",
+  "migration_execution": "rc-test-0330980f-migrations-84xkjti",
+  "smoke": "passed"
+}
