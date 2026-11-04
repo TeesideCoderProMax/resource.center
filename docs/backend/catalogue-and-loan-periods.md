@@ -38,4 +38,8 @@ without an open licence are marked as such. The image-generation service returne
 
 ## Release
 
-Azure Test release is pending. No Staging or Production release is in scope.
+Commit `4151f56` started Test run `41853739209`. Verification failed before
+deployment: the new calendar test matched both a visible element and a hidden
+streamed copy. The test now selects only visible calendar summaries. All 15
+browser tests and 40 frontend tests passed again. Test ports can be overridden
+with E2E_WEB_PORT and E2E_API_PORT to leave the local app running. Retry pending. No Staging or Production release is in scope.

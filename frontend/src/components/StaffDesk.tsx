@@ -228,7 +228,7 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
                     return (
                       <tr key={m.id}>
                         <td><span className="tag">{m.id}</span></td>
-                        <td><strong className="block">{m.name}</strong><span className="muted small">{m.description} · {m.loanDurationDays}-day loan</span></td>
+                        <td><strong className="block">{m.name}</strong><span className="muted small">{m.description} · Up to {m.loanDurationDays} days</span></td>
                         <td><span className="pill pill-plain"><Icon name={categoryIcon(m.category)} size={14} /> {m.category}</span></td>
                         <td>
                           <strong>{m.availableUnits}</strong> <span className="muted small">/ {m.totalUnits} available</span>

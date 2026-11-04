@@ -159,9 +159,9 @@ test("chosen loan period controls the calendar and the recorded due date", async
   await expect(page.getByRole("heading", { name: "Loan details" })).toBeVisible();
   const period = page.getByRole("combobox", { name: "Loan period for Dell Latitude 7440" });
   await expect(period).toHaveValue("1");
-  const initialWindow = await page.locator(".cal-summary").textContent();
+  const initialWindow = await page.locator(".cal-summary").filter({ visible: true }).textContent();
   await period.selectOption("14");
-  await expect(page.locator(".cal-summary")).not.toHaveText(initialWindow!);
+  await expect(page.locator(".cal-summary").filter({ visible: true })).not.toHaveText(initialWindow!);
   await page.getByRole("button", { name: "Reserve" }).click();
   await expect(page.getByRole("status")).toContainText("Reserved Dell Latitude 7440");
   const response = await page.request.get("/api/loan/reservations");
