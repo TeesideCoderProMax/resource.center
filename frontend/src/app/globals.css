@@ -328,3 +328,15 @@ td .bar.danger > span { background: var(--err-border); }
 .queue-card { display: flex; gap: 1rem; padding: 1rem 1.1rem; align-items: flex-start; }
 .queue-body { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
 .queue-body .accent { display: inline-flex; align-items: center; gap: .3rem; font-weight: 600; font-size: .9rem; }
+
+/* Product photos and borrower-selected loan periods. */
+.preview.has-photo, .showcase.has-photo { background: #fff; }
+.product-photo { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; padding: 1rem; min-width: 0; min-height: 0; max-height: 100%; }
+.loan-period { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; color: var(--muted); min-width: 0; }
+.loan-period select { border: 1px solid var(--line, #d9d5e4); border-radius: .65rem; padding: .5rem .75rem; background: #fff; color: var(--ink, #102033); font: inherit; min-width: 5rem; }
+.card-actions { flex-wrap: wrap; }
+.card-actions .loan-period { flex-basis: 100%; }
+@media (max-width: 600px) { .loan-period select { min-height: 44px; } }
+
+.image-credits { padding-left: 1.25rem; }
+.image-credits li { margin: 1rem 0; overflow-wrap: anywhere; }

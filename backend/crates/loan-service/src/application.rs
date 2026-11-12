@@ -11,9 +11,9 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::domain::{
-    compute_two_day_due_at, deterministic_event_id, ensure_can_reserve, ensure_can_subscribe,
-    ensure_staff, ensure_student_or_staff, AuthenticatedActor, DeviceModelSummary, DomainError,
-    LockedModel, Reservation, Role,
+    compute_due_at, deterministic_event_id, ensure_can_reserve, ensure_can_subscribe, ensure_staff,
+    ensure_student_or_staff, AuthenticatedActor, DeviceModelSummary, DomainError, LockedModel,
+    Reservation, Role,
 };
 
 #[derive(Debug, Error)]
@@ -102,6 +102,7 @@ pub trait LoanRepositoryPort: Send + Sync {
         &self,
         actor: AuthenticatedActor,
         model_id: String,
+        loan_duration_days: i32,
         correlation_id: String,
     ) -> BoxFuture<'_, Result<ReservationReceipt, ApplicationError>>;
     fn subscribe_availability(
@@ -385,6 +386,7 @@ impl<S: LoanStorePort> LoanRepositoryPort for S {
         &self,
         actor: AuthenticatedActor,
         model_id: String,
+        loan_duration_days: i32,
         correlation_id: String,
     ) -> BoxFuture<'_, Result<ReservationReceipt, ApplicationError>> {
         Box::pin(async move {
@@ -394,12 +396,12 @@ impl<S: LoanStorePort> LoanRepositoryPort for S {
             self.transact(Box::new(move |tx| {
                 Box::pin(async move {
                     let model = tx.lock_model(model_id.clone()).await?;
+                    let due_at = compute_due_at(now, loan_duration_days, model.loan_duration_days)?;
                     ensure_can_reserve(&model)?;
                     let unit_id = tx
                         .available_unit(model_id.clone())
                         .await?
                         .ok_or_else(|| DomainError::NoAvailableUnits(model_id.clone()))?;
-                    let due_at = compute_two_day_due_at(now);
                     tx.insert_reservation(Reservation {
                         reservation_id: id,
                         model_id: model_id.clone(),

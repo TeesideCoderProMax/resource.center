@@ -13,9 +13,9 @@ const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-
 const HOUR = 3600_000;
 
 const MODELS = [
-  { id: "dell-latitude-7440", name: "Dell Latitude 7440", category: "laptop", description: "14-inch business laptop", loanDurationDays: 2, units: 2 },
-  { id: "ipad-air-m2", name: "iPad Air M2", category: "tablet", description: "11-inch tablet with pencil", loanDurationDays: 2, units: 1 },
-  { id: "canon-r50", name: "Canon EOS R50", category: "camera", description: "Mirrorless camera kit", loanDurationDays: 2, units: 0 },
+  { id: "dell-latitude-7440", name: "Dell Latitude 7440", category: "laptop", description: "14-inch business laptop", loanDurationDays: 14, units: 2 },
+  { id: "ipad-air-m2", name: "iPad Air M2", category: "tablet", description: "11-inch tablet with pencil", loanDurationDays: 14, units: 1 },
+  { id: "canon-r50", name: "Canon EOS R50", category: "camera", description: "Mirrorless camera kit", loanDurationDays: 14, units: 0 },
 ];
 
 let state;
@@ -29,7 +29,10 @@ reset();
 
 const summary = (m) => ({
   id: m.id, name: m.name, category: m.category, description: m.description, loanDurationDays: m.loanDurationDays,
-  totalUnits: state.units.filter((u) => u.modelId === m.id && u.status !== "MAINTENANCE").length,
+  totalUnits: state.units.filter((u) => u.modelId === m.id).length,
+  imageUrl: `/catalogue/${m.id === "canon-r50" ? "canon-eos-r50" : m.id}.webp`,
+  imageAlt: m.name,
+  specifications: [{ label: "Configuration", value: m.description }],
   availableUnits: state.units.filter((u) => u.modelId === m.id && u.status === "AVAILABLE").length,
 });
 
@@ -92,11 +95,12 @@ async function handle(req, cid) {
       if (!s) state.subscriptions.push((s = { subscriptionId: randomUUID(), modelId: model.id, sub: a.sub, email: a.email, status: "ACTIVE", createdAt: new Date().toISOString() }));
       return [201, { subscriptionId: s.subscriptionId, modelId: s.modelId, status: s.status, createdAt: s.createdAt }];
     }
+    if (!Number.isInteger(body.loanDurationDays) || body.loanDurationDays < 1 || body.loanDurationDays > model.loanDurationDays) return [400, { error: "InvalidInput", message: "Choose 1–14 whole days" }];
     if (!unit) return [409, { error: "NoAvailableUnits", message: "no units available" }];
     unit.status = "RESERVED";
     const now = new Date();
     const r = { reservationId: randomUUID(), modelId: model.id, unitId: unit.id, studentSub: a.sub, studentEmail: a.email, status: "RESERVED",
-      reservedAt: now.toISOString(), dueAt: new Date(now.getTime() + 48 * HOUR).toISOString(), collectedAt: null, returnedAt: null };
+      reservedAt: now.toISOString(), dueAt: new Date(now.getTime() + body.loanDurationDays * 24 * HOUR).toISOString(), collectedAt: null, returnedAt: null };
     state.reservations.unshift(r);
     return [201, { reservationId: r.reservationId, modelId: r.modelId, unitId: r.unitId, status: r.status, reservedAt: r.reservedAt, dueAt: r.dueAt, correlationId: cid }];
   }

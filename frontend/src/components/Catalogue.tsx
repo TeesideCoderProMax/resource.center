@@ -107,7 +107,7 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
           </fieldset>
           {durations.length > 0 && (
             <fieldset className="filter-group">
-              <legend className="field-label">Loan duration</legend>
+              <legend className="field-label">Maximum loan</legend>
               <label className="check">
                 <input type="radio" name="duration" checked={duration === null} onChange={() => setDuration(null)} /> Any length
               </label>
@@ -137,7 +137,7 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
                 <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
                   <option value="availability">Highest availability</option>
                   <option value="name">Name (A–Z)</option>
-                  <option value="duration">Loan length (short to long)</option>
+                  <option value="duration">Maximum loan (short to long)</option>
                 </select>
               </label>
               <div className="segmented" role="group" aria-label="Layout">

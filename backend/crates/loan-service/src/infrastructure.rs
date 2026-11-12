@@ -144,6 +144,11 @@ impl PostgresAdapter {
             tx.execute("INSERT INTO loan.schema_migrations(version) VALUES ('0002_reservation_due_dates')", &[]).await.map_err(pg_error)?;
         }
 
+        if tx.query_opt("SELECT version FROM loan.schema_migrations WHERE version = '0003_catalogue_and_loan_periods'", &[]).await.map_err(pg_error)?.is_none() {
+            tx.batch_execute(include_str!("../migrations/0003_catalogue_and_loan_periods.sql")).await.map_err(pg_error)?;
+            tx.execute("INSERT INTO loan.schema_migrations(version) VALUES ('0003_catalogue_and_loan_periods')", &[]).await.map_err(pg_error)?;
+        }
+
         if let Some(ref pub_role) = self.cfg.publisher_role_name {
             let escaped_ident = pub_role.replace('"', "\"\"");
             let grant_sql =
@@ -263,7 +268,7 @@ impl PostgresAdapter {
                 roles: vec![Role::Student],
             };
             handles.push(tokio::spawn(async move {
-                adapter.reserve_device(actor, m_id, c_id).await
+                adapter.reserve_device(actor, m_id, 2, c_id).await
             }));
         }
 
@@ -490,7 +495,7 @@ impl LoanStorePort for PostgresAdapter {
             let (client, _permit) = self.connect_client().await?;
             let rows = client
                 .query(
-                    "SELECT id, name, category, description, loan_duration_days, total_units, available_units
+                    "SELECT id, name, category, description, loan_duration_days, total_units, available_units, image_url, image_alt, specifications::text
                      FROM loan.device_models
                      ORDER BY category ASC, name ASC",
                     &[],
@@ -508,6 +513,10 @@ impl LoanStorePort for PostgresAdapter {
                     loan_duration_days: r.get(4),
                     total_units: r.get(5),
                     available_units: r.get(6),
+                    image_url: r.get(7),
+                    image_alt: r.get(8),
+                    specifications: serde_json::from_str(&r.get::<_, String>(9))
+                        .expect("database specification constraint"),
                 })
                 .collect();
             Ok(models)
@@ -569,7 +578,7 @@ impl LoanTransactionPort for PostgresLoanTransaction<'_> {
             let row = self
                 .tx
                 .query_opt(
-                    "SELECT name, available_units FROM loan.device_models WHERE id = $1 FOR UPDATE",
+                    "SELECT name, available_units, loan_duration_days FROM loan.device_models WHERE id = $1 FOR UPDATE",
                     &[&id],
                 )
                 .await
@@ -579,6 +588,7 @@ impl LoanTransactionPort for PostgresLoanTransaction<'_> {
                 id,
                 name: row.get(0),
                 available_units: row.get(1),
+                loan_duration_days: row.get(2),
             })
         })
     }

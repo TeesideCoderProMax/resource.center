@@ -31,11 +31,13 @@ export function sameOrigin(method: string, origin: string | null, appBaseUrl: st
   }
 }
 
-/** Only `modelId` is forwarded. Actor identity, email and role come from the token. */
+/** Forward only the model and selected period; identity comes from the token. */
 export function sanitizeBody(path: string, body: unknown): string | undefined {
   if (path === "reservations" || path === "subscriptions") {
     const modelId = typeof body === "object" && body !== null ? (body as Record<string, unknown>).modelId : undefined;
-    return JSON.stringify({ modelId: typeof modelId === "string" ? modelId : "" });
+    const loanDurationDays = path === "reservations" && typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>).loanDurationDays : undefined;
+    return JSON.stringify({ modelId: typeof modelId === "string" ? modelId : "", ...(path === "reservations" ? { loanDurationDays } : {}) });
   }
   return undefined;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { call, fmt } from "@/lib/api-client";
 import { useBag } from "@/lib/bag";
 import type { DeviceModelSummary } from "@/lib/loan";
@@ -10,7 +10,7 @@ import { errorNotice, Notice, type NoticeValue } from "./Notice";
 
 export const devicePath = (id: string) => `/devices/${encodeURIComponent(id)}`;
 
-/** Initials of the first two words, shown in the preview tile (the catalogue has no product photos). */
+/** Initials used if the product image is missing or cannot load. */
 export const monogram = (name: string) => name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 
 /** Emerald when stocked, amber for the last unit, lilac when only the waitlist is open (PRD 5.1). */
@@ -27,12 +27,30 @@ export function AvailabilityPill({ item }: { item: DeviceModelSummary }) {
 }
 
 export function DevicePreview({ item, large = false }: { item: DeviceModelSummary; large?: boolean }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const hasImage = Boolean(item.imageUrl && failedUrl !== item.imageUrl);
   return (
-    <div className={large ? "showcase" : "preview"} aria-hidden="true">
+    <div className={`${large ? "showcase" : "preview"}${hasImage ? " has-photo" : ""}`}>
+      {hasImage ? <img className="product-photo" src={item.imageUrl!} alt={item.imageAlt || item.name} width={960} height={640} loading="lazy" onError={() => setFailedUrl(item.imageUrl!)} /> : <>
+
       <span className="preview-icon"><Icon name={categoryIcon(item.category)} size={large ? 40 : 24} /></span>
-      <span className="mono">{monogram(item.name)}</span>
+      <span className="mono" aria-hidden="true">{monogram(item.name)}</span>
+      </>}
     </div>
   );
+}
+
+/** Shared by card, detail and bag reservation controls. */
+export function LoanPeriod({ item, days, onChange, disabled = false }: {
+  item: DeviceModelSummary; days: number; onChange: (days: number) => void; disabled?: boolean;
+}) {
+  const id = useId();
+  return <label className="loan-period" htmlFor={id}>
+    <span>Loan period for {item.name}</span>
+    <select id={id} value={days} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))}>
+      {Array.from({ length: item.loanDurationDays }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n} {n === 1 ? "day" : "days"}</option>)}
+    </select>
+  </label>;
 }
 
 export function AddToBag({ item, wide = false }: { item: DeviceModelSummary; wide?: boolean }) {
@@ -51,11 +69,17 @@ export function AddToBag({ item, wide = false }: { item: DeviceModelSummary; wid
  * Reserve/subscribe actions. Counts are never changed optimistically: after every attempt the
  * parent reloads from the API, which stays authoritative.
  */
-export function ReserveActions({ item, onChanged, wide = false }: {
+export function ReserveActions({ item, onChanged, wide = false, days, onDaysChange, showPeriod = true }: {
   item: DeviceModelSummary;
   onChanged?: () => void | Promise<void>;
   wide?: boolean;
+  days?: number;
+  onDaysChange?: (days: number) => void;
+  showPeriod?: boolean;
 }) {
+  const [localDays, setLocalDays] = useState(1);
+  const selectedDays = days ?? localDays;
+  const setDays = onDaysChange ?? setLocalDays;
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<NoticeValue>(null);
   // A 409 last-unit race means the shown count is stale; offer subscribe straight away.
@@ -67,7 +91,7 @@ export function ReserveActions({ item, onChanged, wide = false }: {
     setNotice(null);
     try {
       if (action === "reservations") {
-        const r = await call<{ dueAt: string; unitId: string }>("POST", action, { modelId: item.id });
+        const r = await call<{ dueAt: string; unitId: string }>("POST", action, { modelId: item.id, loanDurationDays: selectedDays });
         setNotice({
           kind: "ok",
           text: `Reserved ${item.name} (unit ${r.unitId}). Due back ${fmt(r.dueAt)}. Next: collect it at the Resource Center desk; staff will mark it collected.`,
@@ -88,6 +112,7 @@ export function ReserveActions({ item, onChanged, wide = false }: {
   const cls = wide ? " wide" : "";
   return (
     <>
+      {showPeriod && !subscribe && <LoanPeriod item={item} days={selectedDays} onChange={setDays} disabled={busy} />}
       <Notice notice={notice} />
       {subscribe ? (
         <button className={`btn${cls}`} disabled={busy} aria-busy={busy} onClick={() => act("subscriptions")}>

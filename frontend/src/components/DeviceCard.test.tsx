@@ -61,3 +61,23 @@ test("signed-out viewers see no action buttons", () => {
   render(<DeviceCard item={item} canAct={false} />);
   expect(screen.queryByRole("button")).toBeNull();
 });
+
+test("sends the chosen whole-day period with the reservation", async () => {
+  const fetch = fakeFetch({ "POST reservations": { status: 201, body: { unitId: "u", dueAt: "2026-11-18T10:00:00Z" } } });
+  render(<DeviceCard item={{ ...item, loanDurationDays: 14 }} canAct />);
+  const selector = screen.getByRole("combobox", { name: "Loan period for iPad" });
+  expect(selector).toHaveValue("1");
+  fireEvent.change(selector, { target: { value: "14" } });
+  fireEvent.click(screen.getByRole("button", { name: "Reserve" }));
+  await screen.findByRole("status");
+  expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ modelId: "ipad", loanDurationDays: 14 });
+});
+
+test("shows a product image and falls back when it fails", () => {
+  render(<DeviceCard item={{ ...item, imageUrl: "/catalogue/ipad.webp", imageAlt: "iPad with Pencil" }} canAct={false} />);
+  const img = screen.getByRole("img", { name: "iPad with Pencil" });
+  expect(img).toHaveAttribute("src", "/catalogue/ipad.webp");
+  fireEvent.error(img);
+  expect(screen.queryByRole("img")).toBeNull();
+  expect(screen.getByText("I")).toBeInTheDocument();
+});
