@@ -2216,3 +2216,352 @@ Added 36 models with images, descriptions and matching specs, plus borrower-sele
 ### Validation and outcome
 
 Passed: Rust tests (29), PostgreSQL tests (6), Clippy/format, frontend tests (40), production build/typecheck, browser tests (15), release tests (18), catalogue checks, runtime checks for 36 images, dependency audit, Test Terraform validation and Serena memory check. Fixed test type errors, the seed TEMP privilege issue, the old two-day smoke rule and image clipping. Image generation returned 404; all final images were fetched. Test run 41853739209 failed verification before deployment: the new calendar locator matched a hidden streamed copy. Restricted it to visible elements; all 15 browser tests and 40 frontend tests passed again. Added test-port overrides to keep the local app running and clarified the staff inventory maximum label. Retry 41855299241 passed all checks and deployed version b7062ee1ae72ad9cbbf61a67d2701189e09466ed; migration rc-test-0330980f-migrations-84xkjti succeeded. Independent public checks found 36 models, 80 units, specs on every model, 36 working images, and healthy/version-matched readiness. Azure public reads used the edge tool after local-host HTTPS timeouts. No Staging/Production deployment or new live Auth0/email test.
+
+
+## 099 — 2026-11-04 — Check URL loading
+
+### Exact input prompt
+
+```text
+The url keeps loading without stoping, is something wrong?
+```
+
+### Change summary
+
+Checked both URLs after the first attempt was interrupted. The local app/API and hosted app responded; the hosted browser load completed, so the reported endless loading did not recur. No loading fix was made.
+
+### Validation and outcome
+
+Local health endpoints returned 200. Hosted root and health returned 200 through the edge tool; a direct curl request also returned 200, and Chromium reached readyState complete. Images and link prefetches were still in progress at the load event. No project files changed for this check apart from this log.
+
+
+## 100 — 2026-11-04 — App logo and favicon
+
+### Exact input prompt
+
+```text
+Can you please generate a favicon and a logo for this app?
+```
+
+### Change summary
+
+Created SVG and PNG logo assets in frontend/public/brand/ and SVG, ICO and Apple browser icons in frontend/src/app/. Updated the app header and its CSS to use the new mark; added a short asset guide.
+
+### Validation and outcome
+
+Production build, typecheck and all 40 frontend tests passed. A browser check loaded the header mark and all icon URLs with HTTP 200 and confirmed the header fits a 390 px screen. Checked ICO sizes 16/32/48, Apple icon 180, and logo PNG 1296 × 240. Changes remain local; no commit or deployment was requested for this logo task.
+
+## 101 — 2026-11-04 — AI policy review
+
+### Exact input prompt
+
+```text
+Does this align with the AI policy?
+```
+
+Attachment: /home/cabozzz/Downloads/ai_policy_cloud.pdf
+
+### Change summary
+
+Reviewed the supplied two-page Amber policy against the previous AI assistance and cloud plans. Planning support is conditionally permitted, but delegating complete Terraform environments or microservices conflicts with the explicit prohibition; every integrated snippet requires student inspection, understanding, testing, modification and verification, and all assistance requires formal acknowledgement. Existing plans were not edited.
+
+### Validation and outcome
+
+Extracted and read both PDF pages, including the permitted scopes and prohibited usage. Corrected prior broad assurance in light of the newly supplied policy; no cloud actions or application tests were performed. No project files changed apart from this log.
+
+## 102 — 2026-11-04 — Architecture decisions video
+
+### Exact input prompt
+
+```text
+Can you turn these concepts into a hyperframes video?
+
+These decisions were intended to solve two problems: running the application on Azure without managing servers, and keeping reservations and notifications correct when requests overlap or services fail.
+
+The explanations below reflect the recorded design and its technical rationale. They do not mean every choice was required by the assessment—or that it was the simplest possible solution.
+
+1. Azure Container Apps — keep your application structure while Azure manages execution
+
+Your backend consists of a Rust HTTP API and a separate notification worker. Both can run inside container images.
+
+Container Apps was chosen because it lets you deploy those images while Azure handles starting instances, restarting failed processes, routing traffic and scaling. The API can scale according to HTTP demand; Notifications can scale according to the queue backlog.
+
+It also accommodated your switch from Python to Rust without changing the hosting model.
+
+The trade-off is that you still maintain Dockerfiles, images, configuration and scaling rules. Scaling from zero can introduce a delay on the first request.
+
+Why this instead of Azure Functions? Container Apps preserves an ordinary Axum server and queue-consumer process. Functions would introduce a different execution and integration model. Functions could also work; Container Apps was a fit for the chosen application structure, not an assessment requirement.
+
+2. Managed ingress — let Azure handle the public HTTPS entry point
+
+“Ingress” is the entry point through which external requests reach your application.
+
+Your original design used Nginx and Let’s Encrypt. Azure Container Apps already provides HTTPS termination and request routing, so the later design used that capability directly.
+
+That removes a proxy and certificate-renewal process you would otherwise operate. It does not replace application authorization: the API must still validate Auth0 tokens and check student/staff permissions.
+
+The trade-off is reliance on Azure’s ingress features and limits. Nginx remains useful where custom proxy behaviour is needed; the project had not established a need for it.
+
+3. The outbox — prevent a successful database change from losing its notification
+
+Consider a device return:
+1. The API updates PostgreSQL to mark the device returned.
+2. It sends a notification request to Service Bus.
+If the API crashes between those steps, the return exists but the notification request is lost. Reversing the order creates another problem: a notification could be sent even though the database update fails.
+
+The outbox solves this by saving both the business change and a record requesting notification in the same PostgreSQL transaction:
+One transaction:
+  Mark device returned
+  Save notification request in outbox
+Commit both, or neither
+A separate publisher subsequently sends the saved request to the queue.
+
+This keeps external network calls outside the database transaction and allows loan operations to continue during a queue outage. The cost is extra processing, storage and eventual delivery rather than immediate delivery.
+
+4. Scheduled publisher — ensure saved requests eventually leave the outbox
+
+PostgreSQL does not automatically publish the outbox records to Service Bus in this design. Something must read and send them.
+
+A scheduled Container Apps Job was chosen to:
+- Wake periodically.
+- Claim a bounded batch of pending records.
+- Publish them.
+- Record successful publication.
+- Exit.
+It continues doing this even when the API has scaled to zero. An API background task would be unreliable as the only publisher because its process might stop when no HTTP traffic exists.
+
+The one-minute schedule was a simplicity/cost/latency choice. It introduces delay and runs even when there is no work. A continuously running publisher or change-data-capture design could reduce delay but adds different operational costs.
+
+5. Supporting Azure services — give each responsibility a managed home
+Service	Reason for including it	Cost or complexity introduced
+Service Bus	Buffers notification requests so Loan and Notifications need not be available simultaneously.	Delivery, retry and dead-letter handling must be designed.
+PostgreSQL	Holds authoritative loan state and supports atomic reservation/outbox transactions.	Provisioned database capacity and connection management.
+Cosmos DB	Gives Notifications its own job and delivery-state store.	A second database, partitioning and concurrency rules.
+Container Registry	Stores the deployable images and their immutable versions.	Registry storage and access configuration.
+Managed identities / Key Vault	Control service access and hold external credentials.	More permission configuration to understand and maintain.
+Monitor / Log Analytics	Makes failures, backlog and application behaviour observable.	Logging costs and alert maintenance.
+Storage for Terraform state	Keeps shared infrastructure state available across developer and CI runs.	Sensitive state needs access protection and recovery arrangements.
+
+
+Cosmos was a chosen design, not something notifications inherently require. Separate service ownership can be achieved with other storage arrangements. Its inclusion provided Azure/Cosmos experience and independent notification persistence, at the expense of more moving parts.
+
+6. Transaction ports — keep business rules testable without weakening atomicity
+
+A transaction port is a small interface through which application code requests database operations within one transaction.
+
+For example:
+Begin transaction
+Read and lock the relevant availability
+Apply the reservation rule
+Save reservation and required outbox requests
+Commit
+The application decides what must succeed together. The PostgreSQL adapter implements how locking, queries and commit work.
+
+This was introduced to avoid burying business decisions inside database-specific code and to support tests with fake adapters.
+
+The trade-off is additional interfaces and wiring. Too many generic abstractions would make this unnecessarily complicated. Crucially, fake tests cannot prove real PostgreSQL concurrency behaviour; database integration tests are still necessary.
+
+7. Notification leases — stop two workers processing the same job simultaneously
+
+Imagine two worker instances receive duplicate copies of the same notification request.
+
+A lease records temporary ownership:
+Job: event-123
+Owner: worker-A
+Lease expires: 14:05
+While that lease is valid, another worker should not take over. If worker A crashes, ownership eventually expires so another worker can recover the job.
+
+Cosmos ETags provide conditional updates: “apply this change only if the record has not changed since I read it.” However, ETags alone do not define who is entitled to process the job. The lease supplies that rule; the conditional update enforces it under concurrency.
+
+The trade-off is managing expiry, renewal and ownership checks correctly.
+
+8. Deduplication and recovery — accept that retries happen
+
+Duplicates can arise naturally:
+- Service Bus accepts a message.
+- The publisher crashes before marking the outbox record published.
+- The publisher retries later.
+A stable event ID lets Notifications recognize that both messages describe the same request. It should examine the existing job instead of blindly sending again.
+
+Recovery rules then distinguish:
+- Already completed: acknowledge without repeating completed work.
+- Actively owned: avoid concurrent processing.
+- Expired ownership: allow recovery.
+- Temporary failure: retry with backoff.
+- Malformed or repeatedly failing request: move to a dead-letter path for investigation.
+There is still a difficult window: the email provider accepts an email, but the worker crashes before recording success. Provider idempotency can help where supported, but the design must not promise exactly-once email delivery.
+
+The central trade-off: these mechanisms improve failure handling, but they create implementation complexity. For your assessment, their value comes from being able to explain and demonstrate the failure each one addresses—not merely having them in the architecture.
+```
+
+### Change summary
+
+Built a HyperFrames explainer in docs/videos/architecture-decisions/ that follows one laptop return through all eight concepts, with local Kokoro narration and captions, and rendered architecture-decisions.mp4 (3:32, 1080p). Nothing was committed or deployed.
+
+### Validation and outcome
+
+`hyperframes check` passed with no errors; frames were reviewed at every narrated line end and sampled from the decoded MP4; ffprobe confirmed 212.27 s, 1920 × 1080, with audio. Sound was measured, not heard. Limitations: it runs over the requested 3 minutes by about 32 s, has no music or effects, and caption timing is proportional within each line. The Kokoro venv lives only in the session scratchpad.
+
+## 103 — 2026-11-05 — Azure cost per user without free tiers
+
+### Exact input prompt
+
+```text
+If it were not for the free services and free tier of azure, how much per user would this services cost me? If accurate values are not available, please give me your best estimate
+```
+
+### Change summary
+
+Read `infra/platform` and `infra/workloads` Terraform and estimated monthly Azure list-price cost (about $65–70 fixed, near-zero per extra user). No project files changed apart from this log.
+
+### Validation and outcome
+
+Estimate only, from remembered public list prices and Terraform sizing; no live pricing lookup or Azure bill was checked. Real cost depends on region, traffic and Cosmos mode.
+
+## 104 — 2026-11-06 — Backend cold boot time
+
+### Exact input prompt
+
+```text
+Hello, the backend is taking 45-60 seconds to cold boot. IS this normal for a rust app?
+```
+
+### Change summary
+
+Answered that Rust itself starts in milliseconds; the 45–60 s delay comes from Azure Container Apps scale-to-zero (`min_replicas = 0`, 0.25 vCPU) in `infra/workloads/main.tf`. No project files changed apart from this log.
+
+### Validation and outcome
+
+Diagnosis from reading Terraform only; no live cold-start timing or logs were measured.
+
+## 105 — 2026-11-06 — Meaning of serverless
+
+### Exact input prompt
+
+```text
+So what is the true meaning of serverless here? Is it being able to scale down to 0?
+```
+
+### Change summary
+
+Explained that serverless means no server management, automatic scaling and pay-per-use; scale-to-zero is one common feature, not the definition. No project files changed apart from this log.
+
+### Validation and outcome
+
+Conceptual answer; no checks run.
+
+## 106 — 2026-11-06 — Cost of one always-on replica on Azure for Students
+
+### Exact input prompt
+
+```text
+With the azure for studenst subscription, having 1 replica always on is free or have an associated cost?
+```
+
+### Change summary
+
+Estimated that one always-on 0.25 vCPU / 0.5Gi replica costs about $4–14 per month after the monthly free grant, paid from the student credit. No project files changed apart from this log.
+
+### Validation and outcome
+
+Estimate from remembered public Container Apps prices and free grant; no live pricing or billing lookup was done.
+
+## 107 — 2026-11-06 — Inactivity time before scale to zero
+
+### Exact input prompt
+
+```text
+How much time does the app have to stay inactive for it to go to sleep?
+```
+
+### Change summary
+
+Answered that Container Apps scales to zero after a default 300 s cooldown with no scale-rule activity. No project files changed apart from this log.
+
+### Validation and outcome
+
+Answer from remembered Container Apps defaults plus a read of `infra/workloads/main.tf`; no live behaviour was measured.
+
+## 108 — 2026-11-12 — Dev CI Playwright failure on Desk summary
+
+### Exact input prompt
+
+````text
+Ive got this error on the dev branch CI:
+
+This job failed because one Playwright end-to-end test failed in the CI run. The failing test was "staff admin shows telemetry and live inventory" in frontend/e2e/flows.spec.ts around line 123; expect(page.getByLabel("Desk summary")).toContainText("Awaiting collection") failed with a strict mode violation (getByLabel("Desk summary") matched 2 elements).
+````
+
+### Change summary
+
+Found the fix (role locator, `f149952`) already on `qa` but absent from `origin/dev`; merging `qa` into `dev` should clear it. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked git ancestry and the current spec/component source only; the e2e suite was not run. The prompt is logged abridged because the pasted CI text is a summary of the log.
+
+## 109 — 2026-11-12 — Run e2e locally
+
+### Exact input prompt
+
+```text
+run the e2e locally
+```
+
+### Change summary
+
+Ran the Playwright e2e suite locally on `qa`; all pass. No project files changed apart from this log.
+
+### Validation and outcome
+
+`npx playwright test` in `frontend/`: 15 passed (16.2s), including the staff telemetry test.
+
+## 110 — 2026-11-12 — Fresh build
+
+### Exact input prompt
+
+```text
+Run a fresh build
+```
+
+### Change summary
+
+Rebuilt the frontend from a clean `.next` and re-ran e2e. No project files changed apart from this log.
+
+### Validation and outcome
+
+`rm -rf .next && npm run build` succeeded; `npx playwright test`: 15 passed (17.3s).
+
+## 111 — 2026-11-12 — PR 13 contents
+
+### Exact input prompt
+
+```text
+Does the PR 13 have these changes?
+```
+
+### Change summary
+
+PR 13 (`qa` → `dev`, open) contains `f149952`, the e2e locator fix, plus four other qa commits. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked with `gh pr view 13` and git; the local uncommitted edits (`globals.css`, `AppHeader.tsx`) are not in the PR.
+
+## 112 — 2026-11-12 — Update README with current app state
+
+### Exact input prompt
+
+```text
+Great! Let's also update the README.md file with the state the app is right now. The architecture will most likely stay as is.
+
+Make the changes straight to qa
+```
+
+### Change summary
+
+Rewrote `README.md` with the app's current features, state per environment, open items and run commands; architecture unchanged. Committed to `qa`.
+
+### Validation and outcome
+
+Facts taken from `docs/backend/catalogue-and-loan-periods.md`, memories and git history; no checks re-run for the README.
