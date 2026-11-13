@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify GitHub gate settings and the successful Test run before Azure login."""
+"""Verify the source branch and the successful Test run before Azure login."""
 import json
 import os
 from pathlib import Path
@@ -9,18 +9,6 @@ import sys
 
 
 SOURCE_BRANCH = {"staging": "dev", "production": "main"}
-
-
-def validate_gate(gate, branch_policies, branch):
-    rules = gate.get("protection_rules", [])
-    reviewers = next((r for r in rules if r.get("type") == "required_reviewers"), {})
-    branches = gate.get("deployment_branch_policy") or {}
-    # The environment may deploy only from its own branch (dev -> staging, main -> production).
-    only_branch = (branches.get("custom_branch_policies") and not branches.get("protected_branches")
-                   and [(p.get("type", "branch"), p.get("name")) for p in branch_policies] == [("branch", branch)])
-    if not (reviewers.get("reviewers") and reviewers.get("prevent_self_review")
-            and gate.get("can_admins_bypass") is False and only_branch):
-        raise ValueError(f"Promotion requires independent reviewers, no admin bypass and deployments from {branch} only")
 
 
 def validate_release(run, release, repository, run_id):
@@ -47,8 +35,6 @@ def main(environment, run_id):
     branch = SOURCE_BRANCH[environment]
     if os.environ.get("GITHUB_REF") != f"refs/heads/{branch}":
         raise ValueError(f"Promotion to {environment} must be dispatched from {branch}")
-    policies = api(f"environments/{environment}/deployment-branch-policies").get("branch_policies", [])
-    validate_gate(api(f"environments/{environment}"), policies, branch)
     run = api(f"actions/runs/{run_id}")
     subprocess.run(["gh", "run", "download", run_id, "--repo", repo, "--name", "test-release", "--dir", "tested-release"], check=True)
     release = json.loads(Path("tested-release/release.json").read_text())

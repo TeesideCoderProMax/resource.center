@@ -71,11 +71,8 @@ that an actual login, token, role or email works.
 
 ## GitHub controls and promotion
 
-Branch flow: one branch per environment — `qa` → `test`, `dev` → `staging`, `main` → `production`. Feature PRs target `qa`; a push to `qa` runs CI and the Test release. Reviewed `qa` → `dev` and `dev` → `main` PRs follow passing runs; promotion is then dispatched from that branch. Restrict each GitHub environment's deployment branches to its branch ("Selected branches", exactly one branch rule); promotion fails closed otherwise. Protect all three branches with reviewed changes and required CI checks. Configure target
-Environments with required independent reviewers, prevent self-review, disable
-admin bypass and allow only that environment's branch. Confirm the repository plan
-supports these controls for a private repository. Environment names alone do not
-create them. Typed confirmation is no longer treated as approval.
+Branch flow: one branch per environment — `qa` → `test`, `dev` → `staging`, `main` → `production`. Feature PRs target `qa`; a push to `qa` runs CI and the Test release. Reviewed `qa` → `dev` and `dev` → `main` PRs follow passing runs; promotion is then dispatched from that branch. Restrict each GitHub environment's deployment branches to its branch ("Selected branches", exactly one branch rule);. Protect all three branches with reviewed changes and required CI checks. Configure target
+Promotion checks only the dispatch branch and the Test release evidence. Environment reviewers, self-review prevention and admin-bypass settings are not enforced by the script; add them in GitHub if independent approval is required.
 
 Dispatch `Deploy & Promote` from `dev` (staging) or `main` (production), choose the target and give `test_run_id`.
 The policy checks the actual environment response and requires a successful

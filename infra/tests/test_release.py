@@ -115,21 +115,6 @@ class ReleaseTests(unittest.TestCase):
         self.assertTrue(any("./infra/scripts/smoke-test.sh" in c for c in calls))
 
 class PromotionTests(unittest.TestCase):
-    def test_gate_rejects_missing_self_approval_and_admin_bypass(self):
-        gate = {"protection_rules": [{"type": "required_reviewers", "reviewers": [{"id": 1}], "prevent_self_review": True}], "can_admins_bypass": False, "deployment_branch_policy": {"protected_branches": False, "custom_branch_policies": True}}
-        dev = [{"name": "dev", "type": "branch"}]
-        promotion.validate_gate(gate, dev, "dev")
-        for invalid in ({}, {**gate, "can_admins_bypass": True}, {**gate, "protection_rules": []},
-                        {**gate, "deployment_branch_policy": {"protected_branches": True, "custom_branch_policies": False}}):
-            with self.assertRaises(ValueError):
-                promotion.validate_gate(invalid, dev, "dev")
-        for policies in ([], [{"name": "main", "type": "branch"}], dev + [{"name": "qa", "type": "branch"}], [{"name": "dev", "type": "tag"}]):
-            with self.assertRaises(ValueError):
-                promotion.validate_gate(gate, policies, "dev")
-        gate["protection_rules"][0]["prevent_self_review"] = False
-        with self.assertRaises(ValueError):
-            promotion.validate_gate(gate, dev, "dev")
-
     def test_only_successful_matching_test_release_can_promote(self):
         run = {"id": 1, "conclusion": "success", "event": "push", "head_branch": "qa", "head_sha": "abc", "path": ".github/workflows/deploy.yml", "repository": {"full_name": "owner/repo"}}
         record = {"environment": "test", "smoke": "passed", "sha": "abc", "version": "abc", "run_id": "1", "backend_image": "r.test/backend@sha256:"+"a"*64, "web_image": "r.test/web@sha256:"+"b"*64}

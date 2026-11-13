@@ -2565,3 +2565,109 @@ Rewrote `README.md` with the app's current features, state per environment, open
 ### Validation and outcome
 
 Facts taken from `docs/backend/catalogue-and-loan-periods.md`, memories and git history; no checks re-run for the README.
+
+## 113 — 2026-11-12 — Staging promotion ValueError
+
+### Exact input prompt
+
+````text
+Okay, so now i got an error at the deploy and promote step in the staging environment:
+
+
+
+The job failed in the promotion step of the Deploy & Promote workflow because the script at infra/scripts/promotion.py raised a ValueError before it could continue.
+
+The relevant check is here:
+
+    main(environment, run_id) validates:
+        environment must be either staging or production
+        run_id must be numeric
+    If either check fails, it raises:
+        ValueError("Expected target environment and numeric Test run ID")
+
+The GitHub Actions log shows exactly this:
+
+    ValueError: Expected target environment and numeric Test run ID
+    exit code: 1
+````
+
+### Change summary
+
+Diagnosed the failure as an empty `test_run_id` dispatch input (optional in `deploy.yml`, required by `promotion.py` for staging/production); the script is correct. Suggested run 41855299241. No project files changed apart from this log.
+
+### Validation and outcome
+
+Read `deploy.yml`, `promotion.py` and `gh run list`; the staging dispatch was not re-run, so the fix is unverified.
+
+## 114 — 2026-11-12 — Where to find the workflow dispatch in the UI
+
+### Exact input prompt
+
+```text
+Where do i find this on the UI?
+```
+
+### Change summary
+
+Explained where to dispatch the workflow in the GitHub UI. No project files changed apart from this log.
+
+### Validation and outcome
+
+Answer from GitHub's standard Actions UI and `deploy.yml`; nothing run.
+
+## 115 — 2026-11-12 — Where to find the run ID in the UI
+
+### Exact input prompt
+
+```text
+I meant the ID
+```
+
+### Change summary
+
+Explained how to find the Test run ID in the GitHub UI. No project files changed apart from this log.
+
+### Validation and outcome
+
+Answer from GitHub's standard Actions UI; nothing run.
+
+## 116 — 2026-11-13 — Staging promotion gh api failure
+
+### Exact input prompt
+
+````text
+Failed again:
+
+
+
+This job failed during the release/promotion validation step, not during the build or test stage.
+
+The key error in the logs is:
+
+    gh api repos/TeesideCoderProMax/resource.center/environments/staging/deployment-branch-policies
+    returned exit status 1
+````
+
+### Change summary
+
+Found the `staging` GitHub environment has no reviewers and no deployment-branch policy (the API 404s), so `promotion.py` correctly refuses; the fix is in GitHub settings. No project files changed apart from this log.
+
+### Validation and outcome
+
+Queried the environment via `gh api` and read `validate_gate`; settings were not changed and the dispatch was not re-run.
+
+## 117 — 2026-11-13 — Relax the promotion gate
+
+### Exact input prompt
+
+```text
+I want you to relax the gate
+```
+
+### Change summary
+
+Removed the environment-gate check (reviewers, self-review, admin bypass, branch policy) from `infra/scripts/promotion.py`, its unit test and the runbook wording; the dispatch-branch and Test-release checks remain. Committed on `qa`, not pushed.
+
+### Validation and outcome
+
+`python3 -m unittest discover -s infra/tests` passed; no real promotion was run, so staging is unverified.
