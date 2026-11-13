@@ -116,7 +116,9 @@ jobs:
             docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" -t "$image" "$context"
             docker tag "$image" "rc-$component:ci"
             docker push "$image"
-            digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$image")
+            # The local rc-*:ci tag can add a registry-less RepoDigests entry; take the ACR one.
+            digest=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$image" | grep "^$ACR_SERVER/" | head -n1)
+            test -n "$digest"
             echo "TF_VAR_${component}_image=$digest" >> "$GITHUB_ENV"
           done
           # Test the same images before any target migration or app activation.

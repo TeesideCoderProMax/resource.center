@@ -2687,3 +2687,51 @@ Pushed the two local `qa` commits (README update, relaxed promotion gate). No pr
 ### Validation and outcome
 
 Push result checked below via git status.
+
+## 119 — 2026-11-13 — QA deploy: invalid immutable image
+
+### Exact input prompt
+
+````text
+SO now the deploy is failing on the QA environment:
+
+
+
+The job failed because the release script rejected the backend image environment variable before it could continue the deployment.
+
+The relevant check is in infra/scripts/release.py:
+
+    In release(), it validates:
+        TF_VAR_backend_image
+        TF_VAR_web_image
+    It requires each value to match this pattern:
+        [a-z0-9.-]+/[a-z0-9/_-]+@sha256:[0-9a-f]{64}
+
+The job log shows:
+
+    ValueError: Invalid immutable image: TF_VAR_backend_image
+````
+
+### Change summary
+
+Root cause: the Test build step took `RepoDigests[0]`, which on the runner was the registry-less `rc-backend@sha256:...` (from the local `rc-backend:ci` tag), failing the immutable-image check. `.github/workflows/deploy.yml` now selects the `$ACR_SERVER/` digest and fails if none is found.
+
+### Validation and outcome
+
+Diagnosed from run 43342633522 logs (`TF_VAR_backend_image: rc-backend@sha256:...`). The fix is not run in CI yet; the shell pipeline was not executed locally.
+
+## 120 — 2026-11-13 — Push the image digest fix
+
+### Exact input prompt
+
+```text
+push it
+```
+
+### Change summary
+
+Committed and pushed the `deploy.yml` digest fix to `qa`. No other project files changed apart from this log.
+
+### Validation and outcome
+
+Push result checked via git status; the CI rerun outcome is not yet known.
