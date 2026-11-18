@@ -183,7 +183,7 @@ async fn run_api_server(pg_adapter: PostgresAdapter) -> Result<(), String> {
 
     let state = AppState {
         repo: Arc::new(pg_adapter),
-        auth: Auth0JwtVerifier::from_env(),
+        auth: Arc::new(Auth0JwtVerifier::from_env()),
         environment,
         service_version,
     };

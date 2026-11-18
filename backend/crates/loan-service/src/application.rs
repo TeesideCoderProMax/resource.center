@@ -90,6 +90,28 @@ pub struct PublishBatchSummary {
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+#[derive(Debug, Error)]
+pub enum AuthVerifyError {
+    #[error("Auth0 issuer/audience configuration is not set on this environment")]
+    NotConfigured,
+    #[error("missing or malformed Authorization Bearer token")]
+    MissingBearerToken,
+    /// Detail is for logs only; clients get a generic message.
+    #[error("invalid access token: {0}")]
+    InvalidToken(String),
+    #[error("token signing keys are unavailable: {0}")]
+    KeysUnavailable(String),
+}
+
+/// Port for access-token verification; the Auth0 adapter lives in infrastructure.
+pub trait AccessTokenVerifierPort: Send + Sync {
+    fn is_configured(&self) -> bool;
+    fn verify_bearer<'a>(
+        &'a self,
+        auth_header: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<AuthenticatedActor, AuthVerifyError>>;
+}
+
 /// Port for Loan persistence and atomic outbox commits.
 pub trait LoanRepositoryPort: Send + Sync {
     fn check_readiness(&self) -> BoxFuture<'_, Result<(), ApplicationError>>;

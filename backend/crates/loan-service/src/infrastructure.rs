@@ -887,4 +887,4 @@ impl QueuePublisherPort for ServiceBusRestPublisher {
     }
 }
 
-pub use crate::auth::{Auth0JwtVerifier, AuthVerifyError};
+pub use crate::auth::Auth0JwtVerifier;
