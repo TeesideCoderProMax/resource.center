@@ -3154,3 +3154,35 @@ Committed the navy borrower note style and the log as separate commits on `feat/
 ### Validation and outcome
 
 The push succeeded. No further checks; this was a CSS-only change.
+
+## 144 — 2026-11-19 — Analyse Copilot PR review
+
+### Exact input prompt
+
+```text
+Copilot made a comment with issues on the PR. Can you fetch this comments and analyse them
+```
+
+### Change summary
+
+Fetched Copilot's 3 inline comments on PR 16 and checked each against the code. All 3 hold. (1) `.results` has no `scroll-margin-top`, so the page-change scroll hides the controls under the sticky header. (2) Pagination can unmount a card whose availability drops after a reservation, which loses the confirmation in `ReserveActions` state. (3) `dev.sh` cleanup uses `docker rm -f` without `-v`, which leaves anonymous `node_modules` volumes behind. The overview's stale-narration point applies to the video, which is no longer in the diff. No project files changed apart from the log.
+
+### Validation and outcome
+
+Verified by reading `globals.css`, `Catalogue.tsx` and `infra/scripts/dev.sh`. No fixes applied yet.
+
+## 145 — 2026-11-19 — Fix Copilot review issues
+
+### Exact input prompt
+
+```text
+Fix all three
+```
+
+### Change summary
+
+Fixed all 3 Copilot review issues and pushed them to PR 16. (1) `.results` gets `scroll-margin-top: 5.5rem` in `globals.css`, so a page change clears the sticky header. (2) After a reservation refresh, `Catalogue.tsx` keeps the visible list and order until the next filter or sort change, so the card and its confirmation stay in place; new test `Catalogue.refresh.test.tsx`. (3) `infra/scripts/dev.sh` cleanup uses `docker rm -fv`, which removes the anonymous `node_modules` volumes.
+
+### Validation and outcome
+
+`tsc` and vitest (45/45) pass. Not checked in the browser, and `make dev` was not run.
