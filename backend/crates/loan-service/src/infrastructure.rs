@@ -701,6 +701,27 @@ impl LoanTransactionPort for PostgresLoanTransaction<'_> {
     }
 }
 
+/// Splits claimed rows into readable items and `(event_id, error)` for payloads that no
+/// longer parse, so one bad row cannot block the publisher.
+fn split_claimed_rows(
+    rows: Vec<(String, String, i32, serde_json::Value)>,
+) -> (Vec<ClaimedOutboxItem>, Vec<(String, String)>) {
+    let mut items = Vec::with_capacity(rows.len());
+    let mut unreadable = Vec::new();
+    for (event_id, correlation_id, attempt_count, payload) in rows {
+        match serde_json::from_value::<NotificationRequestV1>(payload) {
+            Ok(payload) => items.push(ClaimedOutboxItem {
+                event_id,
+                correlation_id,
+                attempt_count,
+                payload,
+            }),
+            Err(e) => unreadable.push((event_id, format!("invalid outbox json: {e}"))),
+        }
+    }
+    (items, unreadable)
+}
+
 impl OutboxStorePort for PostgresAdapter {
     fn claim_pending_batch(
         &self,
@@ -734,27 +755,24 @@ impl OutboxStorePort for PostgresAdapter {
                 .await
                 .map_err(|e| ApplicationError::Persistence(format!("claim outbox rows: {e}")))?;
 
+            let (items, unreadable) = split_claimed_rows(
+                rows.into_iter()
+                    .map(|r| (r.get(0), r.get(1), r.get(2), r.get(3)))
+                    .collect(),
+            );
+            for (event_id, error) in &unreadable {
+                tracing::error!(event_id = %event_id, error = %error, "outbox row payload unreadable; marked FAILED");
+                tx.execute(
+                    "UPDATE loan.outbox_events SET status = 'FAILED', claimed_until = NULL, last_error = $2 WHERE event_id = $1",
+                    &[event_id, error],
+                )
+                .await
+                .map_err(|e| ApplicationError::Persistence(format!("mark unreadable outbox row: {e}")))?;
+            }
+
             tx.commit()
                 .await
                 .map_err(|e| ApplicationError::Persistence(format!("commit claim tx: {e}")))?;
-
-            let mut items = Vec::with_capacity(rows.len());
-            for row in rows {
-                let event_id: String = row.get(0);
-                let correlation_id: String = row.get(1);
-                let attempt_count: i32 = row.get(2);
-                let payload_val: serde_json::Value = row.get(3);
-                let payload: NotificationRequestV1 =
-                    serde_json::from_value(payload_val).map_err(|e| {
-                        ApplicationError::Persistence(format!("invalid outbox json: {e}"))
-                    })?;
-                items.push(ClaimedOutboxItem {
-                    event_id,
-                    correlation_id,
-                    attempt_count,
-                    payload,
-                });
-            }
             Ok(items)
         })
     }
@@ -888,3 +906,39 @@ impl QueuePublisherPort for ServiceBusRestPublisher {
 }
 
 pub use crate::auth::Auth0JwtVerifier;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_claimed_rows_separates_unreadable_payloads() {
+        let valid = crate::application::build_collection_outbox_event(
+            uuid::Uuid::nil(),
+            "s@example.invalid",
+            "Laptop",
+            Utc::now(),
+            "corr",
+        );
+        let rows = vec![
+            (
+                "a".to_string(),
+                "corr".to_string(),
+                1,
+                serde_json::to_value(&valid).unwrap(),
+            ),
+            (
+                "b".to_string(),
+                "corr".to_string(),
+                1,
+                serde_json::json!({"bad": true}),
+            ),
+        ];
+        let (items, bad) = split_claimed_rows(rows);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].event_id, "a");
+        assert_eq!(bad.len(), 1);
+        assert_eq!(bad[0].0, "b");
+        assert!(bad[0].1.starts_with("invalid outbox json"));
+    }
+}

@@ -424,3 +424,61 @@ async fn postgres_tests_campus_metadata_backfill_preserves_staff_edits() {
     assert!(ipad.image_url.is_none());
     assert!(items.iter().any(|i| i.id == "unrelated"));
 }
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_unreadable_outbox_row_is_failed_and_others_publish() {
+    let pg = database("unreadable_outbox").await;
+    pg.run_migrations(false).await.unwrap();
+    let valid = build_collection_outbox_event(
+        Uuid::nil(),
+        "s@example.invalid",
+        "Laptop",
+        Utc::now(),
+        "corr",
+    );
+    {
+        let (client, _permit) = pg.connect_client().await.unwrap();
+        let insert = "INSERT INTO loan.outbox_events (event_id,event_type,contract_version,occurred_at,correlation_id,payload) VALUES ($1,$2,1,$3,'corr',$4)";
+        client
+            .execute(
+                insert,
+                &[
+                    &"bad",
+                    &valid.event_type,
+                    &valid.occurred_at,
+                    &serde_json::json!({"bad": true}),
+                ],
+            )
+            .await
+            .unwrap();
+        client
+            .execute(
+                insert,
+                &[
+                    &valid.event_id,
+                    &valid.event_type,
+                    &valid.occurred_at,
+                    &serde_json::to_value(&valid).unwrap(),
+                ],
+            )
+            .await
+            .unwrap();
+    }
+    let items = pg.claim_pending_batch(10, 60).await.unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].event_id, valid.event_id);
+    let (client, _permit) = pg.connect_client().await.unwrap();
+    let row = client
+        .query_one(
+            "SELECT status, claimed_until IS NULL, last_error FROM loan.outbox_events WHERE event_id = 'bad'",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(row.get::<_, String>(0), "FAILED");
+    assert!(row.get::<_, bool>(1));
+    assert!(row.get::<_, String>(2).starts_with("invalid outbox json"));
+    drop(client);
+    assert!(pg.claim_pending_batch(10, 60).await.unwrap().is_empty());
+}
