@@ -61,8 +61,14 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // After a reservation, keep the visible list and order so the acted-on card (and its confirmation) stays put;
+  // the next filter or sort change recomputes it.
+  const shownIds = useRef<string[]>([]);
+  const [frozen, setFrozen] = useState<string[] | null>(null);
+
   const refresh = useCallback(async () => {
     try {
+      setFrozen(shownIds.current);
       setItems((await call<{ items: DeviceModelSummary[] }>("GET", "catalogue")).items);
       setNotice(null);
     } catch (e) {
@@ -75,6 +81,10 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
   const durations = useMemo(() => [...new Set(items.map((i) => i.loanDurationDays))].sort((a, b) => a - b), [items]);
 
   const shown = useMemo(() => {
+    if (frozen) {
+      const byId = new Map(items.map((i) => [i.id, i]));
+      return frozen.flatMap((id) => byId.get(id) ?? []);
+    }
     const q = query.trim().toLowerCase();
     return items
       .filter((i) => cats.length === 0 || cats.includes(i.category))
@@ -83,10 +93,11 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
       .filter((i) => duration === null || i.loanDurationDays === duration)
       .filter((i) => !q || `${i.name} ${i.description} ${i.category} ${i.id}`.toLowerCase().includes(q))
       .sort(SORTS[sort]);
-  }, [items, query, cats, brands, availableOnly, duration, sort]);
+  }, [items, frozen, query, cats, brands, availableOnly, duration, sort]);
+  shownIds.current = shown.map((i) => i.id);
 
-  // Any filter or sort change starts again from the first page.
-  useEffect(() => { setPage(1); }, [query, cats, brands, availableOnly, duration, sort]);
+  // Any filter or sort change starts again from the first page with a fresh order.
+  useEffect(() => { setPage(1); setFrozen(null); }, [query, cats, brands, availableOnly, duration, sort]);
   const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const current = Math.min(page, pages);
   const resultsRef = useRef<HTMLElement>(null);
