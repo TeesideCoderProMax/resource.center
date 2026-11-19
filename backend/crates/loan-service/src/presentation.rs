@@ -549,6 +549,48 @@ mod contract_tests {
     }
 
     #[tokio::test]
+    async fn real_verifier_accepts_signed_student_token() {
+        use crate::auth::test_keys::{claims, sign, KID};
+        let app = build_router(
+            AppState {
+                repo: Arc::new(FakeStore::with_units(1)),
+                auth: Arc::new(crate::infrastructure::Auth0JwtVerifier::with_test_jwks()),
+                environment: "test".into(),
+                service_version: "test".into(),
+            },
+            &[],
+        );
+        let bearer = sign(&claims("s1", &["student"]), KID);
+        let (status, body) = request(
+            &app,
+            "GET",
+            "/api/v1/reservations",
+            Some(&bearer),
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, json!([]));
+        let mut tampered = bearer.clone();
+        let last = if tampered.pop() == Some('A') {
+            'B'
+        } else {
+            'A'
+        };
+        tampered.push(last);
+        let (status, body) = request(
+            &app,
+            "GET",
+            "/api/v1/reservations",
+            Some(&tampered),
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["error"], "InvalidToken");
+    }
+
+    #[tokio::test]
     async fn health_reports_verifier_configuration() {
         for configured in [true, false] {
             let app = app_with(Arc::new(FakeStore::with_units(1)), configured);
