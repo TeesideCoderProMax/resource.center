@@ -46,8 +46,20 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
   const [sort, setSort] = useState<Sort>("availability");
   const [layout, setLayout] = useState<"grid" | "list">("grid");
 
-  // The header search navigates to /?q=…; follow it when already on this page.
+  // A /?q=… link pre-fills the search; follow it when already on this page.
   useEffect(() => { setQuery(initialQuery); }, [initialQuery]);
+
+  // Ctrl/⌘+K focuses the catalogue search.
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [mod, setMod] = useState("Ctrl ");
+  useEffect(() => {
+    if (/Mac|iPhone|iPad/.test(navigator.platform)) setMod("⌘");
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchRef.current?.focus(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -117,7 +129,11 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
           </div>
           <div className="filter-group">
             <label className="field-label" htmlFor="catalogue-search">Search</label>
-            <input id="catalogue-search" type="search" placeholder="Name, category, description…" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <div className="search-box">
+              <Icon name="search" />
+              <input ref={searchRef} id="catalogue-search" type="search" placeholder="Search equipment…" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <kbd aria-hidden="true">{mod}K</kbd>
+            </div>
           </div>
           {categories.length > 1 && (
             <fieldset className="filter-group">

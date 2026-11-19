@@ -60,11 +60,10 @@ main { flex: 1; }
 .top-left { display: flex; align-items: center; gap: 1.5rem; }
 .brand { display: inline-flex; align-items: center; gap: .6rem; font-size: 1.25rem; font-weight: 700; color: var(--accent); text-decoration: none; letter-spacing: -.02em; white-space: nowrap; }
 .brand-mark { display: block; width: 2.4rem; height: 2.4rem; flex-shrink: 0; border-radius: .675rem; box-shadow: 0 4px 12px -4px var(--glow); }
-.top-search { display: none; position: relative; align-items: center; width: 18rem; }
-@media (min-width: 1100px) { .top-search { display: flex; } }
-.top-search .icon { position: absolute; left: .75rem; color: var(--secondary); }
-.top-search input { margin: 0; max-width: none; padding-left: 2.25rem; padding-right: 3rem; background: var(--glass); }
-.top-search kbd { position: absolute; right: .6rem; font: 600 .65rem/1 inherit; padding: .25rem .35rem; border-radius: .35rem; border: 1px solid var(--border-soft); color: var(--secondary); background: var(--surface-low); }
+.search-box { display: flex; position: relative; align-items: center; }
+.search-box .icon { position: absolute; left: .75rem; color: var(--secondary); }
+.search-box input { margin: 0; max-width: none; padding-left: 2.25rem; padding-right: 3rem; background: var(--glass); }
+.search-box kbd { position: absolute; right: .6rem; font: 600 .65rem/1 inherit; padding: .25rem .35rem; border-radius: .35rem; border: 1px solid var(--border-soft); color: var(--secondary); background: var(--surface-low); }
 .nav { list-style: none; display: flex; gap: 1.5rem; margin: 0; padding: 0; flex-wrap: wrap; }
 .nav a { color: var(--muted); text-decoration: none; font-weight: 600; font-size: .9rem; padding-bottom: .25rem; border-bottom: 2px solid transparent; }
 .nav a:hover { color: var(--text); }

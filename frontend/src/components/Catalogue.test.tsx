@@ -62,3 +62,9 @@ test("shows 8 devices per page with previous and next", () => {
   fireEvent.change(screen.getByRole("searchbox", { name: "Search" }), { target: { value: "dell" } });
   expect(names()).toHaveLength(8);
 });
+
+test("Ctrl+K focuses the catalogue search", () => {
+  render(<Catalogue initialItems={items} initialError={null} canAct={false} />);
+  fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+  expect(screen.getByRole("searchbox", { name: "Search" })).toHaveFocus();
+});
