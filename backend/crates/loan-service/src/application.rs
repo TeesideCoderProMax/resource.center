@@ -265,7 +265,18 @@ where
         });
         match publication {
             Ok(()) => {
-                store.mark_published(item.event_id.clone()).await?;
+                if let Err(err) = store.mark_published(item.event_id.clone()).await {
+                    // Sent but not marked: keep the lease so it is not resent at once; it is
+                    // republished after expiry and Notifications drops the duplicate.
+                    failed_count += 1;
+                    tracing::warn!(
+                        event_id = %item.event_id,
+                        correlation_id = %item.correlation_id,
+                        error = %err,
+                        "published but not marked; row will be republished after lease expiry"
+                    );
+                    continue;
+                }
                 published_count += 1;
                 tracing::info!(
                     event_id = %item.event_id,
@@ -560,6 +571,7 @@ mod tests {
         items: Vec<ClaimedOutboxItem>,
         published: Mutex<Vec<String>>,
         failed: Mutex<Vec<(String, String)>>,
+        fail_mark_published: Option<String>,
     }
 
     impl OutboxStorePort for FakeOutbox {
@@ -573,6 +585,11 @@ mod tests {
         }
 
         fn mark_published(&self, event_id: String) -> BoxFuture<'_, Result<(), ApplicationError>> {
+            if self.fail_mark_published.as_ref() == Some(&event_id) {
+                return Box::pin(
+                    async move { Err(ApplicationError::Persistence("db down".into())) },
+                );
+            }
             self.published.lock().unwrap().push(event_id);
             Box::pin(async move { Ok(()) })
         }
@@ -631,6 +648,7 @@ mod tests {
                 .collect(),
             published: Mutex::new(Vec::new()),
             failed: Mutex::new(Vec::new()),
+            fail_mark_published: None,
         };
 
         let summary_fail =
@@ -648,5 +666,41 @@ mod tests {
                 .unwrap();
         assert_eq!(summary_ok.published_count, 2);
         assert_eq!(store.published.lock().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn mark_published_error_does_not_abort_batch() {
+        let events = build_return_outbox_events(
+            Uuid::nil(),
+            "borrower@tees.ac.uk",
+            &["waiter@tees.ac.uk".to_string()],
+            "Dell Latitude 7440",
+            Utc::now(),
+            "corr-1",
+        );
+        let first = events[0].event_id.clone();
+        let second = events[1].event_id.clone();
+        let store = FakeOutbox {
+            items: events
+                .into_iter()
+                .map(|p| ClaimedOutboxItem {
+                    event_id: p.event_id.clone(),
+                    correlation_id: p.correlation_id.clone(),
+                    attempt_count: 1,
+                    payload: p,
+                })
+                .collect(),
+            published: Mutex::new(Vec::new()),
+            failed: Mutex::new(Vec::new()),
+            fail_mark_published: Some(first),
+        };
+        let summary = run_outbox_publish_batch(&store, &FakeBroker { should_fail: false }, 10, 60)
+            .await
+            .unwrap();
+        assert_eq!(summary.claimed_count, 2);
+        assert_eq!(summary.published_count, 1);
+        assert_eq!(summary.failed_count, 1);
+        assert_eq!(*store.published.lock().unwrap(), vec![second]);
+        assert!(store.failed.lock().unwrap().is_empty());
     }
 }
