@@ -185,8 +185,9 @@ select { padding: .55rem .75rem; border-radius: .75rem; border: 1px solid var(--
 .pager { display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem; }
 .pager .btn { min-width: 2.5rem; }
 .pager .btn[aria-current="page"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
-.tip { padding: .9rem; border-radius: .9rem; background: color-mix(in srgb, var(--primary-soft) 65%, transparent); border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent); color: var(--on-primary-soft); font-size: .8rem; }
-.tip strong { display: inline-flex; align-items: center; gap: .3rem; font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); }
+.tip { padding: .9rem; border-radius: .9rem; background: linear-gradient(135deg, #0f172a, #172554 70%, #1e293b); border: 1px solid rgba(255, 255, 255, .08); color: #cbd5e1; font-size: .8rem; box-shadow: 0 12px 24px -14px rgba(15, 23, 42, .6); }
+.tip strong { display: inline-flex; align-items: center; gap: .3rem; font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: #fff; }
+.tip strong svg { color: #fb923c; }
 .tip p { margin: .35rem 0 0; }
 .results { margin: 0; display: flex; flex-direction: column; gap: 1.25rem; }
 .results-bar { padding: 1rem 1.25rem; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; }
