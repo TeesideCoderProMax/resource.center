@@ -3104,3 +3104,19 @@ Created `feat/catalogue-filters-and-rebrand` from local `qa` and committed all u
 ### Validation and outcome
 
 `tsc` and Vitest pass on the tip (44/44) and on the two partly staged frontend commits in a temporary worktree (40 and 43). Playwright e2e and Rust checks were not run.
+
+## 141 — 2026-11-19 — Remove the video from the PR
+
+### Exact input prompt
+
+```text
+Remove the video
+```
+
+### Change summary
+
+Added a commit to `feat/catalogue-filters-and-rebrand` that stops tracking `docs/videos/` and adds it to `.gitignore`, so PR 16's diff no longer contains the explainer video. The files remain on disk. Dropping the earlier commit with a history rewrite and force-push was blocked by the permission check. The ~35 MB still sits in the branch history unless the PR is squash-merged.
+
+### Validation and outcome
+
+`git diff origin/qa..HEAD -- docs/videos` is empty, and the MP4 is still on disk.
