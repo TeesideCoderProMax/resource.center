@@ -17,7 +17,7 @@ api_port="${DEV_API_PORT:-8080}"
 web_port="${DEV_WEB_PORT:-3000}"
 cleanup() {
   echo "Stopping $prefix stack"
-  docker rm -f "$prefix-web" "$prefix-api" "$prefix-pg" >/dev/null 2>&1 || true
+  docker rm -fv "$prefix-web" "$prefix-api" "$prefix-pg" >/dev/null 2>&1 || true
   docker network rm "$prefix" >/dev/null 2>&1 || true
   rm -rf "${cert_dir:-}"
 }
