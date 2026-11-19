@@ -2735,3 +2735,372 @@ Committed and pushed the `deploy.yml` digest fix to `qa`. No other project files
 ### Validation and outcome
 
 Push result checked via git status; the CI rerun outcome is not yet known.
+
+## 121 — 2026-11-13 — Staging deploy: Azure login values missing
+
+### Exact input prompt
+
+````text
+So now we have another error in the dev on the staging env deployment:
+
+
+
+This job failed during the Azure authentication step, before any Terraform deployment or image build ran.
+
+The key error in the log is:
+
+    Login failed with Error: Using auth-type: SERVICE_PRINCIPAL. Not all values are present. Ensure 'client-id' and 'tenant-id' are supplied.
+
+This matches the workflow in .github/workflows/deploy.yml: the release job sets ARM_USE_OIDC and ARM_CLIENT_ID/ARM_TENANT_ID/ARM_SUBSCRIPTION_ID from ${{ vars.AZURE_* }}, then azure/login@v2 uses them. So at least one of those values was empty or not available in this run.
+````
+
+### Change summary
+
+Root cause: the `staging` GitHub environment has no variables (`AZURE_*`, `ACR_*`, `WORKLOADS_*`), only `test` does, and `production` doesn't exist. Configuration needed in GitHub; no code change. No project files changed apart from this log.
+
+### Validation and outcome
+
+Listed environment variables via `gh api` (values truncated); nothing was changed.
+
+## 122 — 2026-11-13 — How to add the staging variables
+
+### Exact input prompt
+
+```text
+How to add them?
+```
+
+### Change summary
+
+Explained how to add GitHub environment variables for staging. No project files changed apart from this log.
+
+### Validation and outcome
+
+Answer from GitHub's standard UI/CLI; nothing run.
+
+## 123 — 2026-11-13 — Staging cost on Azure for Students
+
+### Exact input prompt
+
+```text
+So the "costs money" how much will it cost with the azure for students subscription?
+```
+
+### Change summary
+
+Estimated the staging platform's monthly cost from the repo's Test cost notes. No project files changed apart from this log.
+
+### Validation and outcome
+
+Estimate from `docs/cloud/test-costs.md` and remembered public prices; no live pricing or billing lookup.
+
+## 124 — 2026-11-18 — Plan ports for Auth0 verifier and Service Bus consumer
+
+### Exact input prompt
+
+```text
+Hi, i noticed something on the Auth0JWTverifier has no port. presentation.rs uses the concrete infrastructure type directly, and tests switch to a test key set instead of swapping in a fake.
+
+ServiceBusRestConsumer also has got no port. main.rs creates it and runs it directly, so the receive loop can’t be tested against a fake. Creating it in main.rs is the most apropriate place for that
+
+Plan first the implementation, use the /superpowers:writing-plans
+```
+
+### Change summary
+
+Wrote the plan `docs/superpowers/plans/2026-11-18-auth-and-queue-consumer-ports.md`: `AccessTokenVerifierPort` in loan-service application, `QueueConsumerPort` plus an extracted `run_consumer_loop` in notifications-worker, construction kept in `main.rs`. No code changed.
+
+### Validation and outcome
+
+Plan only; based on reading `auth.rs`, `presentation.rs`, worker `main.rs`/`application.rs`/`infrastructure.rs`. No builds or tests run.
+
+## 125 — 2026-11-18 — Execute ports plan natively
+
+### Exact input prompt
+
+```text
+Native
+```
+
+### Change summary
+
+Added `AccessTokenVerifierPort` (loan-service; `FakeVerifier` in presentation tests) and `QueueConsumerPort` + `run_consumer_loop` (notifications-worker application; `main.rs` still builds `ServiceBusRestConsumer`), and updated the clean-architecture memory. Commits ff6be2e, 49af68c, e8d7484 on `qa`; not pushed.
+
+### Validation and outcome
+
+`cargo test --workspace` passed (loan 17, worker 17 incl. 5 new loop tests); clippy `-D warnings` clean for both crates; a deliberate mutation was caught by `complete_failure_propagates`; `serena memories check` clean. Fresh-reviewer pass found no critical/important issues; minors deferred: no end-to-end signed-JWT router test, no test for loop continuing after renew/abandon failure.
+
+## 126 — 2026-11-19 — Ponytail audit of the QA branch
+
+### Exact input prompt
+
+```text
+Before pushing pls use this skill /ponytail:ponytail-audit and check the state of the QA branch with these changes
+```
+
+### Change summary
+
+Audit found no must-fix issues. Should fix: worker exits on one failed message complete; one outbox mark-published DB error stalls the rest of the batch for the lease; one unparsable outbox row blocks the publisher. Nice to have: new Postgres connection per request; no signed-JWT router test. The 3 local commits are safe to push; uncommitted header change needs untracked `frontend/public/brand/`. No project files changed apart from this log.
+
+### Validation and outcome
+
+Read code paths and ran `cargo test --workspace` earlier (pass), frontend `npm test` (40 passed), `tsc --noEmit` and lint (clean). Terraform, CI workflows, frontend pages and live Azure not audited.
+
+## 127 — 2026-11-19 — Architecture compliance of audit fixes
+
+### Exact input prompt
+
+```text
+If we fix these 5 issues, are we still in compliance wiith the architecture i provided?
+```
+
+### Change summary
+
+Answered yes: all five fixes stay inside existing layers and ownership rules (Loan outbox/publisher, Notifications at-least-once with Cosmos dedup, pooling only inside the Postgres adapter). Noted that #4 adds a dependency and #1 relies on Cosmos dedup, not exactly-once. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked against AGENTS.md architecture constraints and `mem:architecture/clean_architecture`; no code changed or run.
+
+## 128 — 2026-11-19 — Plan the audit fixes
+
+### Exact input prompt
+
+```text
+Plan the fix of these 5 issues
+```
+
+### Change summary
+
+Wrote `docs/superpowers/plans/2026-11-19-audit-fixes.md`: six tasks covering worker complete failure, publisher batch continuation, FAILED marking of unreadable outbox rows, an in-adapter connection idle list (no new dependency), a signed-JWT router test, and close-out. No code changed.
+
+### Validation and outcome
+
+Plan only, based on reading the affected code and the `0001` schema; nothing built or run.
+
+## 129 — 2026-11-19 — Execute audit fixes natively
+
+### Exact input prompt
+
+```text
+Native
+```
+
+### Change summary
+
+Fixed all five audit findings plus two review findings on `qa` (commits f943599..latest, not pushed): worker continues after a failed complete; publisher continues after a mark-published error; unreadable outbox rows marked FAILED and counted as failed; Postgres connections reused via an in-adapter idle list that ROLLBACKs on reuse; signed-JWT router test. Updated `mem:architecture/messaging`.
+
+### Validation and outcome
+
+`cargo test --workspace` (loan 21, worker 18) and clippy `-D warnings` pass; `make backend-test-postgres` 11/11 pass. Each new test seen failing first. Fresh review: two important findings fixed; deferred minors: no backoff/alert on repeated complete failures, no max connection age.
+
+## 130 — 2026-11-19 — Navy and tangerine frontend redesign
+
+### Exact input prompt
+
+```text
+Hello, let's do a redesign to the frontend. Also update the docs.
+
+Palette & Visual Identity: Swapped out the generic light purple/lavender theme for a high-contrast, collegiate modernist aesthetic pairing deep Oxford Navy (#0f172a / #172554) with punchy Vivid Tangerine (#f97316 / #ea580c).
+Header & Navigation: Clean navy typography and accents with energetic tangerine indicators for notifications and reservation cart counts.
+Hero & Catalog Metrics: Restyled the header banner and statistics cards into crisp navy, slate, and porcelain tones.
+Buttons & Interactive CTAs: Primary actions ("Reserve Device", "Join Waitlist", filter checkboxes) now feature vivid tangerine accents for strong visual hierarchy and clear calls-to-action.
+Badges & Cards: Calibrated status indicators with emerald for in-stock devices, vivid tangerine for low-stock alerts, and slate navy for waitlists.
+```
+
+### Change summary
+
+Replaced the purple theme tokens in `frontend/src/app/globals.css` (light and dark) with navy/slate surfaces, tangerine primary actions and badges, emerald/tangerine/navy status colours. Recoloured logo SVGs and regenerated PNG/ICO/apple icons; documented the palette in `frontend/public/brand/README.md`.
+
+### Validation and outcome
+
+`npx tsc --noEmit` passes; frontend has no lint script. Not visually checked in a browser.
+
+## 131 — 2026-11-19 — Navy selected category chips
+
+### Exact input prompt
+
+```text
+ Let's make these secondary buttons like this:
+```
+
+(Prompt included a screenshot of a navy "All Devices" chip with a tangerine icon and a tangerine "142" count badge.)
+
+### Change summary
+
+Selected category chips in `frontend/src/app/globals.css` are now navy with white text, a tangerine icon and a solid tangerine count badge.
+
+### Validation and outcome
+
+CSS-only change; not viewed in a browser.
+
+## 132 — 2026-11-19 — Mount frontend into make dev
+
+### Exact input prompt
+
+```text
+Can you pls mount the frontend files to the "make dev" docker
+```
+
+### Change summary
+
+`make dev` now builds the frontend `deps` stage (`rc-web:deps`) and runs `next dev` with `frontend/` bind-mounted for hot reload (node_modules from the image, `.next` in tmpfs, host uid). Changed `Makefile` and `infra/scripts/dev.sh`.
+
+### Validation and outcome
+
+`bash -n` passes. Not run end to end: an existing `make dev` stack was already on port 3000, so the test run was stopped before it could replace it.
+
+## 133 — 2026-11-19 — Slimmer category scrollbar
+
+### Exact input prompt
+
+```text
+ Let's make this lateral scrollbar more elegant
+```
+
+(Prompt included a screenshot of the category chip row with its thick grey horizontal scrollbar.)
+
+### Change summary
+
+The category chip row scrollbar in `frontend/src/app/globals.css` is now a thin, rounded, faint slate thumb on a transparent track that turns tangerine on hover.
+
+### Validation and outcome
+
+CSS-only change; not viewed in a browser.
+
+## 134 — 2026-11-19 — Navy staff stat cards
+
+### Exact input prompt
+
+```text
+ In the /staff route let's give some of the main cards the navy effect with white lettering.
+
+Image 1 shows the kind of aspect i want to give to the cards 
+Image 2 shows an example of the target cards.
+```
+
+(Prompt included two screenshots: a navy hero banner with white text, and the four staff stat cards.)
+
+### Change summary
+
+The four `/staff` stat cards in `frontend/src/app/globals.css` now have a navy gradient with a faint tangerine glow, white and slate text, glass icon tiles with tangerine icons, a light bar track, and red accents kept on the Overdue card.
+
+### Validation and outcome
+
+CSS-only change; not viewed in a browser.
+
+## 135 — 2026-11-19 — Uniform staff sidebar and sections
+
+### Exact input prompt
+
+```text
+ Let's make it more visual uniform,
+
+On the 2nd image, let's make the staff portal card the same design, also the selected route, i mean the active state will have the secondary button design we discussed earlier.
+
+Finally check all the /staff#(...) routes for visual uniform
+```
+
+(Prompt included screenshots of the /staff page and its sidebar.)
+
+### Change summary
+
+The Staff portal card is now navy. Sidebar links get an active state (`aria-current`, from the URL hash or a click; Overdue tracked separately from Loans) styled like the selected category chip. The Collection queue section is now a glass panel like Loans and Inventory. Changed `frontend/src/components/StaffDesk.tsx` and `frontend/src/app/globals.css`.
+
+### Validation and outcome
+
+`tsc` and vitest (40/40) pass. Viewed every staff section as the fake staff persona with a temporary Playwright screenshot spec (removed afterwards) against `next build` and the fake Loan API. Sections were viewed with empty queue and loan lists only.
+
+## 136 — 2026-11-19 — Staff sidebar follows scroll
+
+### Exact input prompt
+
+```text
+ Im on the Loans page and the loans button in the left sidebar does not appear as active
+```
+
+(Prompt included a screenshot of the /staff Loans section with no sidebar link highlighted.)
+
+### Change summary
+
+The sidebar active state in `frontend/src/components/StaffDesk.tsx` now tracks scroll position (the section nearest the top, Inventory at page bottom) instead of only the URL hash, so scrolling to Loans highlights Loans. After a click, Overdue stays highlighted while the Loans section is in view.
+
+### Validation and outcome
+
+`tsc` passes. A temporary Playwright spec (removed afterwards) passed against `next build` and the fake Loan API: Dashboard on load, Loans after scrolling there, Overdue after its click, Inventory at the bottom.
+
+## 137 — 2026-11-19 — Catalogue department/brand filters and pagination
+
+### Exact input prompt
+
+```text
+Hi, let's analyze the seed script of the products we have in our database and implement in the left sidebar of the products catalogue something like this.
+
+I also want to cap 8 products per page with a page selector to go front and back at the end.
+```
+
+(Prompt included a screenshot of a sidebar with Department checkboxes with counts and a two-column Manufacturer / Brand checkbox grid.)
+
+### Change summary
+
+The seed (`backend/catalogue/campus-items.json`, 36 models) has no department or brand field. So the catalogue sidebar in `frontend/src/components/Catalogue.tsx` now has Category checkboxes with counts (synced with the chips, multi-select) and a two-column Manufacturer / Brand grid, with brand taken from the model name. Results show 8 per page with Previous / page numbers / Next at the end (styles in `frontend/src/app/globals.css`). Tests are in `Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`tsc` and vitest (46/46) pass. Checked in the browser via `next dev` against a scratch API serving the 36 seed models: 8 cards per page, 5 pages, Next moves to page 2. Department filtering was not implemented because the data has no department field. `next dev` printed a Next.js security-upgrade notice that was not acted on.
+
+## 138 — 2026-11-19 — Filters panel scroll and Next.js security upgrade
+
+### Exact input prompt
+
+```text
+ The filters tab must have a different scrollbar than the rest of the page, now i cant scroll here untill i reach the very bottom of the page.
+
+Also update the dependencies to fix the warning
+```
+
+(Prompt included a screenshot of the catalogue with the Filters sidebar cut off at the Manufacturer / Brand list.)
+
+### Change summary
+
+On wide screens the sticky Filters panel now scrolls on its own (`max-height` plus `overflow-y: auto` in `frontend/src/app/globals.css`). Upgraded `next` 16.4.3 → 16.4.6 (2 moderate cache advisories) and `vitest` 3 → 5 (dev-only critical tinypool and moderate mocker advisories) in `frontend/package.json` and `package-lock.json`.
+
+### Validation and outcome
+
+`npm audit` reports 0 vulnerabilities. `tsc`, vitest 5 (43/43) and `next build` pass. In the browser at 1280×720, with the page scrolled 400px, the panel scrolled to its own bottom (606px panel showing 1378px of content).
+
+Correction to entry 137: vitest ran 43 tests, not 46.
+
+## 139 — 2026-11-19 — Single catalogue search with keyboard shortcut
+
+### Exact input prompt
+
+```text
+ Instead of having 2 searchbars, let's remove this at the navbar (image 1) and put the icon and ctrl+k or cmd+k trigger to the navbar in the filter area
+```
+
+(Prompt included screenshots of the header "Search equipment…" bar with a ⌘K badge, and the filter panel's "Name, category, description…" search field.)
+
+### Change summary
+
+Removed the header search (`HeaderSearch` in `frontend/src/components/HeaderParts.tsx` and its use in `AppHeader.tsx`). The catalogue's filter-panel search now has the search icon, a ⌘K (Mac) / Ctrl K badge, and the Ctrl/⌘+K shortcut that focuses it (`Catalogue.tsx`). The `.top-search` styles became `.search-box` in `globals.css`. `/?q=` links still pre-fill the search. Added a shortcut test in `Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`tsc` and vitest (44/44) pass. In the browser (dev server against the 36 seed models), the header has no search, Ctrl+K focuses the filter search, and typing "dell" shows 3 results.
+
+## 140 — 2026-11-19 — Branch, commit and open PR
+
+### Exact input prompt
+
+```text
+Great, let's wrap this up. Move all changes made in this branch into a new branch. Add and commit all changes made by logic group with professional messages and open a PR against QA
+```
+
+### Change summary
+
+Created `feat/catalogue-filters-and-rebrand` from local `qa` and committed all uncommitted work in 10 logical commits: theme, catalogue filters, search shortcut, dependency upgrade, Next agent guide, `make dev`, C4 diagrams, Stage 1 submission, explainer video, and this log. Added `docs/videos/architecture-decisions/.gitignore` so render caches stay out of git. Opened https://github.com/TeesideCoderProMax/resource.center/pull/16 against `qa`. It also carries the 10 local `qa` commits not yet on `origin/qa`.
+
+### Validation and outcome
+
+`tsc` and Vitest pass on the tip (44/44) and on the two partly staged frontend commits in a temporary worktree (40 and 43). Playwright e2e and Rust checks were not run.
