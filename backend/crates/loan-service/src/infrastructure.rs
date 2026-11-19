@@ -45,6 +45,42 @@ pub struct PostgresAdapter {
     cfg: PostgresConfig,
     token_provider: Option<ManagedIdentityTokenProvider>,
     semaphore: Arc<Semaphore>,
+    idle: Arc<std::sync::Mutex<Vec<Client>>>,
+}
+
+/// A connection borrowed from the adapter; it returns to the idle list on drop unless closed.
+pub struct PooledClient {
+    client: Option<Client>,
+    idle: Arc<std::sync::Mutex<Vec<Client>>>,
+    max_idle: usize,
+}
+
+impl std::ops::Deref for PooledClient {
+    type Target = Client;
+    fn deref(&self) -> &Client {
+        self.client.as_ref().expect("client present until drop")
+    }
+}
+
+impl std::ops::DerefMut for PooledClient {
+    fn deref_mut(&mut self) -> &mut Client {
+        self.client.as_mut().expect("client present until drop")
+    }
+}
+
+impl Drop for PooledClient {
+    fn drop(&mut self) {
+        if let Some(client) = self.client.take() {
+            if client.is_closed() {
+                return;
+            }
+            if let Ok(mut idle) = self.idle.lock() {
+                if idle.len() < self.max_idle {
+                    idle.push(client);
+                }
+            }
+        }
+    }
 }
 
 impl PostgresAdapter {
@@ -54,16 +90,32 @@ impl PostgresAdapter {
             cfg,
             token_provider,
             semaphore: Arc::new(Semaphore::new(max_conn)),
+            idle: Arc::default(),
         }
     }
 
     pub async fn connect_client(
         &self,
-    ) -> Result<(Client, tokio::sync::OwnedSemaphorePermit), ApplicationError> {
+    ) -> Result<(PooledClient, tokio::sync::OwnedSemaphorePermit), ApplicationError> {
         let permit =
             self.semaphore.clone().acquire_owned().await.map_err(|e| {
                 ApplicationError::Persistence(format!("connection pool closed: {e}"))
             })?;
+        let pooled = |client| PooledClient {
+            client: Some(client),
+            idle: Arc::clone(&self.idle),
+            max_idle: self.cfg.max_connections.max(1),
+        };
+        // shortcut: no max connection age; Entra tokens are checked only at connect, so
+        // long-lived connections stay valid. Add a max age if Azure starts dropping old sessions.
+        loop {
+            let reused = self.idle.lock().ok().and_then(|mut idle| idle.pop());
+            match reused {
+                Some(client) if !client.is_closed() => return Ok((pooled(client), permit)),
+                Some(_) => continue,
+                None => break,
+            }
+        }
 
         let password = if let Some(ref pass) = self.cfg.static_password {
             pass.clone()
@@ -104,7 +156,7 @@ impl PostgresAdapter {
             }
         });
 
-        Ok((client, permit))
+        Ok((pooled(client), permit))
     }
 
     /// Runs idempotent versioned schema migrations (`0001_initial_loan_schema.sql`),
