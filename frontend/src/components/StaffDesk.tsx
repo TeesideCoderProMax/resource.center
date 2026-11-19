@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { call, fmt } from "@/lib/api-client";
 import type { DeviceModelSummary, ReservationRow } from "@/lib/loan";
 import { categoryIcon, Icon, type IconName } from "./Icon";
@@ -64,6 +64,20 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
   const [notice, setNotice] = useState<NoticeValue>(null);
   const [invQuery, setInvQuery] = useState("");
   const [invCategory, setInvCategory] = useState("");
+  const [section, setSection] = useState("dashboard");
+  useEffect(() => {
+    // Scroll-spy: the section nearest the top (below the sticky header) is active.
+    const ids = ["dashboard", "queue", "loans", "inventory"];
+    const sync = () => {
+      const atBottom = innerHeight + scrollY >= document.documentElement.scrollHeight - 4;
+      const top = atBottom ? ids.at(-1)! : ids.filter((id) => (document.getElementById(id)?.getBoundingClientRect().top ?? Infinity) <= 140).at(-1) ?? ids[0];
+      setSection((cur) => (cur === "overdue" && top === "loans" ? cur : top));
+    };
+    sync();
+    window.addEventListener("scroll", sync, { passive: true });
+    return () => window.removeEventListener("scroll", sync);
+  }, []);
+  const nav = (key: string) => ({ "aria-current": section === key ? ("location" as const) : undefined, onClick: () => setSection(key) });
 
   async function confirm(r: ReservationRow, action: Action) {
     if (busy) return;
@@ -123,11 +137,11 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
       <aside className="admin-side glass" aria-label="Staff sections">
         <div className="side-head"><Icon name="shield" /><div><strong className="block">Staff portal</strong><span className="muted small">Resource Center desk</span></div></div>
         <ul>
-          <li><a href="#dashboard"><Icon name="dashboard" /> Dashboard</a></li>
-          <li><a href="#queue"><Icon name="clock" /> Collection queue {queue.length > 0 && <span className="count">{queue.length}</span>}</a></li>
-          <li><a href="#loans"><Icon name="swap" /> Loans</a></li>
-          <li><a href="#loans" onClick={() => setStatus("OPEN")}><Icon name="alert" /> Overdue {stats.overdue > 0 && <span className="count danger">{stats.overdue}</span>}</a></li>
-          <li><a href="#inventory"><Icon name="grid" /> Inventory</a></li>
+          <li><a href="#dashboard" {...nav("dashboard")}><Icon name="dashboard" /> Dashboard</a></li>
+          <li><a href="#queue" {...nav("queue")}><Icon name="clock" /> Collection queue {queue.length > 0 && <span className="count">{queue.length}</span>}</a></li>
+          <li><a href="#loans" {...nav("loans")}><Icon name="swap" /> Loans</a></li>
+          <li><a href="#loans" aria-current={section === "overdue" ? "location" : undefined} onClick={() => { setStatus("OPEN"); setSection("overdue"); }}><Icon name="alert" /> Overdue {stats.overdue > 0 && <span className="count danger">{stats.overdue}</span>}</a></li>
+          <li><a href="#inventory" {...nav("inventory")}><Icon name="grid" /> Inventory</a></li>
         </ul>
       </aside>
 
@@ -156,7 +170,7 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
         <Notice notice={notice} />
         <Notice notice={error} />
 
-        <section aria-labelledby="queue-h" id="queue">
+        <section aria-labelledby="queue-h" id="queue" className="glass panel-lg">
           <div className="row">
             <div><h2 id="queue-h" className="h-sm"><Icon name="clock" /> Collection queue</h2><p className="muted small">Reserved devices waiting for hand-over at the desk.</p></div>
             {queue.length > 0 && <span className="pill pill-accent">{queue.length} waiting</span>}
