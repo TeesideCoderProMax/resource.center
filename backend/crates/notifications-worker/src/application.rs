@@ -512,7 +512,14 @@ where
                 duplicate_skipped,
                 final_status,
             } => {
-                consumer.complete_message(&msg.lock_location).await?;
+                if let Err(err) = consumer.complete_message(&msg.lock_location).await {
+                    if drain_once {
+                        return Err(err);
+                    }
+                    // Redelivery is safe: the Cosmos job record stops a second send.
+                    error!(event_id = %event_id, error = %err, "failed to complete message; broker will redeliver");
+                    continue;
+                }
                 processed_count += 1;
                 info!(
                     event_id = %event_id,
@@ -1054,6 +1061,7 @@ mod tests {
         completed: Mutex<Vec<String>>,
         abandoned: Mutex<Vec<String>>,
         fail_complete: bool,
+        complete_calls: AtomicUsize,
     }
 
     impl FakeConsumer {
@@ -1063,6 +1071,7 @@ mod tests {
                 completed: Mutex::default(),
                 abandoned: Mutex::default(),
                 fail_complete,
+                complete_calls: AtomicUsize::new(0),
             }
         }
     }
@@ -1079,6 +1088,7 @@ mod tests {
             Ok(())
         }
         async fn complete_message(&self, lock_location: &str) -> Result<(), String> {
+            self.complete_calls.fetch_add(1, Ordering::SeqCst);
             if self.fail_complete {
                 return Err("complete failed".into());
             }
@@ -1168,5 +1178,24 @@ mod tests {
         let consumer = FakeConsumer::new(vec![], false);
         let processed = run_consumer_loop(&consumer, &processor, false, || async {}).await;
         assert_eq!(processed, Ok(0));
+    }
+
+    #[tokio::test]
+    async fn complete_failure_does_not_stop_long_running_loop() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        let consumer = FakeConsumer::new(vec![locked(valid_body("e1"), "lock-1")], true);
+        let shutdown = || {
+            let done = consumer.complete_calls.load(Ordering::SeqCst) >= 1;
+            async move {
+                if !done {
+                    std::future::pending::<()>().await;
+                }
+            }
+        };
+        let processed = run_consumer_loop(&consumer, &processor, false, shutdown).await;
+        assert_eq!(processed, Ok(0));
+        assert_eq!(consumer.complete_calls.load(Ordering::SeqCst), 1);
     }
 }
