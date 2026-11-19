@@ -1,0 +1,30 @@
+<style>#root{background:#7c3aed;color:#fff}
+.chk{position:absolute;left:940px;display:flex;align-items:center;gap:26px;font-size:50px;font-weight:700}
+.chk i{display:block;width:56px;height:56px;border:6px solid #fff;border-radius:12px}
+.goal{position:absolute;left:800px;font-size:66px;font-weight:800;letter-spacing:-.02em;line-height:1.12;width:1030px}
+</style>
+<div id="stage">
+ <svg class="full" viewBox="0 0 1920 1080">
+  <rect id="desk" x="0" y="790" width="1920" height="290" fill="#5b21b6"/>
+  <g id="laptop"><rect x="210" y="330" width="540" height="350" rx="24" fill="#0b1c30"/><rect x="236" y="356" width="488" height="298" rx="8" fill="#ede4ff"/>
+   <path d="M150 690h660l44 100H106z" fill="#dce9ff" stroke="#0b1c30" stroke-width="6" stroke-linejoin="round"/>
+   <path id="tick" d="M390 505l66 66 120-130" fill="none" stroke="#7c3aed" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/></g>
+  <path id="bolt" class="bolt" d="M1740 180l-150 230h100l-130 190 280-260h-110l130-160z"/>
+ </svg>
+ <div class="chk" id="c1" style="top:300px"><i></i>System records it</div>
+ <div class="chk" id="c2" style="top:420px"><i></i>Notification goes out</div>
+ <div class="goal" id="g1" style="top:290px">Run on Azure without managing servers</div>
+ <div class="goal" id="g2" style="top:500px;color:#a7f3d0">Stay correct when requests overlap or services fail</div>
+ <div class="ticket" id="ticket" style="left:330px;top:470px">event-123</div>
+</div>
+<script>
+H.draw(tl,"#tick",T.h1+.3,.5);
+H.slide(tl,"#c1",T.h2+.5,60);H.slide(tl,"#c2",T.h2+1.7,60);
+H.stamp(tl,"#bolt",T.h3+.25);H.shake(tl,"#stage",T.h3+.45);
+tl.to("#c2",{opacity:.35,duration:.2},T.h3+.45);
+H.out(tl,"#c1,#c2,#bolt",T.h4-.15);
+tl.to("#laptop",{scale:.72,x:-60,y:170,transformOrigin:"50% 100%",duration:.6,ease:"power2.inOut"},T.h4-.1);
+H.blur(tl,"#g1",T.h4+.5);H.blur(tl,"#g2",T.h5+.25);
+H.pop(tl,"#ticket",T.h6+.1);
+tl.to("#ticket",{x:1700,duration:.45,ease:"power3.in"},D-.5);
+</script>

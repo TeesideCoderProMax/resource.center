@@ -1,0 +1,27 @@
+<style>#root{background:#ede4ff}
+.ctr{position:absolute;top:400px;height:290px;background:repeating-linear-gradient(90deg,#7c3aed 0 34px,#6d28d9 34px 52px);border:6px solid #0b1c30;border-radius:8px;color:#fff;display:grid;place-items:center;font-size:52px;font-weight:800}
+.ghost{position:absolute;top:372px;height:290px;width:640px;background:#c4b5fd;border:6px solid #0b1c30;border-radius:8px}
+.verb{position:absolute;top:300px;font-size:50px;font-weight:800;color:#3b0f8c}
+.lab{position:absolute;top:716px;font-size:38px;font-weight:700}
+</style>
+<div id="stage">
+ <div class="title">Azure Container Apps</div><div class="sub">Keep the application structure while Azure manages execution</div>
+ <div class="ghost" id="g1" style="left:136px"></div><div class="ghost" id="g2" style="left:1184px"></div>
+ <div class="ctr" id="api" style="left:96px;width:640px"><span id="rust">Rust API</span></div>
+ <div class="ctr" id="wrk" style="left:1144px;width:640px">Notification worker</div>
+ <div class="verb" id="v1" style="left:96px">starts</div><div class="verb" id="v2" style="left:300px">restarts</div><div class="verb" id="v3" style="left:560px">routes</div><div class="verb" id="v4" style="left:780px">scales</div>
+ <div class="lab" id="l1" style="left:96px">scales by HTTP demand</div><div class="lab" id="l2" style="left:1144px">scales by queue backlog</div>
+ <div class="box" id="fn" style="left:96px;top:400px;width:1688px;height:290px;font-size:44px;background:#fff;border-style:dashed">Azure Functions could work: a different execution model</div>
+ <div class="box" id="py" style="left:96px;top:400px;width:640px;height:290px;font-size:52px;font-weight:800;background:#ffd8d8"><span>Python</span></div>
+ <div class="cost" id="cost" style="top:790px"><b>Cost</b>Images, scaling rules, first-request delay</div>
+</div>
+<script>
+H.whipIn(tl);H.head(tl,.2);
+H.slide(tl,"#api",T.a1+1.3);H.slide(tl,"#wrk",T.a1+2.2,70);
+H.blur(tl,"#v1",T.a2+.5);H.blur(tl,"#v2",T.a2+.95);H.blur(tl,"#v3",T.a2+1.5);H.blur(tl,"#v4",T.a2+1.95);
+H.pop(tl,"#g1",T.a3+.6);H.blur(tl,"#l1",T.a3+.6);H.pop(tl,"#g2",T.a3+2.2);H.blur(tl,"#l2",T.a3+2.2);
+H.pop(tl,"#fn",T.a4+.05);H.out(tl,"#fn",T.a4+3.2);
+tl.fromTo("#py",{opacity:0},{opacity:1,duration:.15},T.a6);
+tl.to("#py",{y:-420,opacity:0,duration:.4,ease:"power3.in"},T.a6+1.5);
+H.slide(tl,"#cost",T.a7+.15,80);
+</script>

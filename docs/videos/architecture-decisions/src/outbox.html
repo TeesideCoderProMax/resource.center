@@ -1,0 +1,43 @@
+<style>#root{background:#fff}
+.tx{position:absolute;left:300px;top:300px;width:1320px;height:420px;border:7px solid #7c3aed;border-radius:24px;background:#f4eeff}
+.row{position:absolute;left:380px;width:1160px;height:104px;background:#fff;border:5px solid #0b1c30;border-radius:12px;display:flex;align-items:center;padding-left:34px;font-size:42px;font-weight:700}
+</style>
+<div id="stage">
+ <div class="title">The outbox</div><div class="sub">Prevent a successful database change from losing its notification</div>
+ <div id="two">
+  <div class="box fill" id="pg" style="left:150px;top:400px;width:480px;height:190px">PostgreSQL</div>
+  <div class="box" id="sb" style="left:1290px;top:400px;width:480px;height:190px">Service Bus</div>
+  <svg class="full" viewBox="0 0 1920 1080"><path id="arrow" class="line" d="M650 495H1270" pathLength="1"/></svg>
+ </div>
+ <div class="txt" id="ok" style="left:150px;top:620px">✓ Device returned</div>
+ <svg class="full" viewBox="0 0 1920 1080"><path id="bolt" class="bolt" d="M1020 310l-130 200h90l-110 170 240-230h-96l110-140z"/></svg>
+ <div class="ticket" id="tk" style="left:640px;top:360px">event-123</div>
+ <div class="txt fail" id="lost" style="left:1290px;top:620px">Notification lost</div>
+ <div class="txt" id="rev1" style="left:1290px;top:620px">✓ Notification sent</div>
+ <div class="txt fail" id="rev2" style="left:150px;top:620px">✗ Update failed</div>
+ <div class="tx" id="tx"></div><div class="txt" id="txl" style="left:340px;top:326px;color:#3b0f8c">One PostgreSQL transaction</div>
+ <div class="row" id="r1" style="top:410px">Mark device returned</div><div class="row" id="r2" style="top:540px">Save notification request in outbox</div>
+ <div class="box" id="commit" style="left:560px;top:662px;width:800px;height:110px;background:#0b1c30;color:#fff;border-color:#0b1c30;font-size:46px">Commit both, or neither</div>
+ <div class="txt" id="outage" style="left:96px;top:810px;width:800px">Queue outage? Loans keep working.</div>
+ <div class="cost" id="cost" style="top:790px"><b>Cost</b>Processing, storage, eventual delivery</div>
+</div>
+<script>
+const s=2.05;H.head(tl,s);
+H.slide(tl,"#pg",s+.15);H.slide(tl,"#sb",s+.15,70);H.draw(tl,"#arrow",s+.5,.4);H.blur(tl,"#ok",T.o2+.9);
+tl.fromTo("#tk",{opacity:0},{opacity:1,duration:.15},s+.7);
+H.stamp(tl,"#bolt",T.o2+.3);H.shake(tl,"#stage",T.o2+.5);
+tl.to("#tk",{y:330,rotation:14,opacity:0,duration:.6,ease:"power3.in"},T.o2+.55);
+H.blur(tl,"#lost",T.o2+2.4);
+H.out(tl,"#ok,#lost,#bolt",T.o3-.2);
+tl.to("#sb",{x:-1140,duration:.5,ease:"power2.inOut"},T.o3);tl.to("#pg",{x:1140,duration:.5,ease:"power2.inOut"},T.o3);
+tl.to("#rev1",{opacity:0,duration:.01},0);
+tl.fromTo("#rev1",{opacity:0},{opacity:1,x:-1140,duration:.2},T.o3+1);
+tl.fromTo("#rev2",{opacity:0},{opacity:1,x:1140,duration:.2},T.o3+2);
+H.out(tl,"#two,#rev1,#rev2",T.o4-.2);
+H.pop(tl,"#tx",T.o4+.05);H.blur(tl,"#txl",T.o4+.2);
+H.slide(tl,"#r1",T.o4+1);H.slide(tl,"#r2",T.o4+2.2);
+H.stamp(tl,"#commit",T.o5);
+H.blur(tl,"#outage",T.o6+.1);
+H.slide(tl,"#cost",T.o7+.15,80);
+H.whipOut(tl,D);
+</script>

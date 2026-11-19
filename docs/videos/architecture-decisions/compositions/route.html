@@ -1,0 +1,62 @@
+<template>
+<style>@font-face { font-family: "Plus Jakarta Sans"; src: url("assets/fonts/plus-jakarta-sans.woff2") format("woff2"); font-weight: 200 800; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: "Plus Jakarta Sans", sans-serif; color: #0b1c30; }
+#stage { position: absolute; inset: 0; }
+.title { position: absolute; left: 96px; top: 124px; font-size: 66px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.sub { position: absolute; left: 96px; top: 206px; font-size: 32px; font-weight: 500; color: #494454; }
+.dark .sub { color: #d6cdf0; }
+.box { position: absolute; display: grid; place-items: center; text-align: center; background: #fff; border: 5px solid #0b1c30; border-radius: 16px; font-size: 40px; font-weight: 700; line-height: 1.2; padding: 12px; }
+.fill { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+.txt { position: absolute; font-size: 40px; font-weight: 700; line-height: 1.2; }
+.mono { font-family: "IBM Plex Mono", monospace; font-weight: 600; }
+.ticket { position: absolute; width: 300px; height: 112px; display: grid; place-items: center; background: #a7f3d0; color: #0b1c30; font-family: "IBM Plex Mono", monospace; font-weight: 700; font-size: 38px; border-radius: 12px; border: 5px solid #0b1c30;
+  -webkit-mask: radial-gradient(circle 16px at 0 50%, transparent 98%, #000) left, radial-gradient(circle 16px at 100% 50%, transparent 98%, #000) right; -webkit-mask-size: 51% 100%; -webkit-mask-repeat: no-repeat; }
+.cost { position: absolute; right: 96px; top: 760px; display: flex; align-items: center; gap: 22px; background: #ffb224; color: #0b1c30; border-radius: 14px 44px 44px 14px; padding: 18px 44px 18px 26px; font-size: 36px; font-weight: 700; line-height: 1.2; }
+.cost b { font-weight: 800; padding-right: 22px; border-right: 4px solid #0b1c30; }
+.line { fill: none; stroke: #0b1c30; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+.bolt { fill: #e5484d; stroke: #fff; stroke-width: 6; stroke-linejoin: round; }
+svg.full { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: visible; }
+.w { display: inline-block; white-space: pre; }
+.fail { color: #e5484d; }
+
+#root { pointer-events: none; }
+#strip { position: absolute; left: 0; top: 0; width: 1920px; height: 96px; background: #0b1c30; color: #fff; }
+.stop { position: absolute; top: 20px; width: 190px; display: flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 700; opacity: .5; white-space: nowrap; }
+.stop i { display: block; width: 18px; height: 18px; flex: none; border-radius: 50%; background: #fff; }
+#shade { position: absolute; inset: 0; background: #0b1c30; color: #fff; }
+.card { position: absolute; left: 96px; top: 390px; opacity: 0; width: 1728px; }
+.card div { font-size: 130px; font-weight: 800; letter-spacing: -.025em; }
+.card p { font-size: 46px; font-weight: 500; margin-top: 16px; color: #a7f3d0; }
+</style>
+<div id="root" data-composition-id="route" data-width="1920" data-height="1080" data-layout-allow-overlap data-layout-allow-occlusion>
+<div id="shade"><div class="card" id="kingress"><div>Get it running</div><p>Without managing servers</p></div>
+<div class="card" id="koutbox"><div>Don’t lose it</div><p>One change, one saved request</p></div>
+<div class="card" id="kdupes"><div>Survive the retries</div><p>When requests overlap or services fail</p></div></div>
+<div id="strip"><div class="stop" id="st0" style="left:96px"><i></i>Ingress</div>
+<div class="stop" id="st1" style="left:288px"><i></i>Containers</div>
+<div class="stop" id="st2" style="left:480px"><i></i>Outbox</div>
+<div class="stop" id="st3" style="left:672px"><i></i>Ports</div>
+<div class="stop" id="st4" style="left:864px"><i></i>Publisher</div>
+<div class="stop" id="st5" style="left:1056px"><i></i>Services</div>
+<div class="stop" id="st6" style="left:1248px"><i></i>Retries</div>
+<div class="stop" id="st7" style="left:1440px"><i></i>Leases</div>
+<div class="stop" id="st8" style="left:1632px"><i></i>Recovery</div></div>
+</div>
+<script>
+const tl = gsap.timeline({ paused: true });
+const A = [15.966, 33.752, 59.786, 83.373, 102.702, 118.163, 141.829, 156.628, 178.453];
+let at = 0;
+tl.set("#shade", { clipPath: "inset(0 0 100% 0)" }, 0);
+tl.fromTo("#strip", { y: -96 }, { y: 0, duration: .4, ease: "power2.inOut" }, A[0] - .42);
+A.forEach((a, i) => {
+  tl.fromTo("#st" + i, { opacity: .5 }, { opacity: 1, duration: .2 }, a);
+  tl.fromTo("#st" + i + " i", { backgroundColor: "#ffffff" }, { backgroundColor: "#a7f3d0", scale: 1.3, duration: .2 }, a);
+});
+at=15.966;tl.fromTo("#shade",{clipPath:"inset(0 0 100% 0)"},{clipPath:"inset(0 0 0% 0)",duration:.42,ease:"power2.inOut"},at-.42);tl.fromTo("#kingress",{opacity:0},{opacity:1,duration:.01},at-.3);tl.fromTo("#kingress div",{y:60,filter:"blur(8px)"},{y:0,filter:"blur(0px)",duration:.45,ease:"expo.out"},at-.25);tl.to("#shade",{clipPath:"inset(0 0 100% 0)",duration:.4,ease:"power2.inOut"},at+1.6);tl.set("#kingress",{opacity:0},at+2.02);
+at=59.786;tl.fromTo("#shade",{clipPath:"inset(0 0 100% 0)"},{clipPath:"inset(0 0 0% 0)",duration:.42,ease:"power2.inOut"},at-.42);tl.fromTo("#koutbox",{opacity:0},{opacity:1,duration:.01},at-.3);tl.fromTo("#koutbox div",{y:60,filter:"blur(8px)"},{y:0,filter:"blur(0px)",duration:.45,ease:"expo.out"},at-.25);tl.to("#shade",{clipPath:"inset(0 0 100% 0)",duration:.4,ease:"power2.inOut"},at+1.6);tl.set("#koutbox",{opacity:0},at+2.02);
+at=141.829;tl.fromTo("#shade",{clipPath:"inset(0 0 100% 0)"},{clipPath:"inset(0 0 0% 0)",duration:.42,ease:"power2.inOut"},at-.42);tl.fromTo("#kdupes",{opacity:0},{opacity:1,duration:.01},at-.3);tl.fromTo("#kdupes div",{y:60,filter:"blur(8px)"},{y:0,filter:"blur(0px)",duration:.45,ease:"expo.out"},at-.25);tl.to("#shade",{clipPath:"inset(0 0 100% 0)",duration:.4,ease:"power2.inOut"},at+1.6);tl.set("#kdupes",{opacity:0},at+2.02);
+tl.to("#strip", { y: -96, duration: .3, ease: "power2.in" }, 198.732);
+tl.set({}, {}, 212.252);
+window.__timelines["route"] = tl;
+</script>
+</template>

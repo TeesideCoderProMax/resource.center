@@ -1,0 +1,80 @@
+<template>
+<style>@font-face { font-family: "Plus Jakarta Sans"; src: url("assets/fonts/plus-jakarta-sans.woff2") format("woff2"); font-weight: 200 800; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: "Plus Jakarta Sans", sans-serif; color: #0b1c30; }
+#stage { position: absolute; inset: 0; }
+.title { position: absolute; left: 96px; top: 124px; font-size: 66px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.sub { position: absolute; left: 96px; top: 206px; font-size: 32px; font-weight: 500; color: #494454; }
+.dark .sub { color: #d6cdf0; }
+.box { position: absolute; display: grid; place-items: center; text-align: center; background: #fff; border: 5px solid #0b1c30; border-radius: 16px; font-size: 40px; font-weight: 700; line-height: 1.2; padding: 12px; }
+.fill { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+.txt { position: absolute; font-size: 40px; font-weight: 700; line-height: 1.2; }
+.mono { font-family: "IBM Plex Mono", monospace; font-weight: 600; }
+.ticket { position: absolute; width: 300px; height: 112px; display: grid; place-items: center; background: #a7f3d0; color: #0b1c30; font-family: "IBM Plex Mono", monospace; font-weight: 700; font-size: 38px; border-radius: 12px; border: 5px solid #0b1c30;
+  -webkit-mask: radial-gradient(circle 16px at 0 50%, transparent 98%, #000) left, radial-gradient(circle 16px at 100% 50%, transparent 98%, #000) right; -webkit-mask-size: 51% 100%; -webkit-mask-repeat: no-repeat; }
+.cost { position: absolute; right: 96px; top: 760px; display: flex; align-items: center; gap: 22px; background: #ffb224; color: #0b1c30; border-radius: 14px 44px 44px 14px; padding: 18px 44px 18px 26px; font-size: 36px; font-weight: 700; line-height: 1.2; }
+.cost b { font-weight: 800; padding-right: 22px; border-right: 4px solid #0b1c30; }
+.line { fill: none; stroke: #0b1c30; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+.bolt { fill: #e5484d; stroke: #fff; stroke-width: 6; stroke-linejoin: round; }
+svg.full { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: visible; }
+.w { display: inline-block; white-space: pre; }
+.fail { color: #e5484d; }
+#root{background:#0b1c30;color:#fff}.sub{color:#c7c4d8}
+.pipe{position:absolute;left:520px;top:300px;width:880px;height:120px;border:7px solid #fff;border-radius:60px}
+.m{position:absolute;top:327px;width:64px;height:64px;background:#a7f3d0;border-radius:10px}
+.nd{position:absolute;top:290px;width:400px;height:140px;background:#fff;color:#0b1c30;border-radius:14px;display:grid;place-items:center;font-size:42px;font-weight:800}
+.dir{position:absolute;left:96px;width:1728px;height:82px;display:flex;align-items:center;border-top:3px solid #49566b;font-size:42px;font-weight:700}
+.dir b{width:800px;font-weight:800}.dir span{color:#c7c4d8;font-weight:500}
+</style>
+<div id="root" data-composition-id="services" data-width="1920" data-height="1080" data-layout-allow-overlap>
+
+<div id="stage">
+ <div class="title">Supporting Azure services</div><div class="sub">Give each responsibility a managed home</div>
+ <div id="bus">
+  <div class="pipe"></div><div class="m" id="m1" style="left:600px"></div><div class="m" id="m2" style="left:760px"></div><div class="m" id="m3" style="left:920px"></div>
+  <div class="txt" style="left:760px;top:440px">Service Bus</div>
+  <div class="nd" style="left:96px">Loan</div><div class="nd" id="nf" style="left:1424px">Notifications</div>
+ </div>
+ <div class="dir" id="d1" style="top:280px"><b>PostgreSQL</b><span>Loan state</span></div>
+ <div class="dir" id="d2" style="top:362px"><b>Cosmos DB</b><span>Notification jobs</span></div>
+ <div class="dir" id="d3" style="top:444px"><b>Container Registry</b><span>Images</span></div>
+ <div class="dir" id="d4" style="top:526px"><b>Identities + Key Vault</b><span>Access, credentials</span></div>
+ <div class="dir" id="d5" style="top:608px"><b>Monitor + Log Analytics</b><span>Failures, backlog</span></div>
+ <div class="dir" id="d6" style="top:690px"><b>Terraform state storage</b><span>Shared infrastructure state</span></div>
+ <div class="txt" id="cn" style="left:1320px;top:381px;font-size:34px;color:#ffb224">A choice, not a necessity</div>
+ <div class="cost" id="cost" style="top:800px"><b>Cost</b>Each adds cost or complexity</div>
+</div>
+
+
+</div>
+<script>
+const H = {
+  blur(tl, s, t) { tl.fromTo(s, { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.2, ease: "power4.out" }, t); },
+  pop(tl, s, t, stagger) { tl.fromTo(s, { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.42, ease: "back.out(1.6)", stagger: stagger || 0 }, t); },
+  slide(tl, s, t, x, stagger) { tl.fromTo(s, { opacity: 0, x: x === undefined ? -70 : x }, { opacity: 1, x: 0, duration: 0.5, ease: "expo.out", stagger: stagger || 0 }, t); },
+  drop(tl, s, t) { tl.fromTo(s, { opacity: 0, y: -60 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" }, t); },
+  stamp(tl, s, t) { tl.fromTo(s, { opacity: 0, scale: 1.7 }, { opacity: 1, scale: 1, duration: 0.24, ease: "power4.in" }, t); },
+  draw(tl, s, t, d) { tl.fromTo(s, { strokeDashoffset: 1, strokeDasharray: 1 }, { strokeDashoffset: 0, duration: d || 0.5, ease: "power2.inOut" }, t); },
+  out(tl, s, t) { tl.to(s, { opacity: 0, filter: "blur(8px)", duration: 0.2, ease: "power2.in" }, t); },
+  shake(tl, s, t) { tl.fromTo(s, { x: -16 }, { x: 0, duration: 0.45, ease: "elastic.out(1.4, 0.25)", immediateRender: false }, t); },
+  whipIn(tl) { tl.fromTo("#stage", { x: 1920 }, { x: 0, duration: 0.5, ease: "expo.out" }, 0); },
+  whipOut(tl, D) { tl.to("#stage", { x: -1920, duration: 0.32, ease: "power3.in" }, D - 0.34); },
+  head(tl, t) { H.blur(tl, ".title", t); H.blur(tl, ".sub", t + 0.15); },
+};
+
+const T = {"v1": 0.0, "v2": 5.02, "v3": 7.544, "v4": 12.137, "v5": 15.856, "v7": 18.956}, D = 23.666;
+const tl = gsap.timeline({ paused: true });
+
+H.whipIn(tl);H.head(tl,.2);
+H.pop(tl,"#bus",T.v1+.5);
+tl.to("#nf",{opacity:.3,duration:.3},T.v1+2);
+tl.to("#nf",{opacity:1,duration:.3},T.v1+4);
+tl.to("#m3",{x:400,opacity:0,duration:.5,ease:"power2.in"},T.v1+4.1);
+H.out(tl,"#bus",T.v3-.15);
+H.slide(tl,"#d1",T.v3+.1);H.slide(tl,"#d2",T.v3+2.1);H.slide(tl,"#d3",T.v4+.1);H.slide(tl,"#d4",T.v4+1.5);H.slide(tl,"#d5",T.v5+.1);H.slide(tl,"#d6",T.v5+1.4);
+H.slide(tl,"#cost",T.v7+.15,80);
+tl.to("#d2 b",{color:"#ffb224",duration:.2},T.v7+2.2);H.blur(tl,"#cn",T.v7+2.2);
+
+tl.set({}, {}, D - 0.01);
+window.__timelines["services"] = tl;
+</script>
+</template>

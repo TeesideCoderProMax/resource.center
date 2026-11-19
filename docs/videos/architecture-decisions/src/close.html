@@ -1,0 +1,13 @@
+<style>#root{background:#7c3aed;color:#fff}
+.big{position:absolute;left:96px;top:330px;width:1700px;font-size:112px;font-weight:800;letter-spacing:-.025em;line-height:1.08}
+.q{position:absolute;left:96px;top:690px;font-size:42px;font-weight:600;width:1700px}
+</style>
+<div id="stage">
+ <div class="q" id="q1" style="top:240px">Better failure handling, more implementation complexity</div>
+ <div class="big" id="b1">Explain the failure each one addresses</div>
+ <div class="q" id="q2">Not every choice was required, or the simplest.</div>
+</div>
+<script>
+H.blur(tl,"#q1",T.c1+.2);H.blur(tl,"#q2",T.c2+.1);
+tl.fromTo("#b1 .w",{opacity:0,filter:"blur(6px)"},{opacity:1,filter:"blur(0px)",duration:.13,stagger:.1},T.c3+.8);
+</script>

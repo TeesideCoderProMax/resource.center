@@ -1,0 +1,69 @@
+<template>
+<style>@font-face { font-family: "Plus Jakarta Sans"; src: url("assets/fonts/plus-jakarta-sans.woff2") format("woff2"); font-weight: 200 800; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: "Plus Jakarta Sans", sans-serif; color: #0b1c30; }
+#stage { position: absolute; inset: 0; }
+.title { position: absolute; left: 96px; top: 124px; font-size: 66px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.sub { position: absolute; left: 96px; top: 206px; font-size: 32px; font-weight: 500; color: #494454; }
+.dark .sub { color: #d6cdf0; }
+.box { position: absolute; display: grid; place-items: center; text-align: center; background: #fff; border: 5px solid #0b1c30; border-radius: 16px; font-size: 40px; font-weight: 700; line-height: 1.2; padding: 12px; }
+.fill { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+.txt { position: absolute; font-size: 40px; font-weight: 700; line-height: 1.2; }
+.mono { font-family: "IBM Plex Mono", monospace; font-weight: 600; }
+.ticket { position: absolute; width: 300px; height: 112px; display: grid; place-items: center; background: #a7f3d0; color: #0b1c30; font-family: "IBM Plex Mono", monospace; font-weight: 700; font-size: 38px; border-radius: 12px; border: 5px solid #0b1c30;
+  -webkit-mask: radial-gradient(circle 16px at 0 50%, transparent 98%, #000) left, radial-gradient(circle 16px at 100% 50%, transparent 98%, #000) right; -webkit-mask-size: 51% 100%; -webkit-mask-repeat: no-repeat; }
+.cost { position: absolute; right: 96px; top: 760px; display: flex; align-items: center; gap: 22px; background: #ffb224; color: #0b1c30; border-radius: 14px 44px 44px 14px; padding: 18px 44px 18px 26px; font-size: 36px; font-weight: 700; line-height: 1.2; }
+.cost b { font-weight: 800; padding-right: 22px; border-right: 4px solid #0b1c30; }
+.line { fill: none; stroke: #0b1c30; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+.bolt { fill: #e5484d; stroke: #fff; stroke-width: 6; stroke-linejoin: round; }
+svg.full { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: visible; }
+.w { display: inline-block; white-space: pre; }
+.fail { color: #e5484d; }
+#root{background:#2a1458;color:#fff}.box{color:#0b1c30}</style>
+<div id="root" data-composition-id="dupes" data-width="1920" data-height="1080" data-layout-allow-overlap>
+
+<div id="stage" class="dark">
+ <div class="title">Deduplication</div><div class="sub">Accept that retries happen</div>
+ <div class="box" id="pb" style="left:96px;top:330px;width:420px;height:170px">Publisher</div>
+ <div class="box" id="sb" style="left:1300px;top:330px;width:524px;height:170px">Service Bus</div>
+ <svg class="full" viewBox="0 0 1920 1080"><path id="a1" d="M540 415H1280" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" pathLength="1"/>
+ <path id="bolt" class="bolt" d="M600 290l-120 180h84l-100 150 220-210h-90l100-120z"/></svg>
+ <div class="ticket" id="tA" style="left:645px;top:540px">event-123</div>
+ <div class="ticket" id="tB" style="left:975px;top:540px">event-123</div>
+ <div class="txt" id="same" style="left:360px;width:1200px;text-align:center;top:672px;color:#a7f3d0;font-size:50px">Same event ID</div>
+ <div class="box" id="job" style="left:360px;top:760px;width:1200px;height:110px;font-size:40px;background:#a7f3d0">Check the existing job before sending</div>
+</div>
+
+
+</div>
+<script>
+const H = {
+  blur(tl, s, t) { tl.fromTo(s, { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.2, ease: "power4.out" }, t); },
+  pop(tl, s, t, stagger) { tl.fromTo(s, { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.42, ease: "back.out(1.6)", stagger: stagger || 0 }, t); },
+  slide(tl, s, t, x, stagger) { tl.fromTo(s, { opacity: 0, x: x === undefined ? -70 : x }, { opacity: 1, x: 0, duration: 0.5, ease: "expo.out", stagger: stagger || 0 }, t); },
+  drop(tl, s, t) { tl.fromTo(s, { opacity: 0, y: -60 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" }, t); },
+  stamp(tl, s, t) { tl.fromTo(s, { opacity: 0, scale: 1.7 }, { opacity: 1, scale: 1, duration: 0.24, ease: "power4.in" }, t); },
+  draw(tl, s, t, d) { tl.fromTo(s, { strokeDashoffset: 1, strokeDasharray: 1 }, { strokeDashoffset: 0, duration: d || 0.5, ease: "power2.inOut" }, t); },
+  out(tl, s, t) { tl.to(s, { opacity: 0, filter: "blur(8px)", duration: 0.2, ease: "power2.in" }, t); },
+  shake(tl, s, t) { tl.fromTo(s, { x: -16 }, { x: 0, duration: 0.45, ease: "elastic.out(1.4, 0.25)", immediateRender: false }, t); },
+  whipIn(tl) { tl.fromTo("#stage", { x: 1920 }, { x: 0, duration: 0.5, ease: "expo.out" }, 0); },
+  whipOut(tl, D) { tl.to("#stage", { x: -1920, duration: 0.32, ease: "power3.in" }, D - 0.34); },
+  head(tl, t) { H.blur(tl, ".title", t); H.blur(tl, ".sub", t + 0.15); },
+};
+
+const T = {"d1": 0.0, "d2": 1.756, "d3": 6.648, "d4": 8.361}, D = 14.799;
+const tl = gsap.timeline({ paused: true });
+
+const s=2.05;H.head(tl,s);
+H.slide(tl,"#pb",s+.1);H.slide(tl,"#sb",s+.1,70);
+H.draw(tl,"#a1",T.d2+.2,.5);H.pop(tl,"#tA",T.d2+.7);
+H.stamp(tl,"#bolt",T.d2+1.6);H.shake(tl,"#stage",T.d2+1.8);
+H.out(tl,"#bolt",T.d2+3.3);
+H.pop(tl,"#tB",T.d2+3.6);
+H.blur(tl,"#same",T.d3+.3);
+H.pop(tl,"#job",T.d4+2.6);
+H.whipOut(tl,D);
+
+tl.set({}, {}, D - 0.01);
+window.__timelines["dupes"] = tl;
+</script>
+</template>

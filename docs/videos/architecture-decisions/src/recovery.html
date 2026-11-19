@@ -1,0 +1,27 @@
+<style>#root{background:#2a1458;color:#fff}
+.ln{position:absolute;left:96px;width:1728px;height:92px;display:flex;align-items:center;border-top:3px solid #6c58a0;font-size:44px;font-weight:700}
+.ln b{width:900px;font-weight:800}.ln span{color:#a7f3d0}
+</style>
+<div id="stage" class="dark">
+ <div class="title">Recovery rules</div><div class="sub">Every delivery gets one outcome</div>
+ <div id="rows">
+ <div class="ln" id="l1" style="top:280px"><b>Already completed</b><span>Acknowledge</span></div>
+ <div class="ln" id="l2" style="top:372px"><b>Actively owned</b><span>Stay out</span></div>
+ <div class="ln" id="l3" style="top:464px"><b>Expired ownership</b><span>Recover</span></div>
+ <div class="ln" id="l4" style="top:556px"><b>Temporary failure</b><span>Retry with backoff</span></div>
+ <div class="ln" id="l5" style="top:648px"><b>Malformed or repeatedly failing</b><span>Dead-letter</span></div>
+ </div>
+ <div class="box" id="prov" style="left:96px;top:340px;width:640px;height:220px;color:#0b1c30">Email provider<br>✓ accepted</div>
+ <div class="box" id="rec" style="left:1184px;top:340px;width:640px;height:220px;color:#0b1c30;border-style:dashed">Job record<br>success not saved</div>
+ <svg class="full" viewBox="0 0 1920 1080"><path id="bolt" class="bolt" d="M1000 280l-140 200h100l-110 170 250-240h-100l110-130z"/></svg>
+ <div class="txt" id="no" style="left:96px;top:690px;width:1728px;text-align:center;font-size:72px;font-weight:800;color:#ffb224">No exactly-once promise</div>
+</div>
+<script>
+H.whipIn(tl);H.head(tl,.2);
+[["#l1",T.r2],["#l2",T.r3],["#l3",T.r4],["#l4",T.r5],["#l5",T.r6]].forEach(([s,t])=>H.slide(tl,s,t+.1));
+H.out(tl,"#rows",T.r7-.2);
+tl.to(".sub",{opacity:0,duration:.15},T.r7-.2);
+H.slide(tl,"#prov",T.r7+1.2);H.stamp(tl,"#bolt",T.r7+3.2);H.shake(tl,"#stage",T.r7+3.4);H.slide(tl,"#rec",T.r7+3.8,70);
+H.stamp(tl,"#no",T.r8+1);
+tl.fromTo("#root",{backgroundColor:"#2a1458"},{backgroundColor:"#7c3aed",duration:.4,ease:"power2.inOut"},D-.42);
+</script>

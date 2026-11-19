@@ -1,0 +1,30 @@
+<style>#root{background:#f8f9ff}
+.st{position:absolute;font-size:40px;font-weight:800;color:#8a8aa0}
+</style>
+<div id="stage">
+ <div class="title">Scheduled publisher</div><div class="sub">Ensure saved requests eventually leave the outbox</div>
+ <svg class="full" viewBox="0 0 1920 1080">
+  <circle cx="580" cy="560" r="230" fill="#fff" stroke="#0b1c30" stroke-width="9"/>
+  <path id="arc" d="M580 330a230 230 0 1 1-.1 0" fill="none" stroke="#7c3aed" stroke-width="24" pathLength="1"/>
+  <line id="hand" x1="580" y1="560" x2="580" y2="380" stroke="#0b1c30" stroke-width="10" stroke-linecap="round"/><circle cx="580" cy="560" r="14" fill="#0b1c30"/>
+  <path id="flow" class="line" d="M1180 560H1470" pathLength="1"/>
+ </svg>
+ <div class="st" id="s1" style="left:520px;top:270px">Wake</div><div class="st" id="s2" style="left:830px;top:440px">Claim</div><div class="st" id="s3" style="left:790px;top:740px">Publish</div><div class="st" id="s4" style="left:160px;top:740px">Record</div><div class="st" id="s5" style="left:220px;top:440px">Exit</div>
+ <div class="box" id="ob" style="left:1000px;top:470px;width:190px;height:180px;font-size:36px">Outbox</div>
+ <div class="box fill" id="sb" style="left:1470px;top:470px;width:354px;height:180px">Service Bus</div>
+ <div class="ticket" id="tk" style="left:1000px;top:340px">event-123</div>
+ <div class="box" id="api" style="left:1000px;top:700px;width:420px;height:90px;font-size:34px;background:#e5e7ee;border-color:#8a8aa0;color:#5e5c6e">API: scaled to zero</div>
+ <div class="cost" id="cost" style="top:810px"><b>Cost</b>Delay; runs even with no work</div>
+</div>
+<script>
+H.whipIn(tl);H.head(tl,.2);
+H.pop(tl,"#ob",T.b1+.3);H.pop(tl,"#tk",T.b1+.5);H.slide(tl,"#sb",T.b1+.9,70);H.draw(tl,"#flow",T.b1+1.1,.4);
+const t0=T.b2+1;
+H.draw(tl,"#arc",t0-.3,4.6);tl.fromTo("#hand",{rotation:0,svgOrigin:"580 560"},{rotation:360,duration:4.6,ease:"none"},t0-.3);
+[0,.75,1.75,2.7,3.5].forEach((d,i)=>tl.fromTo("#s"+(i+1),{color:"#8a8aa0"},{color:"#7c3aed",duration:.12},t0-.8+d*1.15));
+tl.to("#tk",{x:500,y:0,duration:.55,ease:"power2.inOut"},t0+1.2);
+H.slide(tl,"#api",T.b3+.2);
+H.draw(tl,"#arc",T.b3+.2,2.5);tl.to("#hand",{rotation:720,duration:2.5,ease:"none"},T.b3+.2);
+H.slide(tl,"#cost",T.b4+.2,80);
+H.whipOut(tl,D);
+</script>
