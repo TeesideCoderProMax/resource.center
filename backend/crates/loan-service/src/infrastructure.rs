@@ -11,8 +11,8 @@ use tokio_postgres::Client;
 use uuid::Uuid;
 
 use crate::application::{
-    ApplicationError, BoxFuture, ClaimedOutboxItem, LoanRepositoryPort, LoanStorePort,
-    LoanTransactionPort, OutboxStorePort, QueuePublisherPort, SubscriptionReceipt,
+    ApplicationError, BoxFuture, ClaimedBatch, ClaimedOutboxItem, LoanRepositoryPort,
+    LoanStorePort, LoanTransactionPort, OutboxStorePort, QueuePublisherPort, SubscriptionReceipt,
     TransactionAction,
 };
 use crate::domain::{
@@ -111,7 +111,13 @@ impl PostgresAdapter {
         loop {
             let reused = self.idle.lock().ok().and_then(|mut idle| idle.pop());
             match reused {
-                Some(client) if !client.is_closed() => return Ok((pooled(client), permit)),
+                // A request cancelled between BEGIN and commit/rollback can leave the
+                // session in a transaction; ROLLBACK is a no-op warning otherwise.
+                Some(client) if !client.is_closed() => {
+                    if client.batch_execute("ROLLBACK").await.is_ok() {
+                        return Ok((pooled(client), permit));
+                    }
+                }
                 Some(_) => continue,
                 None => break,
             }
@@ -418,6 +424,7 @@ impl PostgresAdapter {
 
         let reclaimed_batch = self.claim_pending_batch(10, 5).await?;
         let reclaimed_item = reclaimed_batch
+            .items
             .iter()
             .find(|item| item.event_id == collection.outbox_event_id)
             .ok_or_else(|| {
@@ -779,7 +786,7 @@ impl OutboxStorePort for PostgresAdapter {
         &self,
         batch_size: i64,
         lease_seconds: i64,
-    ) -> BoxFuture<'_, Result<Vec<ClaimedOutboxItem>, ApplicationError>> {
+    ) -> BoxFuture<'_, Result<ClaimedBatch, ApplicationError>> {
         Box::pin(async move {
             let (mut client, _permit) = self.connect_client().await?;
             let tx = client
@@ -825,7 +832,10 @@ impl OutboxStorePort for PostgresAdapter {
             tx.commit()
                 .await
                 .map_err(|e| ApplicationError::Persistence(format!("commit claim tx: {e}")))?;
-            Ok(items)
+            Ok(ClaimedBatch {
+                items,
+                unreadable: unreadable.len(),
+            })
         })
     }
 

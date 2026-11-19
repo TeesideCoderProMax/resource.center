@@ -465,7 +465,9 @@ async fn postgres_tests_unreadable_outbox_row_is_failed_and_others_publish() {
             .await
             .unwrap();
     }
-    let items = pg.claim_pending_batch(10, 60).await.unwrap();
+    let batch = pg.claim_pending_batch(10, 60).await.unwrap();
+    assert_eq!(batch.unreadable, 1);
+    let items = batch.items;
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].event_id, valid.event_id);
     let (client, _permit) = pg.connect_client().await.unwrap();
@@ -480,7 +482,12 @@ async fn postgres_tests_unreadable_outbox_row_is_failed_and_others_publish() {
     assert!(row.get::<_, bool>(1));
     assert!(row.get::<_, String>(2).starts_with("invalid outbox json"));
     drop(client);
-    assert!(pg.claim_pending_batch(10, 60).await.unwrap().is_empty());
+    assert!(pg
+        .claim_pending_batch(10, 60)
+        .await
+        .unwrap()
+        .items
+        .is_empty());
 }
 
 async fn backend_pid(pg: &PostgresAdapter) -> i32 {
@@ -531,4 +538,28 @@ async fn postgres_tests_pool_reuses_connection_after_rolled_back_transaction() {
         .get(0);
     assert_eq!(in_tx, None);
     client.query_one("SELECT 1", &[]).await.unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_pool_does_not_reuse_open_transaction() {
+    let pg = adapter("postgres");
+    {
+        // A request cancelled after BEGIN but before a Transaction exists queues no ROLLBACK.
+        let (client, _permit) = pg.connect_client().await.unwrap();
+        client
+            .batch_execute("BEGIN; CREATE TEMP TABLE leak_probe (x int)")
+            .await
+            .unwrap();
+    }
+    let (client, _permit) = pg.connect_client().await.unwrap();
+    let fresh: bool = client
+        .query_one("SELECT to_regclass('pg_temp.leak_probe') IS NULL", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert!(
+        fresh,
+        "borrowed connection was still inside an earlier transaction"
+    );
 }

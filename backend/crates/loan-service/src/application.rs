@@ -71,6 +71,14 @@ pub struct ReturnReceipt {
     pub outbox_event_ids: Vec<String>,
 }
 
+/// Rows claimed for publishing; `unreadable` counts rows already marked FAILED because
+/// their payload no longer parses.
+#[derive(Debug, Clone, Default)]
+pub struct ClaimedBatch {
+    pub items: Vec<ClaimedOutboxItem>,
+    pub unreadable: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct ClaimedOutboxItem {
     pub event_id: String,
@@ -152,7 +160,7 @@ pub trait OutboxStorePort: Send + Sync {
         &self,
         batch_size: i64,
         lease_seconds: i64,
-    ) -> BoxFuture<'_, Result<Vec<ClaimedOutboxItem>, ApplicationError>>;
+    ) -> BoxFuture<'_, Result<ClaimedBatch, ApplicationError>>;
     fn mark_published(&self, event_id: String) -> BoxFuture<'_, Result<(), ApplicationError>>;
     fn record_publish_failure(
         &self,
@@ -248,11 +256,11 @@ where
     // later rows are not reclaimed while this publisher still owns the batch.
     let lease_seconds = lease_seconds.clamp(60, 3600).max(batch_size * 35 + 60);
     let claimed = store.claim_pending_batch(batch_size, lease_seconds).await?;
-    let claimed_count = claimed.len();
+    let claimed_count = claimed.items.len() + claimed.unreadable;
     let mut published_count = 0usize;
-    let mut failed_count = 0usize;
+    let mut failed_count = claimed.unreadable;
 
-    for item in claimed {
+    for item in claimed.items {
         let publication = tokio::time::timeout(
             std::time::Duration::from_secs(35),
             publisher.publish_request(item.payload.clone()),
@@ -572,6 +580,7 @@ mod tests {
         published: Mutex<Vec<String>>,
         failed: Mutex<Vec<(String, String)>>,
         fail_mark_published: Option<String>,
+        unreadable: usize,
     }
 
     impl OutboxStorePort for FakeOutbox {
@@ -579,9 +588,12 @@ mod tests {
             &self,
             _batch_size: i64,
             _lease_seconds: i64,
-        ) -> BoxFuture<'_, Result<Vec<ClaimedOutboxItem>, ApplicationError>> {
-            let items = self.items.clone();
-            Box::pin(async move { Ok(items) })
+        ) -> BoxFuture<'_, Result<ClaimedBatch, ApplicationError>> {
+            let batch = ClaimedBatch {
+                items: self.items.clone(),
+                unreadable: self.unreadable,
+            };
+            Box::pin(async move { Ok(batch) })
         }
 
         fn mark_published(&self, event_id: String) -> BoxFuture<'_, Result<(), ApplicationError>> {
@@ -649,6 +661,7 @@ mod tests {
             published: Mutex::new(Vec::new()),
             failed: Mutex::new(Vec::new()),
             fail_mark_published: None,
+            unreadable: 0,
         };
 
         let summary_fail =
@@ -693,6 +706,7 @@ mod tests {
             published: Mutex::new(Vec::new()),
             failed: Mutex::new(Vec::new()),
             fail_mark_published: Some(first),
+            unreadable: 0,
         };
         let summary = run_outbox_publish_batch(&store, &FakeBroker { should_fail: false }, 10, 60)
             .await
@@ -702,5 +716,21 @@ mod tests {
         assert_eq!(summary.failed_count, 1);
         assert_eq!(*store.published.lock().unwrap(), vec![second]);
         assert!(store.failed.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn unreadable_rows_count_as_failed() {
+        let store = FakeOutbox {
+            items: Vec::new(),
+            published: Mutex::new(Vec::new()),
+            failed: Mutex::new(Vec::new()),
+            fail_mark_published: None,
+            unreadable: 2,
+        };
+        let summary = run_outbox_publish_batch(&store, &FakeBroker { should_fail: false }, 10, 60)
+            .await
+            .unwrap();
+        assert_eq!(summary.claimed_count, 2);
+        assert_eq!(summary.failed_count, 2);
     }
 }
