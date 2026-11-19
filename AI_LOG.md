@@ -3120,3 +3120,37 @@ Added a commit to `feat/catalogue-filters-and-rebrand` that stops tracking `docs
 ### Validation and outcome
 
 `git diff origin/qa..HEAD -- docs/videos` is empty, and the MP4 is still on disk.
+
+## 142 — 2026-11-19 — Navy borrower note
+
+### Exact input prompt
+
+```text
+ Make this card in the filter area  with the same navy + white text we are using in the staff routes
+```
+
+(Prompt included a screenshot of the peach "Borrower note" tip card.)
+
+### Change summary
+
+The `.tip` card in `frontend/src/app/globals.css` now uses the staff navy gradient with a white heading, light slate body text and a tangerine icon. This matches the staff portal header. Not committed.
+
+### Validation and outcome
+
+CSS-only change. It was not viewed in the browser.
+
+## 143 — 2026-11-19 — Commit and push
+
+### Exact input prompt
+
+```text
+Commit and push
+```
+
+### Change summary
+
+Committed the navy borrower note style and the log as separate commits on `feat/catalogue-filters-and-rebrand` and pushed them to PR 16.
+
+### Validation and outcome
+
+The push succeeded. No further checks; this was a CSS-only change.
