@@ -73,11 +73,12 @@ export function DeviceDetail({ item, canAct, signInHref }: { item: DeviceModelSu
 
   return (
     <>
-      <nav aria-label="Breadcrumb" className="crumbs">
-        <Link href="/"><Icon name="home" size={14} /> Home</Link><span aria-hidden="true">›</span>
-        <Link href="/">Catalog</Link><span aria-hidden="true">›</span>
-        <span className="cap">{item.category}</span><span aria-hidden="true">›</span>
-        <span aria-current="page">{item.name}</span>
+      <nav aria-label="Breadcrumbs" className="crumbs">
+        <ol>
+          <li><Link href="/"><Icon name="home" size={14} /> Catalog</Link></li>
+          <li><Link href={`/?category=${encodeURIComponent(item.category)}`} className="cap">{item.category}</Link></li>
+          <li><Link href={`/devices/${encodeURIComponent(item.id)}`} aria-current="page">{item.name}</Link></li>
+        </ol>
       </nav>
 
       <div className="detail-layout">

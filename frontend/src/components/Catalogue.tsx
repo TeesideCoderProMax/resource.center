@@ -29,16 +29,24 @@ const SORTS: Record<Sort, (a: DeviceModelSummary, b: DeviceModelSummary) => numb
   duration: (a, b) => a.loanDurationDays - b.loanDurationDays || a.name.localeCompare(b.name),
 };
 
-export function Catalogue({ initialItems, initialError, canAct, initialQuery = "" }: {
+const resolveCategory = (items: DeviceModelSummary[], raw: string): string[] => {
+  const target = raw.trim().toLowerCase();
+  if (!target) return [];
+  const match = items.find((i) => i.category.toLowerCase() === target)?.category;
+  return [match ?? raw.trim()];
+};
+
+export function Catalogue({ initialItems, initialError, canAct, initialQuery = "", initialCategory = "" }: {
   initialItems: DeviceModelSummary[];
   initialError: string | null;
   canAct: boolean;
   initialQuery?: string;
+  initialCategory?: string;
 }) {
   const [items, setItems] = useState(initialItems);
   const [notice, setNotice] = useState<NoticeValue>(initialError ? { kind: "error", text: initialError, hint: "degraded" } : null);
   const [query, setQuery] = useState(initialQuery);
-  const [cats, setCats] = useState<string[]>([]);
+  const [cats, setCats] = useState<string[]>(() => resolveCategory(initialItems, initialCategory));
   const [brands, setBrands] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [availableOnly, setAvailableOnly] = useState(false);
@@ -46,8 +54,19 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
   const [sort, setSort] = useState<Sort>("availability");
   const [layout, setLayout] = useState<"grid" | "list">("grid");
 
-  // A /?q=… link pre-fills the search; follow it when already on this page.
+  // Follow /?q=… and /?category=… links when already on this page.
   useEffect(() => { setQuery(initialQuery); }, [initialQuery]);
+  useEffect(() => { setCats(resolveCategory(initialItems, initialCategory)); }, [initialItems, initialCategory]);
+
+  // Keep single-category selection in the URL so browser Back from a device page returns to the same filter.
+  const hasSyncedUrl = useRef(false);
+  useEffect(() => {
+    if (!hasSyncedUrl.current) { hasSyncedUrl.current = true; return; }
+    const url = new URL(window.location.href);
+    if (cats.length === 1) url.searchParams.set("category", cats[0]);
+    else url.searchParams.delete("category");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  }, [cats]);
 
   // Ctrl/⌘+K focuses the catalogue search.
   const searchRef = useRef<HTMLInputElement>(null);
@@ -108,10 +127,21 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
 
   return (
     <>
-      <nav aria-label="Breadcrumb" className="crumbs">
-        <Link href="/">Home</Link><span aria-hidden="true">›</span>
-        <span>Equipment Catalog</span><span aria-hidden="true">›</span>
-        <span aria-current="page" className="accent">{cats.length === 1 ? cats[0] : cats.length > 1 ? `${cats.length} categories` : "All Hardware"}</span>
+      <nav aria-label="Breadcrumbs" className="crumbs">
+        <ol>
+          <li>
+            <Link href="/" onClick={reset}><Icon name="home" size={14} /> Catalog</Link>
+          </li>
+          <li>
+            {cats.length === 1 ? (
+              <Link href={`/?category=${encodeURIComponent(cats[0])}`} aria-current="page" className="accent">{cats[0]}</Link>
+            ) : cats.length > 1 ? (
+              <a href="#catalogue-h" aria-current="page" className="accent" onClick={(e) => e.preventDefault()}>{cats.length} categories</a>
+            ) : (
+              <Link href="/" aria-current="page" className="accent" onClick={reset}>All Hardware</Link>
+            )}
+          </li>
+        </ol>
       </nav>
 
       <h1 className="sr-only">Equipment catalog</h1>

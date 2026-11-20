@@ -68,3 +68,14 @@ test("Ctrl+K focuses the catalogue search", () => {
   fireEvent.keyDown(window, { key: "k", ctrlKey: true });
   expect(screen.getByRole("searchbox", { name: "Search" })).toHaveFocus();
 });
+
+test("initialCategory filters the list and Catalog breadcrumb resets it", () => {
+  render(<Catalogue initialItems={items} initialError={null} canAct={false} initialCategory="tablet" />);
+  expect(names()).toEqual(["iPad Air"]);
+  const nav = screen.getByRole("navigation", { name: "Breadcrumbs" });
+  expect(nav).toHaveTextContent("Catalog");
+  expect(screen.getByRole("link", { name: "tablet" })).toHaveAttribute("aria-current", "page");
+  fireEvent.click(screen.getByRole("link", { name: "Catalog" }));
+  expect(names()).toEqual(["Dell Latitude", "iPad Air"]);
+  expect(screen.getByRole("link", { name: "All Hardware" })).toHaveAttribute("aria-current", "page");
+});

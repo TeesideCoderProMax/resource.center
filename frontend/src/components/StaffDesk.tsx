@@ -148,7 +148,12 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
       <div className="admin-main">
         <section aria-labelledby="staff-h" id="dashboard" className="page-head">
           <div>
-            <nav aria-label="Breadcrumb" className="crumbs"><Link href="/">Home</Link><span aria-hidden="true">›</span><span aria-current="page" className="accent">Staff Admin</span></nav>
+            <nav aria-label="Breadcrumbs" className="crumbs">
+              <ol>
+                <li><Link href="/"><Icon name="home" size={14} /> Catalog</Link></li>
+                <li><Link href="/staff" aria-current="page" className="accent">Staff Admin</Link></li>
+              </ol>
+            </nav>
             <h1 id="staff-h">Staff desk: collection and return</h1>
             <p className="muted">Hand devices over, record returns, chase overdue loans and check stock.</p>
           </div>
