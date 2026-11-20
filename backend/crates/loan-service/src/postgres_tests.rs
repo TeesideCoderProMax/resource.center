@@ -424,3 +424,142 @@ async fn postgres_tests_campus_metadata_backfill_preserves_staff_edits() {
     assert!(ipad.image_url.is_none());
     assert!(items.iter().any(|i| i.id == "unrelated"));
 }
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_unreadable_outbox_row_is_failed_and_others_publish() {
+    let pg = database("unreadable_outbox").await;
+    pg.run_migrations(false).await.unwrap();
+    let valid = build_collection_outbox_event(
+        Uuid::nil(),
+        "s@example.invalid",
+        "Laptop",
+        Utc::now(),
+        "corr",
+    );
+    {
+        let (client, _permit) = pg.connect_client().await.unwrap();
+        let insert = "INSERT INTO loan.outbox_events (event_id,event_type,contract_version,occurred_at,correlation_id,payload) VALUES ($1,$2,1,$3,'corr',$4)";
+        client
+            .execute(
+                insert,
+                &[
+                    &"bad",
+                    &valid.event_type,
+                    &valid.occurred_at,
+                    &serde_json::json!({"bad": true}),
+                ],
+            )
+            .await
+            .unwrap();
+        client
+            .execute(
+                insert,
+                &[
+                    &valid.event_id,
+                    &valid.event_type,
+                    &valid.occurred_at,
+                    &serde_json::to_value(&valid).unwrap(),
+                ],
+            )
+            .await
+            .unwrap();
+    }
+    let batch = pg.claim_pending_batch(10, 60).await.unwrap();
+    assert_eq!(batch.unreadable, 1);
+    let items = batch.items;
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].event_id, valid.event_id);
+    let (client, _permit) = pg.connect_client().await.unwrap();
+    let row = client
+        .query_one(
+            "SELECT status, claimed_until IS NULL, last_error FROM loan.outbox_events WHERE event_id = 'bad'",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(row.get::<_, String>(0), "FAILED");
+    assert!(row.get::<_, bool>(1));
+    assert!(row.get::<_, String>(2).starts_with("invalid outbox json"));
+    drop(client);
+    assert!(pg
+        .claim_pending_batch(10, 60)
+        .await
+        .unwrap()
+        .items
+        .is_empty());
+}
+
+async fn backend_pid(pg: &PostgresAdapter) -> i32 {
+    let (client, _permit) = pg.connect_client().await.unwrap();
+    client
+        .query_one("SELECT pg_backend_pid()", &[])
+        .await
+        .unwrap()
+        .get(0)
+}
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_pool_reuses_connections() {
+    let pg = adapter("postgres");
+    assert_eq!(backend_pid(&pg).await, backend_pid(&pg).await);
+}
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_pool_discards_closed_connection() {
+    let pg = adapter("postgres");
+    let first = backend_pid(&pg).await;
+    let killer = adapter("postgres");
+    let (client, _permit) = killer.connect_client().await.unwrap();
+    client
+        .execute("SELECT pg_terminate_backend($1)", &[&first])
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert_ne!(backend_pid(&pg).await, first);
+}
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_pool_reuses_connection_after_rolled_back_transaction() {
+    let pg = adapter("postgres");
+    {
+        let (mut client, _permit) = pg.connect_client().await.unwrap();
+        let tx = client.transaction().await.unwrap();
+        assert!(tx.execute("SELECT 1/0", &[]).await.is_err());
+    }
+    let (client, _permit) = pg.connect_client().await.unwrap();
+    let in_tx: Option<i64> = client
+        .query_one("SELECT txid_current_if_assigned()::text::bigint", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(in_tx, None);
+    client.query_one("SELECT 1", &[]).await.unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_pool_does_not_reuse_open_transaction() {
+    let pg = adapter("postgres");
+    {
+        // A request cancelled after BEGIN but before a Transaction exists queues no ROLLBACK.
+        let (client, _permit) = pg.connect_client().await.unwrap();
+        client
+            .batch_execute("BEGIN; CREATE TEMP TABLE leak_probe (x int)")
+            .await
+            .unwrap();
+    }
+    let (client, _permit) = pg.connect_client().await.unwrap();
+    let fresh: bool = client
+        .query_one("SELECT to_regclass('pg_temp.leak_probe') IS NULL", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert!(
+        fresh,
+        "borrowed connection was still inside an earlier transaction"
+    );
+}

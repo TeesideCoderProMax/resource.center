@@ -247,13 +247,7 @@ impl NotificationJobStorePort for CosmosRestJobStore {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct PeekLockedMessage {
-    pub body: String,
-    pub lock_location: String,
-    pub message_id: Option<String>,
-    pub delivery_count: Option<u32>,
-}
+pub use crate::application::PeekLockedMessage;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -642,5 +636,28 @@ pub async fn verify_postgres_access_denied(
             );
             Ok(err.to_string())
         }
+    }
+}
+
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to methods returning must-use futures"
+)]
+#[async_trait]
+impl crate::application::QueueConsumerPort for ServiceBusRestConsumer {
+    async fn receive_peek_lock(
+        &self,
+        wait_seconds: u32,
+    ) -> Result<Option<PeekLockedMessage>, String> {
+        ServiceBusRestConsumer::receive_peek_lock(self, wait_seconds).await
+    }
+    async fn renew_lock(&self, lock_location: &str) -> Result<(), String> {
+        ServiceBusRestConsumer::renew_lock(self, lock_location).await
+    }
+    async fn complete_message(&self, lock_location: &str) -> Result<(), String> {
+        ServiceBusRestConsumer::complete_message(self, lock_location).await
+    }
+    async fn abandon_message(&self, lock_location: &str) -> Result<(), String> {
+        ServiceBusRestConsumer::abandon_message(self, lock_location).await
     }
 }

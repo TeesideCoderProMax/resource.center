@@ -11,8 +11,8 @@ use tokio_postgres::Client;
 use uuid::Uuid;
 
 use crate::application::{
-    ApplicationError, BoxFuture, ClaimedOutboxItem, LoanRepositoryPort, LoanStorePort,
-    LoanTransactionPort, OutboxStorePort, QueuePublisherPort, SubscriptionReceipt,
+    ApplicationError, BoxFuture, ClaimedBatch, ClaimedOutboxItem, LoanRepositoryPort,
+    LoanStorePort, LoanTransactionPort, OutboxStorePort, QueuePublisherPort, SubscriptionReceipt,
     TransactionAction,
 };
 use crate::domain::{
@@ -45,6 +45,42 @@ pub struct PostgresAdapter {
     cfg: PostgresConfig,
     token_provider: Option<ManagedIdentityTokenProvider>,
     semaphore: Arc<Semaphore>,
+    idle: Arc<std::sync::Mutex<Vec<Client>>>,
+}
+
+/// A connection borrowed from the adapter; it returns to the idle list on drop unless closed.
+pub struct PooledClient {
+    client: Option<Client>,
+    idle: Arc<std::sync::Mutex<Vec<Client>>>,
+    max_idle: usize,
+}
+
+impl std::ops::Deref for PooledClient {
+    type Target = Client;
+    fn deref(&self) -> &Client {
+        self.client.as_ref().expect("client present until drop")
+    }
+}
+
+impl std::ops::DerefMut for PooledClient {
+    fn deref_mut(&mut self) -> &mut Client {
+        self.client.as_mut().expect("client present until drop")
+    }
+}
+
+impl Drop for PooledClient {
+    fn drop(&mut self) {
+        if let Some(client) = self.client.take() {
+            if client.is_closed() {
+                return;
+            }
+            if let Ok(mut idle) = self.idle.lock() {
+                if idle.len() < self.max_idle {
+                    idle.push(client);
+                }
+            }
+        }
+    }
 }
 
 impl PostgresAdapter {
@@ -54,16 +90,38 @@ impl PostgresAdapter {
             cfg,
             token_provider,
             semaphore: Arc::new(Semaphore::new(max_conn)),
+            idle: Arc::default(),
         }
     }
 
     pub async fn connect_client(
         &self,
-    ) -> Result<(Client, tokio::sync::OwnedSemaphorePermit), ApplicationError> {
+    ) -> Result<(PooledClient, tokio::sync::OwnedSemaphorePermit), ApplicationError> {
         let permit =
             self.semaphore.clone().acquire_owned().await.map_err(|e| {
                 ApplicationError::Persistence(format!("connection pool closed: {e}"))
             })?;
+        let pooled = |client| PooledClient {
+            client: Some(client),
+            idle: Arc::clone(&self.idle),
+            max_idle: self.cfg.max_connections.max(1),
+        };
+        // shortcut: no max connection age; Entra tokens are checked only at connect, so
+        // long-lived connections stay valid. Add a max age if Azure starts dropping old sessions.
+        loop {
+            let reused = self.idle.lock().ok().and_then(|mut idle| idle.pop());
+            match reused {
+                // A request cancelled between BEGIN and commit/rollback can leave the
+                // session in a transaction; ROLLBACK is a no-op warning otherwise.
+                Some(client) if !client.is_closed() => {
+                    if client.batch_execute("ROLLBACK").await.is_ok() {
+                        return Ok((pooled(client), permit));
+                    }
+                }
+                Some(_) => continue,
+                None => break,
+            }
+        }
 
         let password = if let Some(ref pass) = self.cfg.static_password {
             pass.clone()
@@ -104,7 +162,7 @@ impl PostgresAdapter {
             }
         });
 
-        Ok((client, permit))
+        Ok((pooled(client), permit))
     }
 
     /// Runs idempotent versioned schema migrations (`0001_initial_loan_schema.sql`),
@@ -366,6 +424,7 @@ impl PostgresAdapter {
 
         let reclaimed_batch = self.claim_pending_batch(10, 5).await?;
         let reclaimed_item = reclaimed_batch
+            .items
             .iter()
             .find(|item| item.event_id == collection.outbox_event_id)
             .ok_or_else(|| {
@@ -701,12 +760,33 @@ impl LoanTransactionPort for PostgresLoanTransaction<'_> {
     }
 }
 
+/// Splits claimed rows into readable items and `(event_id, error)` for payloads that no
+/// longer parse, so one bad row cannot block the publisher.
+fn split_claimed_rows(
+    rows: Vec<(String, String, i32, serde_json::Value)>,
+) -> (Vec<ClaimedOutboxItem>, Vec<(String, String)>) {
+    let mut items = Vec::with_capacity(rows.len());
+    let mut unreadable = Vec::new();
+    for (event_id, correlation_id, attempt_count, payload) in rows {
+        match serde_json::from_value::<NotificationRequestV1>(payload) {
+            Ok(payload) => items.push(ClaimedOutboxItem {
+                event_id,
+                correlation_id,
+                attempt_count,
+                payload,
+            }),
+            Err(e) => unreadable.push((event_id, format!("invalid outbox json: {e}"))),
+        }
+    }
+    (items, unreadable)
+}
+
 impl OutboxStorePort for PostgresAdapter {
     fn claim_pending_batch(
         &self,
         batch_size: i64,
         lease_seconds: i64,
-    ) -> BoxFuture<'_, Result<Vec<ClaimedOutboxItem>, ApplicationError>> {
+    ) -> BoxFuture<'_, Result<ClaimedBatch, ApplicationError>> {
         Box::pin(async move {
             let (mut client, _permit) = self.connect_client().await?;
             let tx = client
@@ -734,28 +814,28 @@ impl OutboxStorePort for PostgresAdapter {
                 .await
                 .map_err(|e| ApplicationError::Persistence(format!("claim outbox rows: {e}")))?;
 
+            let (items, unreadable) = split_claimed_rows(
+                rows.into_iter()
+                    .map(|r| (r.get(0), r.get(1), r.get(2), r.get(3)))
+                    .collect(),
+            );
+            for (event_id, error) in &unreadable {
+                tracing::error!(event_id = %event_id, error = %error, "outbox row payload unreadable; marked FAILED");
+                tx.execute(
+                    "UPDATE loan.outbox_events SET status = 'FAILED', claimed_until = NULL, last_error = $2 WHERE event_id = $1",
+                    &[event_id, error],
+                )
+                .await
+                .map_err(|e| ApplicationError::Persistence(format!("mark unreadable outbox row: {e}")))?;
+            }
+
             tx.commit()
                 .await
                 .map_err(|e| ApplicationError::Persistence(format!("commit claim tx: {e}")))?;
-
-            let mut items = Vec::with_capacity(rows.len());
-            for row in rows {
-                let event_id: String = row.get(0);
-                let correlation_id: String = row.get(1);
-                let attempt_count: i32 = row.get(2);
-                let payload_val: serde_json::Value = row.get(3);
-                let payload: NotificationRequestV1 =
-                    serde_json::from_value(payload_val).map_err(|e| {
-                        ApplicationError::Persistence(format!("invalid outbox json: {e}"))
-                    })?;
-                items.push(ClaimedOutboxItem {
-                    event_id,
-                    correlation_id,
-                    attempt_count,
-                    payload,
-                });
-            }
-            Ok(items)
+            Ok(ClaimedBatch {
+                items,
+                unreadable: unreadable.len(),
+            })
         })
     }
 
@@ -887,4 +967,40 @@ impl QueuePublisherPort for ServiceBusRestPublisher {
     }
 }
 
-pub use crate::auth::{Auth0JwtVerifier, AuthVerifyError};
+pub use crate::auth::Auth0JwtVerifier;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_claimed_rows_separates_unreadable_payloads() {
+        let valid = crate::application::build_collection_outbox_event(
+            uuid::Uuid::nil(),
+            "s@example.invalid",
+            "Laptop",
+            Utc::now(),
+            "corr",
+        );
+        let rows = vec![
+            (
+                "a".to_string(),
+                "corr".to_string(),
+                1,
+                serde_json::to_value(&valid).unwrap(),
+            ),
+            (
+                "b".to_string(),
+                "corr".to_string(),
+                1,
+                serde_json::json!({"bad": true}),
+            ),
+        ];
+        let (items, bad) = split_claimed_rows(rows);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].event_id, "a");
+        assert_eq!(bad.len(), 1);
+        assert_eq!(bad[0].0, "b");
+        assert!(bad[0].1.starts_with("invalid outbox json"));
+    }
+}

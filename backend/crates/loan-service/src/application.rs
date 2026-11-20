@@ -71,6 +71,14 @@ pub struct ReturnReceipt {
     pub outbox_event_ids: Vec<String>,
 }
 
+/// Rows claimed for publishing; `unreadable` counts rows already marked FAILED because
+/// their payload no longer parses.
+#[derive(Debug, Clone, Default)]
+pub struct ClaimedBatch {
+    pub items: Vec<ClaimedOutboxItem>,
+    pub unreadable: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct ClaimedOutboxItem {
     pub event_id: String,
@@ -89,6 +97,28 @@ pub struct PublishBatchSummary {
 }
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+#[derive(Debug, Error)]
+pub enum AuthVerifyError {
+    #[error("Auth0 issuer/audience configuration is not set on this environment")]
+    NotConfigured,
+    #[error("missing or malformed Authorization Bearer token")]
+    MissingBearerToken,
+    /// Detail is for logs only; clients get a generic message.
+    #[error("invalid access token: {0}")]
+    InvalidToken(String),
+    #[error("token signing keys are unavailable: {0}")]
+    KeysUnavailable(String),
+}
+
+/// Port for access-token verification; the Auth0 adapter lives in infrastructure.
+pub trait AccessTokenVerifierPort: Send + Sync {
+    fn is_configured(&self) -> bool;
+    fn verify_bearer<'a>(
+        &'a self,
+        auth_header: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<AuthenticatedActor, AuthVerifyError>>;
+}
 
 /// Port for Loan persistence and atomic outbox commits.
 pub trait LoanRepositoryPort: Send + Sync {
@@ -130,7 +160,7 @@ pub trait OutboxStorePort: Send + Sync {
         &self,
         batch_size: i64,
         lease_seconds: i64,
-    ) -> BoxFuture<'_, Result<Vec<ClaimedOutboxItem>, ApplicationError>>;
+    ) -> BoxFuture<'_, Result<ClaimedBatch, ApplicationError>>;
     fn mark_published(&self, event_id: String) -> BoxFuture<'_, Result<(), ApplicationError>>;
     fn record_publish_failure(
         &self,
@@ -226,11 +256,11 @@ where
     // later rows are not reclaimed while this publisher still owns the batch.
     let lease_seconds = lease_seconds.clamp(60, 3600).max(batch_size * 35 + 60);
     let claimed = store.claim_pending_batch(batch_size, lease_seconds).await?;
-    let claimed_count = claimed.len();
+    let claimed_count = claimed.items.len() + claimed.unreadable;
     let mut published_count = 0usize;
-    let mut failed_count = 0usize;
+    let mut failed_count = claimed.unreadable;
 
-    for item in claimed {
+    for item in claimed.items {
         let publication = tokio::time::timeout(
             std::time::Duration::from_secs(35),
             publisher.publish_request(item.payload.clone()),
@@ -243,7 +273,18 @@ where
         });
         match publication {
             Ok(()) => {
-                store.mark_published(item.event_id.clone()).await?;
+                if let Err(err) = store.mark_published(item.event_id.clone()).await {
+                    // Sent but not marked: keep the lease so it is not resent at once; it is
+                    // republished after expiry and Notifications drops the duplicate.
+                    failed_count += 1;
+                    tracing::warn!(
+                        event_id = %item.event_id,
+                        correlation_id = %item.correlation_id,
+                        error = %err,
+                        "published but not marked; row will be republished after lease expiry"
+                    );
+                    continue;
+                }
                 published_count += 1;
                 tracing::info!(
                     event_id = %item.event_id,
@@ -538,6 +579,8 @@ mod tests {
         items: Vec<ClaimedOutboxItem>,
         published: Mutex<Vec<String>>,
         failed: Mutex<Vec<(String, String)>>,
+        fail_mark_published: Option<String>,
+        unreadable: usize,
     }
 
     impl OutboxStorePort for FakeOutbox {
@@ -545,12 +588,20 @@ mod tests {
             &self,
             _batch_size: i64,
             _lease_seconds: i64,
-        ) -> BoxFuture<'_, Result<Vec<ClaimedOutboxItem>, ApplicationError>> {
-            let items = self.items.clone();
-            Box::pin(async move { Ok(items) })
+        ) -> BoxFuture<'_, Result<ClaimedBatch, ApplicationError>> {
+            let batch = ClaimedBatch {
+                items: self.items.clone(),
+                unreadable: self.unreadable,
+            };
+            Box::pin(async move { Ok(batch) })
         }
 
         fn mark_published(&self, event_id: String) -> BoxFuture<'_, Result<(), ApplicationError>> {
+            if self.fail_mark_published.as_ref() == Some(&event_id) {
+                return Box::pin(
+                    async move { Err(ApplicationError::Persistence("db down".into())) },
+                );
+            }
             self.published.lock().unwrap().push(event_id);
             Box::pin(async move { Ok(()) })
         }
@@ -609,6 +660,8 @@ mod tests {
                 .collect(),
             published: Mutex::new(Vec::new()),
             failed: Mutex::new(Vec::new()),
+            fail_mark_published: None,
+            unreadable: 0,
         };
 
         let summary_fail =
@@ -626,5 +679,58 @@ mod tests {
                 .unwrap();
         assert_eq!(summary_ok.published_count, 2);
         assert_eq!(store.published.lock().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn mark_published_error_does_not_abort_batch() {
+        let events = build_return_outbox_events(
+            Uuid::nil(),
+            "borrower@tees.ac.uk",
+            &["waiter@tees.ac.uk".to_string()],
+            "Dell Latitude 7440",
+            Utc::now(),
+            "corr-1",
+        );
+        let first = events[0].event_id.clone();
+        let second = events[1].event_id.clone();
+        let store = FakeOutbox {
+            items: events
+                .into_iter()
+                .map(|p| ClaimedOutboxItem {
+                    event_id: p.event_id.clone(),
+                    correlation_id: p.correlation_id.clone(),
+                    attempt_count: 1,
+                    payload: p,
+                })
+                .collect(),
+            published: Mutex::new(Vec::new()),
+            failed: Mutex::new(Vec::new()),
+            fail_mark_published: Some(first),
+            unreadable: 0,
+        };
+        let summary = run_outbox_publish_batch(&store, &FakeBroker { should_fail: false }, 10, 60)
+            .await
+            .unwrap();
+        assert_eq!(summary.claimed_count, 2);
+        assert_eq!(summary.published_count, 1);
+        assert_eq!(summary.failed_count, 1);
+        assert_eq!(*store.published.lock().unwrap(), vec![second]);
+        assert!(store.failed.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn unreadable_rows_count_as_failed() {
+        let store = FakeOutbox {
+            items: Vec::new(),
+            published: Mutex::new(Vec::new()),
+            failed: Mutex::new(Vec::new()),
+            fail_mark_published: None,
+            unreadable: 2,
+        };
+        let summary = run_outbox_publish_batch(&store, &FakeBroker { should_fail: false }, 10, 60)
+            .await
+            .unwrap();
+        assert_eq!(summary.claimed_count, 2);
+        assert_eq!(summary.failed_count, 2);
     }
 }

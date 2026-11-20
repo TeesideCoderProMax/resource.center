@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { AppHeader } from "@/components/AppHeader";
 import { BagProvider } from "@/lib/bag";
 import { getViewer } from "@/lib/viewer";
+import { themeInitScript } from "@/components/ThemeToggle";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,7 +21,8 @@ export default async function RootLayout({
   const viewer = await getViewer();
   const envName = process.env.APP_ENV_NAME || "local";
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: themeInitScript }} /></head>
       <body>
         <a href="#main" className="skip">Skip to content</a>
         <BagProvider>

@@ -4,49 +4,9 @@ Date: 2026-11-01. Design follows ADRs 0002–0004. Backend phase 1 is implemente
 
 This new diagram copies the current Container structure and adds requirement, security, fake and build-order labels. The two business services are Loan and Notifications; the publisher belongs to Loan.
 
-```mermaid
-flowchart TB
-    visitor["Visitor / student / staff"]
-    auth["MVP dependency: Auth0\nOIDC + PKCE; RS256 JWKS\nPhase 3: live sign-in proof pending"]
-    subgraph System["Campus Device Loan System"]
-        web["MVP UI: Next.js\nR1 catalogue; R2 reserve/subscribe; R3 staff flows\nManaged HTTPS; no client secrets\nCatalogue exists; action screens in phase 3"]
-        subgraph Loan["MVP service 1: Loan"]
-            api["Rust + Tokio + Axum API\nR1 catalogue/counts; R2 due dates/subscriptions\nR3 collection/return timestamps; R4 atomic allocation/outbox\nJWT issuer/audience/expiry + student/staff RBAC\nPhase 1: application use cases + domain rules"]
-            pg[("MVP dependency: private PostgreSQL\nLoan state + outbox; model-first row locks\nTLS + per-process managed identity\nPhase 1: migration 0002 + transaction tests")]
-            pub["MVP process: Loan publisher\nR5 async delivery; recoverable outbox lease\nOutbox-only DB grants; Service Bus sender\nExisting process; phase 4 release checks"]
-            mig["MVP process: migration job\nSchema-owner identity; separate seed SQL\nPhase 1 schema; phase 4 safe rollout"]
-        end
-        queue["MVP dependency: Service Bus Basic\nR5 durable async JSON v1 / PeekLock\nEntra sender/receiver roles; dead-letter queue"]
-        subgraph Notifications["MVP service 2: Notifications"]
-            worker["Rust + Tokio worker; no public ingress\nR5 confirmations + availability email\nReceiver identity; no PostgreSQL access\nPhase 2: owned leases/retry/recovery"]
-            cosmos[("MVP dependency: Cosmos DB for NoSQL\nJobs/attempts; eventId partition + ETag\nWorker identity only; phase 2 claim tests")]
-        end
-        logs["MVP operations: logs / health / metrics\nCorrelation IDs; alerts\nPhase 4: CI gates and scaling evidence"]
-    end
-    resend["MVP email dependency: Resend\nHTTPS; API key from Key Vault\nPhase 3: approved live recipient proof"]
-    fakeStore["Local fake storage\nSame Loan use cases; copy-on-success\nPhase 1 unit/HTTP tests"]
-    fakeAuth["Local JWT fixture + cached test JWKS\nReal RS256 verification; no live Auth0\nTests only; phase 1 route contracts"]
-    fakeDelivery["Fake broker / job store / email ports\nLocal tests; stored Test uses fake email\nNo proof of received email"]
-    visitor -->|"HTTPS"| web
-    web -.->|"Phase 3 browser OIDC/PKCE"| auth
-    visitor -->|"HTTPS JSON; Bearer JWT for protected routes"| api
-    web -->|"HTTPS public catalogue fetch"| api
-    api -->|"JWKS HTTPS; verify token and role"| auth
-    api -->|"TLS SQL; state + outbox in one transaction"| pg
-    mig -->|"TLS SQL; migrate before matching API"| pg
-    pub -->|"TLS SQL; claim committed outbox"| pg
-    pub -->|"HTTPS REST; eventId + correlationId"| queue
-    queue -->|"HTTPS PeekLock; KEDA scale signal"| worker
-    worker -->|"HTTPS; conditional ETag writes"| cosmos
-    worker -->|"HTTPS; format and send"| resend
-    api -.->|"Test substitute for storage only"| fakeStore
-    api -.->|"Test identity provider data"| fakeAuth
-    pub -.-> fakeDelivery
-    worker -.-> fakeDelivery
-    api -.-> logs
-    pub -.-> logs
-    worker -.-> logs
-```
+![Stage 2 annotated Container diagram](../architecture/diagrams/4-stage2-plan.png)
+
+Source: page 4 of [`resource-center-c4.drawio`](../architecture/diagrams/resource-center-c4.drawio).
 
 | Label | Requirement and evidence target |
 | --- | --- |

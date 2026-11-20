@@ -407,3 +407,45 @@ async fn selected_periods_set_due_dates_and_invalid_periods_leave_no_writes() {
     }
     assert!(compute_due_at(store.now(), 4, 3).is_err());
 }
+
+/// Fake verifier: bearer `subject:role` authenticates; `keys-down` simulates a JWKS outage.
+pub struct FakeVerifier {
+    pub configured: bool,
+}
+
+impl AccessTokenVerifierPort for FakeVerifier {
+    fn is_configured(&self) -> bool {
+        self.configured
+    }
+
+    fn verify_bearer<'a>(
+        &'a self,
+        auth_header: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<AuthenticatedActor, AuthVerifyError>> {
+        Box::pin(async move {
+            if !self.configured {
+                return Err(AuthVerifyError::NotConfigured);
+            }
+            let token = auth_header
+                .and_then(|h| h.strip_prefix("Bearer "))
+                .filter(|t| !t.is_empty())
+                .ok_or(AuthVerifyError::MissingBearerToken)?;
+            if token == "keys-down" {
+                return Err(AuthVerifyError::KeysUnavailable("fake".into()));
+            }
+            let (subject, role) = token
+                .split_once(':')
+                .ok_or_else(|| AuthVerifyError::InvalidToken("fake".into()))?;
+            let role = match role {
+                "staff" => Role::Staff,
+                "student" => Role::Student,
+                _ => return Err(AuthVerifyError::InvalidToken("fake role".into())),
+            };
+            Ok(AuthenticatedActor {
+                subject: subject.into(),
+                email: format!("{subject}@example.invalid"),
+                roles: vec![role],
+            })
+        })
+    }
+}

@@ -9,14 +9,15 @@ use serde::{Deserialize, Serialize};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use uuid::Uuid;
 
-use crate::application::{ApplicationError, LoanRepositoryPort};
+use crate::application::{
+    AccessTokenVerifierPort, ApplicationError, AuthVerifyError, LoanRepositoryPort,
+};
 use crate::domain::DomainError;
-use crate::infrastructure::{Auth0JwtVerifier, AuthVerifyError};
 
 #[derive(Clone)]
 pub struct AppState {
     pub repo: Arc<dyn LoanRepositoryPort>,
-    pub auth: Auth0JwtVerifier,
+    pub auth: Arc<dyn AccessTokenVerifierPort>,
     pub environment: String,
     pub service_version: String,
 }
@@ -216,7 +217,7 @@ async fn list_catalogue(State(state): State<AppState>, headers: HeaderMap) -> im
 
 async fn list_reservations(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let correlation_id = extract_correlation_id(&headers);
-    let actor = match authenticate_request(&state.auth, &headers).await {
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
         Ok(actor) => actor,
         Err(error) => return map_auth_error(error, &correlation_id).into_response(),
     };
@@ -232,7 +233,7 @@ async fn create_reservation(
     payload: Result<Json<CreateReservationRequest>, axum::extract::rejection::JsonRejection>,
 ) -> impl IntoResponse {
     let correlation_id = extract_correlation_id(&headers);
-    let actor = match authenticate_request(&state.auth, &headers).await {
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
         Ok(a) => a,
         Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
     };
@@ -281,7 +282,7 @@ async fn create_subscription(
     Json(payload): Json<CreateSubscriptionRequest>,
 ) -> impl IntoResponse {
     let correlation_id = extract_correlation_id(&headers);
-    let actor = match authenticate_request(&state.auth, &headers).await {
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
         Ok(a) => a,
         Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
     };
@@ -312,7 +313,7 @@ async fn record_collection(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let correlation_id = extract_correlation_id(&headers);
-    let actor = match authenticate_request(&state.auth, &headers).await {
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
         Ok(a) => a,
         Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
     };
@@ -344,7 +345,7 @@ async fn record_return(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let correlation_id = extract_correlation_id(&headers);
-    let actor = match authenticate_request(&state.auth, &headers).await {
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
         Ok(a) => a,
         Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
     };
@@ -371,7 +372,7 @@ async fn record_return(
 }
 
 async fn authenticate_request(
-    verifier: &Auth0JwtVerifier,
+    verifier: &dyn AccessTokenVerifierPort,
     headers: &HeaderMap,
 ) -> Result<crate::domain::AuthenticatedActor, AuthVerifyError> {
     let auth_header = headers
@@ -467,7 +468,7 @@ mod tests {
     async fn health_and_catalogue_endpoints_respond_with_correlation_id() {
         let state = AppState {
             repo: Arc::new(FakeStore::with_units(2)),
-            auth: Auth0JwtVerifier::from_env(),
+            auth: Arc::new(crate::test_support::FakeVerifier { configured: false }),
             environment: "test".into(),
             service_version: "0.1.0-test".into(),
         };
@@ -529,11 +530,108 @@ mod contract_tests {
     use serde_json::{json, Value};
     use tower::ServiceExt;
 
+    use crate::test_support::FakeVerifier;
+
     fn token(subject: &str, role: &str) -> String {
-        crate::auth::test_keys::sign(
-            &crate::auth::test_keys::claims(subject, &[role]),
-            crate::auth::test_keys::KID,
+        format!("{subject}:{role}")
+    }
+
+    fn app_with(store: Arc<FakeStore>, configured: bool) -> Router {
+        build_router(
+            AppState {
+                repo: store,
+                auth: Arc::new(FakeVerifier { configured }),
+                environment: "test".into(),
+                service_version: "test".into(),
+            },
+            &[],
         )
+    }
+
+    #[tokio::test]
+    async fn real_verifier_accepts_signed_student_token() {
+        use crate::auth::test_keys::{claims, sign, KID};
+        let app = build_router(
+            AppState {
+                repo: Arc::new(FakeStore::with_units(1)),
+                auth: Arc::new(crate::infrastructure::Auth0JwtVerifier::with_test_jwks()),
+                environment: "test".into(),
+                service_version: "test".into(),
+            },
+            &[],
+        );
+        let bearer = sign(&claims("s1", &["student"]), KID);
+        let (status, body) = request(
+            &app,
+            "GET",
+            "/api/v1/reservations",
+            Some(&bearer),
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, json!([]));
+        let mut tampered = bearer.clone();
+        let last = if tampered.pop() == Some('A') {
+            'B'
+        } else {
+            'A'
+        };
+        tampered.push(last);
+        let (status, body) = request(
+            &app,
+            "GET",
+            "/api/v1/reservations",
+            Some(&tampered),
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["error"], "InvalidToken");
+    }
+
+    #[tokio::test]
+    async fn health_reports_verifier_configuration() {
+        for configured in [true, false] {
+            let app = app_with(Arc::new(FakeStore::with_units(1)), configured);
+            let (status, body) = request(&app, "GET", "/health/live", None, json!(null)).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(body["auth0Configured"], json!(configured));
+        }
+    }
+
+    #[tokio::test]
+    async fn fake_verifier_errors_map_to_status() {
+        let app = app_with(Arc::new(FakeStore::with_units(1)), true);
+        let route = "/api/v1/reservations";
+        let (status, body) = request(&app, "GET", route, None, json!(null)).await;
+        assert_eq!(
+            (status, body["error"].clone()),
+            (StatusCode::UNAUTHORIZED, json!("Unauthorized"))
+        );
+        let (status, body) = request(&app, "GET", route, Some("garbage"), json!(null)).await;
+        assert_eq!(
+            (status, body["error"].clone()),
+            (StatusCode::UNAUTHORIZED, json!("InvalidToken"))
+        );
+        let (status, body) = request(&app, "GET", route, Some("keys-down"), json!(null)).await;
+        assert_eq!(
+            (status, body["error"].clone()),
+            (StatusCode::SERVICE_UNAVAILABLE, json!("AuthUnavailable"))
+        );
+        let app = app_with(Arc::new(FakeStore::with_units(1)), false);
+        let (status, body) = request(
+            &app,
+            "GET",
+            route,
+            Some(&token("a", "student")),
+            json!(null),
+        )
+        .await;
+        assert_eq!(
+            (status, body["error"].clone()),
+            (StatusCode::SERVICE_UNAVAILABLE, json!("AuthNotConfigured"))
+        );
     }
     async fn request(
         app: &Router,
@@ -563,15 +661,7 @@ mod contract_tests {
     #[tokio::test]
     async fn invalid_or_missing_periods_return_400_without_writes() {
         let store = Arc::new(FakeStore::with_units(1));
-        let app = build_router(
-            AppState {
-                repo: store.clone(),
-                auth: Auth0JwtVerifier::with_test_jwks(),
-                environment: "test".into(),
-                service_version: "test".into(),
-            },
-            &[],
-        );
+        let app = app_with(store.clone(), true);
         let owner = token("owner", "student");
         for body in [
             json!({"modelId":"model"}),
@@ -595,15 +685,7 @@ mod contract_tests {
     #[tokio::test]
     async fn authenticated_routes_due_date_errors_and_owner_reads() {
         let store = Arc::new(FakeStore::with_units(1));
-        let app = build_router(
-            AppState {
-                repo: store.clone(),
-                auth: Auth0JwtVerifier::with_test_jwks(),
-                environment: "test".into(),
-                service_version: "test".into(),
-            },
-            &[],
-        );
+        let app = app_with(store.clone(), true);
         let owner = token("owner", "student");
         let staff = token("staff", "staff");
         let other = token("other", "student");

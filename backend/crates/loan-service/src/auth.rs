@@ -49,24 +49,26 @@ struct Claims {
     extra: std::collections::HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum AuthVerifyError {
-    #[error("Auth0 issuer/audience configuration is not set on this environment")]
-    NotConfigured,
-    #[error("missing or malformed Authorization Bearer token")]
-    MissingBearerToken,
-    /// Detail is for logs only; clients get a generic message.
-    #[error("invalid access token: {0}")]
-    InvalidToken(String),
-    #[error("token signing keys are unavailable: {0}")]
-    KeysUnavailable(String),
-}
+pub use crate::application::AuthVerifyError;
 
 fn non_blank_env(name: &str) -> Option<String> {
     std::env::var(name)
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
+}
+
+impl crate::application::AccessTokenVerifierPort for Auth0JwtVerifier {
+    fn is_configured(&self) -> bool {
+        self.issuer.is_some() && self.audience.is_some()
+    }
+
+    fn verify_bearer<'a>(
+        &'a self,
+        auth_header: Option<&'a str>,
+    ) -> crate::application::BoxFuture<'a, Result<AuthenticatedActor, AuthVerifyError>> {
+        Box::pin(self.verify(auth_header))
+    }
 }
 
 impl Auth0JwtVerifier {
@@ -132,11 +134,7 @@ impl Auth0JwtVerifier {
         v
     }
 
-    pub fn is_configured(&self) -> bool {
-        self.issuer.is_some() && self.audience.is_some()
-    }
-
-    pub async fn verify_bearer(
+    async fn verify(
         &self,
         auth_header: Option<&str>,
     ) -> Result<AuthenticatedActor, AuthVerifyError> {
@@ -284,6 +282,7 @@ pub mod test_keys {
 mod tests {
     use super::test_keys::*;
     use super::*;
+    use crate::application::AccessTokenVerifierPort;
     use serde_json::json;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
