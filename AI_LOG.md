@@ -3486,3 +3486,19 @@ Removed the redundant dead `Home` crumb and unified breadcrumbs on `Catalog` (`/
 ### Validation and outcome
 
 `npm run typecheck` (`tsc --noEmit`) and `npm test` (vitest, 13 files / 47 tests) pass in `frontend/`. Not visually verified in a running browser.
+
+## 159 — 2026-11-20 — Commit and push the branch
+
+### Exact input prompt
+
+```text
+Go ahead and commit the changes on this branch. Push it at the end
+```
+
+### Change summary
+
+Committed the branch's changes in 4 groups: linked breadcrumbs and the category kept in the URL (85231c4), the clickable catalogue image (b0e422c), the light-blue accents with the electric header logo and the light/dark toggle (e44f2cf), and the AI log (2f5a6a2). Pushed them to `feat/catalogue-filters-and-rebrand`.
+
+### Validation and outcome
+
+The push succeeded (cf4ab69..2f5a6a2). The breadcrumb hunk in `globals.css` was staged on its own with its commit. The suite wasn't re-run before committing; the last run was 46/46.
