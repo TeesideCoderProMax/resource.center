@@ -3186,3 +3186,303 @@ Fixed all 3 Copilot review issues and pushed them to PR 16. (1) `.results` gets 
 ### Validation and outcome
 
 `tsc` and vitest (45/45) pass. Not checked in the browser, and `make dev` was not run.
+
+## 146 — 2026-11-20 — Light-blue cards and clickable catalogue images
+
+### Exact input prompt
+
+```text
+Hi let's change the navy cards troughout the app to this color: #CBDBF5
+
+The secondary buttons stay with that dark blue accent.
+
+Also, when a user clicks on the image of a product on the product catalogue make it also open the product details page
+```
+
+### Change summary
+
+`globals.css`: the navy gradient cards (staff stat cards, staff sidebar header, catalogue borrower note) now use a solid `#CBDBF5` with dark text. Navy buttons and chips are unchanged. `DeviceCard.tsx` wraps the product image in a link to the detail page and keeps it out of the tab order.
+
+### Validation and outcome
+
+`tsc` and vitest (45/45) pass. Not checked in the browser.
+
+## 146 — 2026-11-20 — Electric header logo
+
+### Exact input prompt
+
+```text
+Hi, pls turn our logo into this:
+
+[pasted React Bits integration guide: "Integrate the <ElectricLogo /> component from React Bits" (JavaScript + CSS variant, dependency ogl), with usage example, props table, full component source and CSS]
+```
+
+### Change summary
+
+Added `ogl` and vendored React Bits `ElectricLogo` as `frontend/src/components/ElectricLogo.tsx` (+ `.css`). New client `BrandMark.tsx` overlays orange electric strands on the existing `logo-mark.svg` in `AppHeader.tsx`, switching light/dark theme with the colour scheme; wrapper styles in `globals.css`.
+
+### Validation and outcome
+
+`tsc` clean, vitest 45/45 (one earlier run had a failure that did not reproduce), `next build` succeeds. Not checked in a browser.
+
+## 147 — 2026-11-20 — ogl not found in dev stack
+
+### Exact input prompt
+
+```text
+Ive got this issue: Module not found: Can't resolve 'ogl'
+```
+
+### Change summary
+
+`ogl` is installed on the host, but the running `rc-dev-web` container uses `node_modules` from the `rc-web:deps` image, which was built before `ogl` was added. Restarting `make dev` rebuilds that image from the updated lockfile. No project files changed apart from the log.
+
+### Validation and outcome
+
+Confirmed `frontend/node_modules/ogl` exists on the host, the lockfile includes it, and the Makefile `dev` target rebuilds `rc-web:deps`. Did not restart the stack.
+
+## 148 — 2026-11-20 — Calmer logo interaction
+
+### Exact input prompt
+
+```text
+Awesome, it worls! Make the animation be less reactive
+```
+
+### Change summary
+
+Toned down the header logo's response to the pointer in `frontend/src/components/BrandMark.tsx`. The hover charge drops from 0.75 to 0.25, the charged radius from 40px to 25px, and random arcs happen half as often.
+
+### Validation and outcome
+
+Prop change only; not checked in a browser.
+
+## 149 — 2026-11-20 — Calmer idle logo animation
+
+### Exact input prompt
+
+```text
+I was not talking on the mouse, but on it's normal state, make the "eletric lines" be less reactive
+```
+
+### Change summary
+
+Calmed the header logo's idle strands in `frontend/src/components/BrandMark.tsx` (speed 2.5→1.2, bend 0.4→0.25, crackle 1→0.6, flicker 0.6→0.25) and kept random arcs at 0.5. Restored the previous mouse settings (default cursor intensity, 40px radius).
+
+### Validation and outcome
+
+Prop change only; not checked in a browser.
+
+## 150 — 2026-11-20 — Orange accent on brand name
+
+### Exact input prompt
+
+```text
+Awesome! Can we add some of these orange accents to the letters? [Image #2]
+```
+
+### Change summary
+
+In `AppHeader.tsx`, "Hub" in the header brand now sits in a `.brand-accent` span. `globals.css` gives it the primary orange with a soft glow to match the electric logo.
+
+### Validation and outcome
+
+Not checked in a browser.
+
+## 147 — 2026-11-20 — Light-blue logo and secondary buttons
+
+### Exact input prompt
+
+```text
+Allright so let's bet on this lighter blue for the rest of the app. Change the Logo colors and the secondary button now have this color as well
+```
+
+### Change summary
+
+The logo (`logo.svg`, `logo-mark.svg`, `icon.svg`) now has a `#CBDBF5` tile with a navy screen and an `#EA580C` arrow. Its PNG exports, `apple-icon.png` and `favicon.ico` were regenerated from the SVGs, and the palette note in `public/brand/README.md` was updated. Secondary `.btn` buttons in `globals.css` now have a `#CBDBF5` background with navy text and a `#B6CBEF` hover.
+
+### Validation and outcome
+
+vitest (45/45) passes, and the rendered `logo.png` was checked visually. The app itself was not checked in the browser.
+
+## 148 — 2026-11-20 — Light-blue brand text and selected chip, white pager
+
+### Exact input prompt
+
+```text
+Great! Put this blue accent on image 1 and 2 
+
+Image 3 stays whit as it was.
+
+[Image #1] [Image #2] [Image #3]
+```
+
+### Change summary
+
+In `globals.css`, the header brand text and the selected category chip now use `#CBDBF5`, and the chip text is navy. The pagination buttons are back to the white surface with navy text.
+
+### Validation and outcome
+
+vitest (45/45) passes. The app was not checked in the browser. Light-blue brand text on the near-white header background has very low contrast.
+
+## 149 — 2026-11-20 — Why the chip blue looks darker
+
+### Exact input prompt
+
+```text
+So [Image #4] the blue on the cards appear to be more darker, why is that? I like the more darker the best
+```
+
+### Change summary
+
+Explained that the chip and the brand text use the same `#CBDBF5`. A solid filled area looks more saturated than thin anti-aliased text on a near-white background, so the text appears lighter. Offered a darker text shade. No project files changed apart from the log.
+
+### Validation and outcome
+
+Checked `.brand` and `.chip[aria-pressed]` in `globals.css`. Both use `#cbdbf5`.
+
+## 150 — 2026-11-20 — Darker brand text blue
+
+### Exact input prompt
+
+```text
+Yes
+```
+
+### Change summary
+
+The `.brand` header text colour in `frontend/src/app/globals.css` changed from `#cbdbf5` to `#9db8e8`, so it looks like the chip's blue.
+
+### Validation and outcome
+
+Confirmed with grep that the rule changed. It was not checked in the browser. Contrast is still low on the near-white header (about 2:1).
+
+## 151 — 2026-11-20 — Darker brand text blue (again)
+
+### Exact input prompt
+
+```text
+More dark pls
+```
+
+### Change summary
+
+The `.brand` header text in `frontend/src/app/globals.css` changed from `#9db8e8` to `#4a74c4`. This is a medium blue in the same family that reaches about 4.5:1 contrast on the header.
+
+### Validation and outcome
+
+Confirmed with grep that the rule changed. It was not checked in the browser.
+
+## 152 — 2026-11-20 — Revert logo and brand text to navy
+
+### Exact input prompt
+
+```text
+Okay so let's revert the logo and lettering to the navy blue we were using
+```
+
+### Change summary
+
+Restored the navy logo assets from git: `public/brand/*` (SVGs, PNGs and README) plus `src/app/icon.svg`, `apple-icon.png` and `favicon.ico`. The `.brand` header text in `globals.css` is back to `var(--accent)` (navy). The light-blue cards, chips and secondary buttons are unchanged.
+
+### Validation and outcome
+
+`git status` shows the brand assets clean. Grep confirmed the `.brand` rule changed. It was not checked in the browser.
+
+## 153 — 2026-11-20 — Options for the orange "Hub" and logo glow
+
+### Exact input prompt
+
+```text
+Awesome, [Image #5] the orange does not stay good in here. What are the options?
+```
+
+### Change summary
+
+Found where the orange in the header comes from: `.brand-accent` in `globals.css` (`var(--primary)` plus an orange glow) on "Hub", and the `ElectricLogo` glow (`#fed7aa`/`#f97316`) in `BrandMark.tsx`. Proposed options without applying any. No project files changed apart from the log.
+
+### Validation and outcome
+
+Read `AppHeader.tsx` (uncommitted), `BrandMark.tsx` and `globals.css`. Nothing was applied.
+
+## 154 — 2026-11-20 — Light-blue "Hub" and logo glow
+
+### Exact input prompt
+
+```text
+Let's go 2 + A but keep the 1+A in memory, if i say to go with the second option
+```
+
+### Change summary
+
+"Hub" (`.brand-accent` in `globals.css`) is now `#4a74c4` without the orange glow. The logo mark's shadow and the ElectricLogo glow in `BrandMark.tsx` now use light blue (`#cbdbf5`/`#9db8e8`). The "1 + A" fallback (all-navy text plus the light-blue glow) was saved to Claude's user memory, not the repository.
+
+### Validation and outcome
+
+`tsc` passes. Not checked in the browser.
+
+## 155 — 2026-11-20 — Switch header brand to option 1 + A
+
+### Exact input prompt
+
+```text
+Let's go with the 2nd choice
+```
+
+### Change summary
+
+Applied the saved fallback: `.brand-accent` in `globals.css` now uses `color: inherit`, so "Hub" is navy like the rest of the brand text. The light-blue logo glow is unchanged.
+
+### Validation and outcome
+
+Confirmed with grep that the rule changed. Not checked in the browser.
+
+## 156 — 2026-11-20 — Light/dark mode toggle with sun/moon animation
+
+### Exact input prompt
+
+```text
+Great! Can we add a light/dark mode toggle with a sun and moon animation?
+```
+
+### Change summary
+
+Added `ThemeToggle.tsx`, a header button whose sun turns into a moon (the rays fold away and a cutout slides in). It stores the choice in `localStorage` and sets `data-theme` on `<html>`. With no stored choice, the OS setting still applies. `globals.css` now scopes the dark tokens to `:root:not([data-theme="light"])` under the media query and to `:root[data-theme="dark"]`, and adds the animation CSS, which respects reduced motion. `layout.tsx` adds an inline head script so a stored choice doesn't flash the other theme on load. `BrandMark.tsx` uses the shared `useDarkTheme` hook. `AppHeader.tsx` renders the toggle. New test: `ThemeToggle.test.tsx`.
+
+### Validation and outcome
+
+`tsc` and vitest (46/46) pass. ESLint isn't configured for this command. Not checked in the browser. The CSS `r`/`cx` transitions need a current browser (Safari support is partial).
+
+
+## 157 — 2026-11-20 — Spice up header logo typography
+
+### Exact input prompt
+
+```text
+Hi! The logo letters look kind of like food without salt. Can you spice it up pls
+```
+
+### Change summary
+
+Wrapped the header wordmark in `.brand-wordmark` / `.brand-name` in `frontend/src/components/AppHeader.tsx` (fixing the unintended flex gap between "Device" and "Hub") and styled it in `frontend/src/app/globals.css` with `Space Grotesk`, a subtle navy-to-electric-blue gradient (ice-blue in dark mode) with hover shimmer, and a dark navy `Hub` badge with a tangerine spark dot. Added reduced-motion and Forced Colors Mode fallbacks.
+
+### Validation and outcome
+
+`npm run typecheck` (`tsc --noEmit`) and `npm test` (vitest, 13 files / 46 tests) pass in `frontend/`. Not visually verified in a running browser.
+
+
+## 158 — 2026-11-20 — Fix breadcrumb navigation and category filtering
+
+### Exact input prompt
+
+```text
+Awesome! Let's fix the breadcrumbs. The home goes nowhere and if you enter a product detail, you cant go back to the filtred category , in this case the "Acessory"
+```
+
+### Change summary
+
+Removed the redundant dead `Home` crumb and unified breadcrumbs on `Catalog` (`/`) across `Catalogue.tsx`, `DeviceDetail.tsx`, and `StaffDesk.tsx` using semantic `<nav aria-label="Breadcrumbs"><ol>` markup and CSS-generated dividers in `globals.css`. Wired `/?category=…` support in `page.tsx` and `Catalogue.tsx` (including URL sync and `Catalog` reset click) and turned the device detail category crumb into a working link back to the filtered category; added a unit test in `Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`npm run typecheck` (`tsc --noEmit`) and `npm test` (vitest, 13 files / 47 tests) pass in `frontend/`. Not visually verified in a running browser.
