@@ -136,7 +136,8 @@ export function DeviceCard({ item, canAct, onChanged, layout = "grid" }: {
   return (
     <article className={`glass device-card ${layout}`}>
       <div className="preview-wrap">
-        <DevicePreview item={item} />
+        {/* Duplicate of the title link, so skipped in tab order. */}
+        <Link href={devicePath(item.id)} className="block" tabIndex={-1}><DevicePreview item={item} /></Link>
         <div className="pills overlay">
           <AvailabilityPill item={item} />
           <span className="pill pill-plain">{item.category}</span>
