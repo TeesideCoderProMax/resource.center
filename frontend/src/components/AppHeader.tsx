@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { canBorrow, navLinks, roleLabel, type Viewer } from "@/lib/roles";
 import { BagButton, MainNav } from "./HeaderParts";
+import { BrandMark } from "./BrandMark";
+import { ThemeToggle } from "./ThemeToggle";
 
 const initials = (email: string | null) => (email ?? "?").split("@")[0].split(/[._-]/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
 
@@ -9,10 +11,17 @@ export function AppHeader({ viewer }: { viewer: Viewer }) {
     <header className="top">
       <div className="top-inner">
         <div className="top-left">
-          <Link href="/" className="brand"><img className="brand-mark" src="/brand/logo-mark.svg" width={40} height={40} alt="" />Campus Device Hub</Link>
+          <Link href="/" className="brand">
+            <BrandMark />
+            <span className="brand-wordmark">
+              <span className="brand-name">Campus Device</span>{" "}
+              <span className="brand-accent">Hub</span>
+            </span>
+          </Link>
         </div>
         <MainNav links={navLinks(viewer)} />
         <div className="account">
+          <ThemeToggle />
           {!viewer.authConfigured ? (
             <span className="badge warn">Sign-in not configured</span>
           ) : viewer.signedIn ? (
