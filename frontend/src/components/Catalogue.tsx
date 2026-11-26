@@ -52,7 +52,14 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
   const [availableOnly, setAvailableOnly] = useState(false);
   const [duration, setDuration] = useState<number | null>(null);
   const [sort, setSort] = useState<Sort>("availability");
-  const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  const activeFilterCount =
+    (query.trim() ? 1 : 0) +
+    cats.length +
+    brands.length +
+    (availableOnly ? 1 : 0) +
+    (duration !== null ? 1 : 0);
 
   // Follow /?q=… and /?category=… links when already on this page.
   useEffect(() => { setQuery(initialQuery); }, [initialQuery]);
@@ -74,7 +81,12 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
   useEffect(() => {
     if (/Mac|iPhone|iPad/.test(navigator.platform)) setMod("⌘");
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchRef.current?.focus(); }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setMobileFiltersOpen(true);
+        searchRef.current?.focus();
+        requestAnimationFrame(() => searchRef.current?.focus());
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -150,11 +162,11 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
         <div className="chips-block">
           <div className="row"><strong>Categories</strong></div>
           <div className="chips" role="group" aria-label="Categories">
-            <button className="chip" aria-pressed={cats.length === 0} onClick={() => setCats([])}>
+            <button type="button" className="chip" aria-pressed={cats.length === 0} onClick={() => setCats([])}>
               <Icon name="grid" /> All devices <span className="count">{items.length}</span>
             </button>
             {categories.map(([c, n]) => (
-              <button key={c} className="chip" aria-pressed={cats.includes(c)} onClick={() => setCats(toggle(cats, c))}>
+              <button type="button" key={c} className="chip" aria-pressed={cats.includes(c)} onClick={() => setCats(toggle(cats, c))}>
                 <Icon name={categoryIcon(c)} /> {c} <span className="count">{n}</span>
               </button>
             ))}
@@ -163,11 +175,29 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
       )}
 
       <div className="catalogue-layout">
-        <aside className="glass filters-panel" aria-label="Filters">
+        <aside className="glass filters-panel" aria-label="Filters" data-open={mobileFiltersOpen ? "true" : "false"}>
           <div className="row filters-head">
-            <strong className="h-sm"><Icon name="list" /> Filters</strong>
-            <button className="link-btn" onClick={reset}>Reset all</button>
+            <strong className="h-sm filters-title-desktop">
+              <Icon name="list" /> Filters
+              {activeFilterCount > 0 && <span className="pill pill-accent">{activeFilterCount}</span>}
+            </strong>
+            <button
+              type="button"
+              className="filters-toggle"
+              aria-expanded={mobileFiltersOpen}
+              aria-controls="catalogue-filters-body"
+              onClick={() => setMobileFiltersOpen((open) => !open)}
+            >
+              <Icon name="list" />
+              <span>Filters</span>
+              {activeFilterCount > 0 && <span className="pill pill-accent">{activeFilterCount}</span>}
+              <span className="filters-toggle-chevron" aria-hidden="true">
+                <Icon name="chevronDown" size={16} />
+              </span>
+            </button>
+            <button type="button" className="link-btn" onClick={reset}>Reset all</button>
           </div>
+          <div id="catalogue-filters-body" className="filters-body">
           <div className="filter-group">
             <label className="field-label" htmlFor="catalogue-search">Search</label>
             <div className="search-box">
@@ -223,6 +253,7 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
             <strong><Icon name="info" size={14} /> Borrower note</strong>
             <p>Fully reserved? Subscribe and you are emailed when a unit is returned. Late returns are flagged to desk staff.</p>
           </div>
+          </div>
         </aside>
 
         <section ref={resultsRef} aria-labelledby="catalogue-h" className="results">
@@ -232,26 +263,20 @@ export function Catalogue({ initialItems, initialError, canAct, initialQuery = "
               <span className="h-sm" aria-hidden="true">Available Hardware</span>
               <span className="pill pill-accent">{shown.length} of {items.length} results</span>
             </div>
-            <div className="row-start">
-              <label className="sort">
-                <span className="muted small">Sort by</span>
-                <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-                  <option value="availability">Highest availability</option>
-                  <option value="name">Name (A–Z)</option>
-                  <option value="duration">Maximum loan (short to long)</option>
-                </select>
-              </label>
-              <div className="segmented" role="group" aria-label="Layout">
-                <button aria-pressed={layout === "grid"} onClick={() => setLayout("grid")} title="Grid view"><Icon name="grid" /><span className="sr-only">Grid view</span></button>
-                <button aria-pressed={layout === "list"} onClick={() => setLayout("list")} title="List view"><Icon name="list" /><span className="sr-only">List view</span></button>
-              </div>
-            </div>
+            <label className="sort">
+              <span className="muted small">Sort by</span>
+              <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+                <option value="availability">Highest availability</option>
+                <option value="name">Name (A–Z)</option>
+                <option value="duration">Maximum loan (short to long)</option>
+              </select>
+            </label>
           </div>
           <Notice notice={notice} />
           {items.length === 0 && !notice && <p className="muted">No devices in the catalogue.</p>}
           {items.length > 0 && shown.length === 0 && <p className="muted">No devices match these filters.</p>}
-          <div className={layout === "grid" ? "device-grid" : "device-list"}>
-            {pageItems.map((item) => <DeviceCard key={item.id} item={item} canAct={canAct} onChanged={refresh} layout={layout} />)}
+          <div className="device-grid">
+            {pageItems.map((item) => <DeviceCard key={item.id} item={item} canAct={canAct} onChanged={refresh} />)}
           </div>
           {pages > 1 && (
             <nav className="pager" aria-label="Pages">

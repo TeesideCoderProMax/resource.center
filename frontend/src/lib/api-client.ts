@@ -12,12 +12,17 @@ const MESSAGES: Record<string, string> = {
   AuthNotConfigured: "Sign-in is not configured on this environment.",
   AuthUnavailable: "Sign-in keys are unavailable. Try again shortly.",
   InvalidInput: "The request was not valid.",
+  AlreadyExists: "An item with that identifier or serial number already exists.",
+  ResourceInUse: "This item cannot be removed because it has active or historical loans.",
   CrossOriginRejected: "The request came from an unexpected origin. Reload the page.",
   LoanApiNotConfigured: "The Loan API is not configured on this environment.",
   LoanApiUnreachable: "The Loan API could not be reached. Try again shortly.",
 };
 
+const MESSAGE_FIRST = new Set(["InvalidInput", "AlreadyExists", "ResourceInUse"]);
+
 export function errorMessage(status: number, body: Partial<ApiError> | null): string {
+  if (body?.error && MESSAGE_FIRST.has(body.error) && body.message) return body.message;
   return (body?.error && MESSAGES[body.error]) || body?.message || `Request failed (HTTP ${status})`;
 }
 
@@ -27,11 +32,11 @@ export class ApiClientError extends Error {
   }
 }
 
-export async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+export async function call<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api/loan/${path}`, {
     method,
     headers: body ? { "content-type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : method === "POST" ? "{}" : undefined,
+    body: body ? JSON.stringify(body) : method === "POST" || method === "PATCH" ? "{}" : undefined,
     cache: "no-store",
   });
   const data = await res.json().catch(() => null);

@@ -127,14 +127,13 @@ export function ReserveActions({ item, onChanged, wide = false, days, onDaysChan
   );
 }
 
-export function DeviceCard({ item, canAct, onChanged, layout = "grid" }: {
+export function DeviceCard({ item, canAct, onChanged }: {
   item: DeviceModelSummary;
   canAct: boolean;
   onChanged?: () => void | Promise<void>;
-  layout?: "grid" | "list";
 }) {
   return (
-    <article className={`glass device-card ${layout}`}>
+    <article className="glass device-card">
       <div className="preview-wrap">
         {/* Duplicate of the title link, so skipped in tab order. */}
         <Link href={devicePath(item.id)} className="block" tabIndex={-1}><DevicePreview item={item} /></Link>

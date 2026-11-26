@@ -12,7 +12,11 @@ export function correlationId(incoming: string | null): string {
 
 /** Route template for logs: `reservations/{id}/collect`, so IDs never reach log fields. */
 export function routeTemplate(path: string): string {
-  return path.replace(UUID, "{id}").slice(0, 100);
+  return path
+    .replace(UUID, "{id}")
+    .replace(/^staff\/inventory\/models\/([^/]+)(\/units)?$/, "staff/inventory/models/{id}$2")
+    .replace(/^staff\/inventory\/units\/([^/]+)$/, "staff/inventory/units/{id}")
+    .slice(0, 100);
 }
 
 export interface ProxyLog {

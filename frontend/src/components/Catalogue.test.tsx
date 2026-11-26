@@ -10,9 +10,14 @@ const items: DeviceModelSummary[] = [
 
 const names = () => screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
 
-test("shows result count and sorts by availability", () => {
-  render(<Catalogue initialItems={items} initialError={null} canAct={false} />);
+test("shows result count, grid-only layout without a layout toggle, and sorts by availability", () => {
+  const { container } = render(<Catalogue initialItems={items} initialError={null} canAct={false} />);
   expect(screen.getByText("2 of 2 results")).toBeInTheDocument();
+  expect(container.querySelector(".device-grid")).toBeInTheDocument();
+  expect(screen.queryByRole("group", { name: "Layout" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Grid view|List view/ })).not.toBeInTheDocument();
+  expect(container.querySelector(".chips-rail")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Scroll categories (left|right)/ })).not.toBeInTheDocument();
   expect(names()).toEqual(["Dell Latitude", "iPad Air"]);
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "name" } });
   expect(names()).toEqual(["Dell Latitude", "iPad Air"]);
@@ -78,4 +83,23 @@ test("initialCategory filters the list and Catalog breadcrumb resets it", () => 
   fireEvent.click(screen.getByRole("link", { name: "Catalog" }));
   expect(names()).toEqual(["Dell Latitude", "iPad Air"]);
   expect(screen.getByRole("link", { name: "All Hardware" })).toHaveAttribute("aria-current", "page");
+});
+
+test("mobile filters toggle tracks expanded state and active filter count", () => {
+  render(<Catalogue initialItems={items} initialError={null} canAct={false} />);
+  const aside = screen.getByRole("complementary", { name: "Filters" });
+  const toggle = screen.getByRole("button", { name: /Filters/ });
+  expect(aside).toHaveAttribute("data-open", "false");
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+  fireEvent.click(toggle);
+  expect(aside).toHaveAttribute("data-open", "true");
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+  fireEvent.click(screen.getByRole("checkbox", { name: "Available now only" }));
+  expect(toggle).toHaveTextContent("1");
+
+  fireEvent.click(toggle);
+  expect(aside).toHaveAttribute("data-open", "false");
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
 });
