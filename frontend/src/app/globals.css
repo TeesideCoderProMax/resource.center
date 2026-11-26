@@ -464,14 +464,52 @@ td .bar.danger > span { background: var(--err-border); }
 .image-credits { padding-left: 1.25rem; }
 .image-credits li { margin: 1rem 0; overflow-wrap: anywhere; }
 
-/* Theme toggle: sun rays fold away and a cutout circle slides in to form the moon. */
+/* Theme toggle: two-layer celestial sun & crescent-with-stars icon using compositor-only transform/opacity transitions. */
 .theme-toggle svg { overflow: visible; }
-.theme-toggle .sun-core { transition: r .4s ease; }
-.theme-toggle .sun-rays { transform-origin: 12px 12px; transition: transform .5s ease, opacity .3s ease; }
-.theme-toggle .moon-cut { transition: cx .45s ease, cy .45s ease; }
-.theme-toggle svg { transition: transform .5s ease; }
-.theme-toggle[aria-pressed="true"] svg { transform: rotate(-40deg); }
-.theme-toggle[aria-pressed="true"] .sun-core { r: 9px; }
-.theme-toggle[aria-pressed="true"] .sun-rays { transform: rotate(90deg) scale(.4); opacity: 0; }
-.theme-toggle[aria-pressed="true"] .moon-cut { cx: 17px; cy: 7px; }
-@media (prefers-reduced-motion: reduce) { .theme-toggle svg, .theme-toggle svg * { transition: none; } }
+.theme-toggle .theme-sun,
+.theme-toggle .theme-moon {
+  transform-origin: 12px 12px;
+  transition: transform .75s cubic-bezier(0.37, 0, 0.63, 1), opacity .55s cubic-bezier(0.37, 0, 0.63, 1);
+}
+.theme-toggle .theme-sun { opacity: 1; transform: rotate(0deg) scale(1); }
+.theme-toggle .theme-moon { opacity: 0; transform: rotate(-45deg) scale(.45); }
+.theme-toggle .theme-moon-star { opacity: 0; transform: scale(.2); transition: transform .5s cubic-bezier(0.37, 0, 0.63, 1), opacity .45s cubic-bezier(0.37, 0, 0.63, 1); }
+.theme-toggle .theme-moon-star-lg { transform-origin: 17.2px 6.4px; }
+.theme-toggle .theme-moon-star-sm { transform-origin: 19.8px 10.2px; }
+
+.theme-toggle[aria-pressed="true"] .theme-sun { opacity: 0; transform: rotate(55deg) scale(.35); }
+.theme-toggle[aria-pressed="true"] .theme-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+.theme-toggle[aria-pressed="true"] .theme-moon-star { opacity: 1; transform: scale(1); }
+.theme-toggle[aria-pressed="true"] .theme-moon-star-lg { transition-delay: .14s; }
+.theme-toggle[aria-pressed="true"] .theme-moon-star-sm { transition-delay: .24s; }
+
+/* Smooth full-page radial sweep via View Transitions API, with CSS fade fallback when unsupported. */
+:root[data-theme-transition="radial"]::view-transition-old(root),
+:root[data-theme-transition="radial"]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+:root[data-theme-transition="radial"]::view-transition-old(root) { z-index: 1; }
+:root[data-theme-transition="radial"]::view-transition-new(root) { z-index: 2; }
+:root[data-theme-transition="fade"] body,
+:root[data-theme-transition="fade"] .top,
+:root[data-theme-transition="fade"] .foot,
+:root[data-theme-transition="fade"] .card,
+:root[data-theme-transition="fade"] .glass,
+:root[data-theme-transition="fade"] .chip,
+:root[data-theme-transition="fade"] .btn,
+:root[data-theme-transition="fade"] input,
+:root[data-theme-transition="fade"] select,
+:root[data-theme-transition="fade"] textarea,
+:root[data-theme-transition="fade"] dialog.modal {
+  transition: background-color .75s cubic-bezier(0.37, 0, 0.63, 1), color .75s cubic-bezier(0.37, 0, 0.63, 1), border-color .75s cubic-bezier(0.37, 0, 0.63, 1), box-shadow .75s cubic-bezier(0.37, 0, 0.63, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  .theme-toggle svg, .theme-toggle svg * { transition: none; transition-delay: 0s; }
+}
