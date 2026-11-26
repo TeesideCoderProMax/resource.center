@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stage 2 MVP Development Plan - Afonso Caboz</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 11mm 13mm 11mm 13mm;
+  }
+  @page diagram {
+    size: A4 landscape;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: "Inter", "Liberation Sans", Arial, Helvetica, sans-serif;
+    font-size: 8.3pt;
+    line-height: 1.33;
+    color: #1f2430;
+    margin: 0;
+    padding: 0;
+  }
+
+  header {
+    border-bottom: 2px solid #0d5091;
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+  }
+
+  h1 {
+    font-size: 15pt;
+    font-weight: 700;
+    color: #0d5091;
+    margin: 0 0 3px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .meta {
+    font-size: 8pt;
+    color: #556070;
+    margin: 0;
+  }
+
+  .meta strong {
+    color: #1f2430;
+  }
+
+  h2 {
+    font-size: 10.2pt;
+    font-weight: 700;
+    color: #0d5091;
+    margin: 9px 0 4px 0;
+    padding-bottom: 2px;
+    border-bottom: 1px solid #d9e2ec;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  h3 {
+    font-size: 8.8pt;
+    font-weight: 700;
+    color: #1f2430;
+    margin: 6px 0 2.5px 0;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  p {
+    margin: 0 0 4.5px 0;
+  }
+
+  ul, ol {
+    margin: 2px 0 5px 0;
+    padding-left: 16px;
+  }
+
+  li {
+    margin: 1.8px 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4px 0 6px 0;
+    font-size: 7.75pt;
+    line-height: 1.28;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  th {
+    background: #eef4fa;
+    color: #0d5091;
+    font-weight: 700;
+    text-align: left;
+    padding: 3.5px 5px;
+    border: 1px solid #c9d8e8;
+  }
+
+  td {
+    padding: 3.5px 5px;
+    border: 1px solid #d9e2ec;
+    vertical-align: top;
+  }
+
+  tbody tr:nth-child(even) {
+    background: #fafcff;
+  }
+
+  code {
+    font-family: "JetBrains Mono", "Liberation Mono", monospace;
+    font-size: 7.4pt;
+    background: #f1f5f9;
+    padding: 0.5px 2.5px;
+    border-radius: 2px;
+    color: #0f3d6e;
+  }
+
+  .callout {
+    background: #f6f9fc;
+    border-left: 3px solid #0d5091;
+    padding: 5px 8px;
+    margin: 5px 0 6px 0;
+    font-size: 8pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .milestones {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin: 4px 0 6px 0;
+  }
+
+  .milestone-card {
+    border: 1px solid #c9d8e8;
+    border-top: 2.5px solid #0d5091;
+    border-radius: 3px;
+    padding: 5.5px 7.5px;
+    background: #ffffff;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .milestone-card h3 {
+    margin: 0 0 3px 0;
+    color: #0d5091;
+    font-size: 8.5pt;
+  }
+
+  .milestone-card p {
+    font-size: 7.75pt;
+    margin: 0 0 3px 0;
+  }
+
+  .milestone-card p:last-child {
+    margin-bottom: 0;
+  }
+
+  .section-block {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .diagram-page {
+    page: diagram;
+    break-before: page;
+    page-break-before: always;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .diagram-page h2 {
+    margin: 0 0 4px 0;
+  }
+
+  .diagram-caption {
+    font-size: 8.5pt;
+    color: #4a5568;
+    margin: 0 0 8px 0;
+  }
+
+  .diagram-frame {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #d9e2ec;
+    padding: 6px;
+    background: #ffffff;
+  }
+
+  .diagram-frame img {
+    max-width: 100%;
+    max-height: 168mm;
+    width: auto;
+    height: auto;
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Stage 2: MVP Development Plan</h1>
+  <p class="meta">
+    <strong>Project:</strong> Campus Device Loan System (Resource Center), CIS3039-N Cloud Native DevOps |
+    <strong>Author:</strong> Afonso Caboz |
+    <strong>Companion Diagram:</strong> Stage 2 Annotated Container Diagram (Page 4)
+  </p>
+</header>
+
+<h2>1. Purpose: Anchoring Ambition to Delivery</h2>
+<p>
+  An architecture earns its weight only when its build sequence can survive the friction of time, cloud budgets, and external dependencies. Without an explicit line separating essential capability from deferred ambition, cloud-native projects fracture under premature complexity, accumulating half-wired services while core invariants remain unproven.
+</p>
+<p>
+  This Stage 2 plan distills the Campus Device Loan System into a verifiable January MVP. It binds every user journey (R1 to R5) to its owning container, orders the build so foundational data and concurrency guarantees precede interface polish, exposes external dependencies early, and defines the AI-accelerated engineering discipline that governs execution and auditability.
+</p>
+
+<h2>2. MVP Definition: Scope and Boundaries</h2>
+
+<h3>In-Scope User Journeys (R1 to R5)</h3>
+<table>
+  <thead>
+    <tr>
+      <th style="width: 7%;">ID</th>
+      <th style="width: 77%;">Journey and Architectural Guarantee</th>
+      <th style="width: 16%;">Primary Actor</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>R1</strong></td>
+      <td><strong>Public Catalogue and Live Availability.</strong> Unauthenticated visitors browse device models by brand, model, and category with live available unit counts.</td>
+      <td>Visitor</td>
+    </tr>
+    <tr>
+      <td><strong>R2</strong></td>
+      <td><strong>Authenticated Reservation and Waitlist Subscription.</strong> Signed-in students reserve an available device, receiving an automatically assigned 2-day due date, or subscribe to a model waitlist when stock reaches zero.</td>
+      <td>Student</td>
+    </tr>
+    <tr>
+      <td><strong>R3</strong></td>
+      <td><strong>Staff Collection and Return with Backend RBAC.</strong> Authenticated staff record physical device collection and return with authoritative timestamps. Role enforcement resides in the Loan API, and unauthorized student requests terminate with deterministic <code>403 Forbidden</code>.</td>
+      <td>Staff</td>
+    </tr>
+    <tr>
+      <td><strong>R4</strong></td>
+      <td><strong>Concurrency-Safe Allocation and Atomic Outbox.</strong> Row-level PostgreSQL locking guarantees that exactly one student claims the final available unit under concurrent contention. Every loan state transition and its notification outbox row commit or roll back inside one database transaction.</td>
+      <td>System Invariant</td>
+    </tr>
+    <tr>
+      <td><strong>R5</strong></td>
+      <td><strong>Asynchronous Confirmations and Waitlist Fan-Out.</strong> Collection and return events trigger confirmation notices, and returning a device alerts every active subscriber on that model waitlist. Delivery executes asynchronously with deduplication by <code>eventId</code>, bounded retries, and dead-letter isolation.</td>
+      <td>System Invariant</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Explicit Out-of-Scope List (Deferred Beyond January MVP)</h3>
+<ul>
+  <li><strong>Catalogue Administration UI:</strong> Creating, editing, or retiring device models through a web interface is excluded. Inventory is seeded deterministically via the release migration job.</li>
+  <li><strong>Live Staging and Production Cloud Deployments:</strong> Terraform modules and GitHub Actions workflows will be parameterized for Staging and Production with gated promotion rules, while live cloud execution targets the <strong>Test</strong> environment alone to respect free-tier cost limits.</li>
+  <li><strong>Extended Operational Workflows:</strong> Smart-locker integration, multi-step staff approval queues, overdue fine calculation, and peer-to-peer transfers are excluded.</li>
+  <li><strong>Live Transactional Email in Automated Test Runs:</strong> Automated Test runs will bind <code>EMAIL_DELIVERY_MODE=fake</code> (<code>FakeEmailSender</code>) so the full job, attempt, retry, and deduplication lifecycle executes without external email noise. Live Resend delivery remains a bounded acceptance check subject to tutor confirmation.</li>
+  <li><strong>Distributed ACID or Exactly-Once Email Claims:</strong> Cross-service coordination operates under at-least-once delivery with idempotent deduplication. No two-phase commit across PostgreSQL and Cosmos DB will be attempted.</li>
+</ul>
+
+<h2>3. Container Mapping to Stage 1 Architecture</h2>
+<p>
+  The MVP spans two cooperating backend services with isolated data stores, fronted by a Backend-for-Frontend (BFF) web application. Neither service reads or writes the other database, and Notifications never calls back into the Loan API to reconstruct ordinary requests.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 17%;">Stage 1 Container</th>
+      <th style="width: 16%;">Technology</th>
+      <th style="width: 31%;">MVP Scope and Requirements</th>
+      <th style="width: 28%;">Security Posture and Boundary</th>
+      <th style="width: 8%;">Step</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Web Frontend</strong></td>
+      <td>Next.js 16 (App Router, BFF)</td>
+      <td><strong>In MVP</strong> (R1, R2, R3). Visitor, Student, and Staff views, proxying allow-listed <code>/api/loan/*</code> routes.</td>
+      <td>Auth0 OIDC + PKCE, encrypted <code>HttpOnly</code> session cookie, zero tokens in browser scripts, <code>Origin</code> check on mutations.</td>
+      <td><strong>Step 3</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Loan API</strong></td>
+      <td>Rust, Tokio, Axum</td>
+      <td><strong>In MVP</strong> (R1 to R4). Catalogue, reservations, waitlist, collection and return, enforcing domain rules.</td>
+      <td>RS256 JWT validation (<code>iss</code>, <code>aud</code>, <code>exp</code>, role claim), backend student/staff RBAC, CORS allow-list.</td>
+      <td><strong>Step 1</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Migrations</strong></td>
+      <td>Rust Job (release trigger)</td>
+      <td><strong>In MVP</strong> (R4). Applies PostgreSQL schema migrations and repeatable demo seed data before API activation.</td>
+      <td>Schema-owner Entra managed identity, executed prior to new API revisions.</td>
+      <td><strong>Step 1</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Loan Database</strong></td>
+      <td>Azure PostgreSQL (private)</td>
+      <td><strong>In MVP</strong> (R4). Authoritative loan state, active waitlist uniqueness, and transactional outbox table.</td>
+      <td>No public endpoint, Entra managed identity per process, verified TLS.</td>
+      <td><strong>Step 1</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Outbox Publisher</strong></td>
+      <td>Rust Job (cron, 1 min)</td>
+      <td><strong>In MVP</strong> (R5). Claims committed outbox rows under recoverable leases and publishes <code>NotificationRequestV1</code>.</td>
+      <td>Outbox-only SQL grants, Entra Service Bus sender role.</td>
+      <td><strong>Step 2</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Notification Queue</strong></td>
+      <td>Azure Service Bus (Basic)</td>
+      <td><strong>In MVP</strong> (R5). Durable at-least-once hand-off with PeekLock and dead-letter queue.</td>
+      <td>Entra sender and receiver RBAC roles over HTTPS/REST transport.</td>
+      <td><strong>Step 2</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Notifications Worker</strong></td>
+      <td>Rust, Tokio</td>
+      <td><strong>In MVP</strong> (R5). Deduplicates by <code>eventId</code>, retries with backoff, dispatches email via Resend or fake adapter.</td>
+      <td>Zero public ingress, zero PostgreSQL access, Resend API key sourced from Key Vault.</td>
+      <td><strong>Step 2</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Notification Store</strong></td>
+      <td>Azure Cosmos DB (NoSQL)</td>
+      <td><strong>In MVP</strong> (R5). Delivery jobs and attempt history partitioned by <code>/eventId</code> with ETag concurrency control.</td>
+      <td>Worker managed identity only, isolated from the Loan service.</td>
+      <td><strong>Step 2</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>Substituted Fakes and External Dependencies:</strong>
+  <strong>Auth0</strong> is substituted in automated unit and HTTP tests by a <code>Test JWT Fixture</code> (locally signed RS256 tokens and cached test JWKS executing the real verification path).
+  <strong>Resend</strong> is substituted in the Test environment by <code>FakeEmailSender</code> (<code>EMAIL_DELIVERY_MODE=fake</code>), preserving full Cosmos DB job and attempt persistence.
+  <strong>In-Memory Port Adapters</strong> sit behind clean-architecture repository and broker traits for fast domain tests and are never used to claim SQL locking or cloud behavior.
+</div>
+
+<h2>4. Sequenced Build Order and Milestones</h2>
+<p>
+  Implementation is sequenced into four discrete milestones so each layer rests on verified contracts rather than assumptions.
+</p>
+
+<div class="milestones">
+  <div class="milestone-card">
+    <h3>Milestone 1: Loan Core, Data and Contracts (Step 1)</h3>
+    <p><strong>Deliverables:</strong> PostgreSQL migrations (device models, units, reservations, active-only waitlist uniqueness, transactional outbox), clean-architecture Loan use cases with row-locked last-unit contention and automatic 2-day due dates, Axum HTTP endpoints, and versioned <code>NotificationRequestV1</code> contracts.</p>
+    <p><strong>Exit Gate:</strong> Domain unit tests and real local TLS PostgreSQL integration tests proving single-winner contention, double-return idempotency, waitlist fan-out, and atomic rollback on outbox failure.</p>
+  </div>
+  <div class="milestone-card">
+    <h3>Milestone 2: Async Delivery and Recovery (Step 2)</h3>
+    <p><strong>Deliverables:</strong> Loan-owned Outbox Publisher job with recoverable leases, Azure Service Bus adapter, and independent Notifications Worker backed by Cosmos DB with timed claim tokens, ETag optimistic concurrency, bounded retry backoff, and dead-letter routing.</p>
+    <p><strong>Exit Gate:</strong> Worker concurrency, cancellation, crash-gap, and poison-message tests proving duplicate suppression and graceful recovery during downstream outages.</p>
+  </div>
+  <div class="milestone-card">
+    <h3>Milestone 3: Identity, Frontend and Flows (Step 3)</h3>
+    <p><strong>Deliverables:</strong> Auth0 OIDC/PKCE integration with custom role claims, Next.js BFF app shell with encrypted <code>HttpOnly</code> sessions and <code>/api/loan/*</code> proxy, Visitor/Student/Staff views with explicit <code>401</code>, <code>403</code>, <code>409</code>, and <code>503</code> handling, and email delivery verification.</p>
+    <p><strong>Exit Gate:</strong> Vitest and React Testing Library component suites, Playwright E2E tests against a fake Loan API using SDK-generated session cookies, plus live Auth0 and email acceptance checks.</p>
+  </div>
+  <div class="milestone-card">
+    <h3>Milestone 4: IaC, CI/CD and Cloud Proof (Step 4)</h3>
+    <p><strong>Deliverables:</strong> Terraform roots (<code>bootstrap</code>, <code>platform</code>, <code>workloads</code>) for Container Apps (managed HTTPS ingress, Consumption scale-to-zero), private PostgreSQL, Cosmos DB, Service Bus, ACR, and Key Vault. GitHub Actions Test deployment, gated Staging/Production promotion templates, drain-before-migrate runbook, idempotent demo seeding, structured JSON logs with correlation IDs, <code>/api/ready</code> probes, alerts, and load probing.</p>
+    <p><strong>Exit Gate:</strong> Green CI/CD run into Azure Test, verified readiness and correlation telemetry, and recorded scalability evidence.</p>
+  </div>
+</div>
+
+<h2>5. AI-Accelerated Engineering Structure</h2>
+<p>
+  To maintain architectural discipline across a multi-service Rust, Next.js, and Terraform repository, development is anchored by a structured AI-assisted toolset enabled by default in the workspace. In line with CIS3039-N academic governance, AI tools accelerate architecture exploration, diagnostic verification, and completeness checks, while all design choices, trade-offs, and final reasoning remain student-owned.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 22%;">Layer</th>
+      <th style="width: 28%;">Enabled Tooling</th>
+      <th style="width: 50%;">Operational Role in the MVP Build</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Runtime and Governance</strong></td>
+      <td>Antigravity (AGY), <code>AGENTS.md</code>, <code>AI_LOG.md</code></td>
+      <td>Enforces repository-wide architectural invariants (service boundaries, clean-architecture ports, forbidden cross-DB access) and maintains an append-only audit trail separating proposals from verified validation outcomes.</td>
+    </tr>
+    <tr>
+      <td><strong>Semantic Memory and Code Intelligence</strong></td>
+      <td>Serena MCP (<code>.serena/memories/</code>)</td>
+      <td>Provides symbol-level code navigation and editing alongside structured persistent memories (<code>core</code>, <code>selected_baseline</code>, <code>service_boundaries</code>, <code>persistence</code>, <code>messaging</code>, <code>testing</code>) so isolated build sessions preserve exact contracts without context drift.</td>
+    </tr>
+    <tr>
+      <td><strong>Live Documentation Grounding</strong></td>
+      <td>Context7 MCP</td>
+      <td>Retrieves current, version-accurate documentation for Rust/Tokio/Axum, Next.js App Router, <code>@auth0/nextjs-auth0</code>, and Azure/Terraform providers, preventing stale API assumptions during implementation.</td>
+    </tr>
+    <tr>
+      <td><strong>Browser and Web Quality Suite</strong></td>
+      <td>Chrome DevTools MCP Skills (<code>chrome-devtools</code>, <code>a11y-debugging</code>, <code>cookie-debugging</code>, <code>debug-optimize-lcp</code>, <code>memory-leak-debugging</code>) and Modern Web Guidance</td>
+      <td>Audits semantic HTML, keyboard accessibility, <code>HttpOnly</code> and <code>SameSite</code> cookie boundaries, <code>401</code>/<code>403</code> auth redirects, Core Web Vitals (LCP), and current web security practices directly against running frontend builds.</td>
+    </tr>
+    <tr>
+      <td><strong>Isolated Orchestration</strong></td>
+      <td>Subagents (<code>research</code>, <code>browser</code>, <code>self</code>) and Workflow / Swarm Engine</td>
+      <td>Separates read-only codebase research, live interactive browser testing, and multi-angle verification into isolated contexts, mirroring the project's phase-by-phase build discipline.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>6. Risks, Dependencies and High-Level Test Approach</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 24%;">Risk or Dependency</th>
+      <th style="width: 34%;">Impact</th>
+      <th style="width: 42%;">Mitigation Strategy</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>External Identity (Auth0 Tenant)</strong></td>
+      <td>Misconfigured role-claim Actions, callback URLs, or JWKS drift block live login and RBAC verification.</td>
+      <td>Decouple automated CI with the RS256 <code>Test JWT Fixture</code> exercising real JWT validation, and isolate live Auth0 tenant checks to an explicit acceptance checklist.</td>
+    </tr>
+    <tr>
+      <td><strong>Secrets and Credential Exposure</strong></td>
+      <td>Leaking database credentials, Auth0 secrets, or Resend keys compromises environment integrity.</td>
+      <td>Enforce Entra Managed Identities for all Azure-to-Azure links (PostgreSQL, Service Bus, Cosmos DB, ACR), store external keys solely in Azure Key Vault, and redact student emails from all structured logs.</td>
+    </tr>
+    <tr>
+      <td><strong>Cloud Resources and Cost Creep</strong></td>
+      <td>Stateful stores (PostgreSQL and Test Cosmos DB 400 RU/s) incur cost even when Container Apps scale to zero.</td>
+      <td>Confine live cloud deployment to one Azure Test environment (France Central, Container Apps Consumption) and keep Staging/Production parameterized in Terraform without standing paid instances.</td>
+    </tr>
+    <tr>
+      <td><strong>Schema and Release Coupling</strong></td>
+      <td>Running an older Loan API revision against a migrated schema risks write corruption or dropped outbox rows.</td>
+      <td>Enforce a strict release sequence: drain active API and worker revisions, execute the Migrations job, verify readiness, then activate new revisions.</td>
+    </tr>
+    <tr>
+      <td><strong>Private Network Test Friction</strong></td>
+      <td>Private-subnet PostgreSQL and locked-down Cosmos DB firewalls restrict direct local test execution.</td>
+      <td>Run ephemeral Dockerized TLS PostgreSQL locally for deterministic SQL and contention tests, treating cloud-side Cosmos and broker outage checks as explicit deployed verification steps.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="section-block">
+  <h3>High-Level Test Approach</h3>
+  <ol>
+    <li><strong>Unit and Domain Layer:</strong> Pure Rust tests behind in-memory port fakes covering due-date rules, state transitions, role guards, and duplicate suppression, paired with Vitest and React Testing Library component tests.</li>
+    <li><strong>Real-Database and Concurrency Integration:</strong> Automated local TLS PostgreSQL suite validating migrations, last-unit race contention (single winner), double-return idempotency, waitlist fan-out, and transactional rollback on outbox failure.</li>
+    <li><strong>Resilience and Worker Recovery:</strong> Competing-worker lease tests, ETag conflict handling, bounded retry backoff, crash-gap recovery, and dead-letter routing for poison payloads.</li>
+    <li><strong>End-to-End and Security Verification:</strong> Signed local RS256 JWT tests for API RBAC (<code>401</code>/<code>403</code>), plus Playwright E2E tests against a fake Loan API exercising Visitor, Student, and Staff flows through the BFF proxy.</li>
+    <li><strong>Cloud and Operational Smoke:</strong> Deployed <code>/api/ready</code> checks, structured JSON correlation tracing, GitHub Actions pipeline execution, and bounded HTTP load probing in Azure Test.</li>
+  </ol>
+</div>
+
+<div class="section-block">
+  <h2>7. Stage 1 Diagram Confirmation and Revision Log</h2>
+  <p>
+    The Stage 1 <strong>C4 Context</strong> (<code>1-context.png</code>), <strong>C4 Container</strong> (<code>2-container.png</code>), and <strong>Deployment</strong> (<code>3-deployment.png</code>) diagrams remain valid as the architectural baseline for this project. The Stage 2 annotated Container diagram on Page 4 (<code>4-stage2-plan.png</code>) is a direct annotated derivative of the Stage 1 Container diagram rather than a structural departure.
+  </p>
+  <ul>
+    <li><strong>Backend Runtime Formalized (ADR 0002):</strong> Confirmed Rust (Tokio and Axum) across Loan API, Migrations, Outbox Publisher, and Notifications Worker (superseding the starter Python/FastAPI concept) to reduce container image footprint and cold-start latency under scale-to-zero.</li>
+    <li><strong>Managed Cloud Ingress Formalized (ADR 0003):</strong> Confirmed Azure Container Apps managed HTTPS ingress for the Web Frontend and API, superseding VM-hosted Nginx and Let's Encrypt.</li>
+    <li><strong>Strict Service and Store Isolation:</strong> Confirmed independent Notifications ownership of Cosmos DB fed exclusively through Loan's transactional outbox and Azure Service Bus, removing any cross-service PostgreSQL dependency.</li>
+    <li><strong>Stage 2 Plan Annotations Added:</strong> Overlaid R1 to R5 requirement tags, per-container security controls, fake/mock substitutions (<code>Test JWT Fixture</code>, <code>FakeEmailSender</code>, in-memory port adapters), the MVP service boundary, and the four-step build sequence.</li>
+  </ul>
+
+  <div class="callout">
+    <strong>Open Tutor Confirmation Items:</strong>
+    (1) Confirm whether the automatic 2-day loan period should start at <strong>reservation</strong> (current design) or at <strong>physical collection</strong>.
+    (2) Confirm whether <code>FakeEmailSender</code> (persisting full Cosmos DB delivery jobs and attempts) is sufficient for the Test demo, or whether live Resend email receipt is required.
+    (3) Confirm expected retention duration for student email addresses in notification delivery records.
+  </div>
+</div>
+
+<div class="diagram-page">
+  <h2>Appendix: Stage 2 Annotated Container Diagram</h2>
+  <p class="diagram-caption">
+    Derived from the Stage 1 C4 Container diagram (<code>2-container.png</code>) with requirement badges (R1 to R5), per-container security controls, test fake substitutions, MVP service boundary, and build sequence (Steps 1 to 4).
+  </p>
+  <div class="diagram-frame">
+    <img src="../../architecture/diagrams/4-stage2-plan.png" alt="Stage 2 Development Plan - Annotated Container Diagram">
+  </div>
+</div>
+
+</body>
+</html>

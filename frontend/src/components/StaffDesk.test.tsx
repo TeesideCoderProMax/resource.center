@@ -66,12 +66,22 @@ test("desk telemetry is derived from the catalogue and reservation rows", () => 
   expect(stats).toEqual({ totalUnits: 4, inUsePct: 75, awaiting: 1, active: 1, onTimePct: 50, overdue: 2 });
 });
 
-test("inventory table shows live stock per model", async () => {
-  fakeFetch({ "GET reservations": { status: 200, body: [] } });
-  render(<StaffDesk catalogue={[{ id: "cam", name: "Canon", category: "camera", description: "c", loanDurationDays: 2, totalUnits: 2, availableUnits: 0 }]} />);
-  const inv = await screen.findByRole("table", { name: "Equipment inventory" });
-  expect(within(inv).getByText("Canon")).toBeInTheDocument();
-  expect(within(inv).getByText("Waitlist")).toBeInTheDocument();
+test("dashboard sidebar nests Collection queue, Loans and Overdue in a collapsible tree", async () => {
+  fakeFetch({ "GET reservations": { status: 200, body: [row()] } });
+  render(<StaffDesk catalogue={[{ id: "cam", name: "Canon", category: "camera", description: "c", loanDurationDays: 14, totalUnits: 2, availableUnits: 1 }]} />);
+  const nav = await screen.findByRole("complementary", { name: "Staff sections" });
+  expect(within(nav).getByRole("link", { name: /Collection queue/ })).toHaveAttribute("href", "/staff/dashboard#queue");
+  expect(within(nav).getByRole("link", { name: "Loans" })).toHaveAttribute("href", "/staff/dashboard#loans");
+  expect(within(nav).getByRole("link", { name: /Overdue/ })).toHaveAttribute("href", "/staff/dashboard#overdue");
+  expect(within(nav).getByRole("link", { name: /Inventory/ })).toHaveAttribute("href", "/staff/inventory");
+
+  const toggle = within(nav).getByRole("button", { name: /Collapse dashboard sections/i });
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(within(nav).queryByRole("link", { name: "Loans" })).toBeNull();
+  fireEvent.click(toggle);
+  expect(within(nav).getByRole("link", { name: "Loans" })).toBeVisible();
 });
 
 test("a 403 on the list is explicit", async () => {

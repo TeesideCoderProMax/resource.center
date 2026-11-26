@@ -2735,3 +2735,1033 @@ Committed and pushed the `deploy.yml` digest fix to `qa`. No other project files
 ### Validation and outcome
 
 Push result checked via git status; the CI rerun outcome is not yet known.
+
+## 121 — 2026-11-13 — Staging deploy: Azure login values missing
+
+### Exact input prompt
+
+````text
+So now we have another error in the dev on the staging env deployment:
+
+
+
+This job failed during the Azure authentication step, before any Terraform deployment or image build ran.
+
+The key error in the log is:
+
+    Login failed with Error: Using auth-type: SERVICE_PRINCIPAL. Not all values are present. Ensure 'client-id' and 'tenant-id' are supplied.
+
+This matches the workflow in .github/workflows/deploy.yml: the release job sets ARM_USE_OIDC and ARM_CLIENT_ID/ARM_TENANT_ID/ARM_SUBSCRIPTION_ID from ${{ vars.AZURE_* }}, then azure/login@v2 uses them. So at least one of those values was empty or not available in this run.
+````
+
+### Change summary
+
+Root cause: the `staging` GitHub environment has no variables (`AZURE_*`, `ACR_*`, `WORKLOADS_*`), only `test` does, and `production` doesn't exist. Configuration needed in GitHub; no code change. No project files changed apart from this log.
+
+### Validation and outcome
+
+Listed environment variables via `gh api` (values truncated); nothing was changed.
+
+## 122 — 2026-11-13 — How to add the staging variables
+
+### Exact input prompt
+
+```text
+How to add them?
+```
+
+### Change summary
+
+Explained how to add GitHub environment variables for staging. No project files changed apart from this log.
+
+### Validation and outcome
+
+Answer from GitHub's standard UI/CLI; nothing run.
+
+## 123 — 2026-11-13 — Staging cost on Azure for Students
+
+### Exact input prompt
+
+```text
+So the "costs money" how much will it cost with the azure for students subscription?
+```
+
+### Change summary
+
+Estimated the staging platform's monthly cost from the repo's Test cost notes. No project files changed apart from this log.
+
+### Validation and outcome
+
+Estimate from `docs/cloud/test-costs.md` and remembered public prices; no live pricing or billing lookup.
+
+## 124 — 2026-11-18 — Plan ports for Auth0 verifier and Service Bus consumer
+
+### Exact input prompt
+
+```text
+Hi, i noticed something on the Auth0JWTverifier has no port. presentation.rs uses the concrete infrastructure type directly, and tests switch to a test key set instead of swapping in a fake.
+
+ServiceBusRestConsumer also has got no port. main.rs creates it and runs it directly, so the receive loop can’t be tested against a fake. Creating it in main.rs is the most apropriate place for that
+
+Plan first the implementation, use the /superpowers:writing-plans
+```
+
+### Change summary
+
+Wrote the plan `docs/superpowers/plans/2026-11-18-auth-and-queue-consumer-ports.md`: `AccessTokenVerifierPort` in loan-service application, `QueueConsumerPort` plus an extracted `run_consumer_loop` in notifications-worker, construction kept in `main.rs`. No code changed.
+
+### Validation and outcome
+
+Plan only; based on reading `auth.rs`, `presentation.rs`, worker `main.rs`/`application.rs`/`infrastructure.rs`. No builds or tests run.
+
+## 125 — 2026-11-18 — Execute ports plan natively
+
+### Exact input prompt
+
+```text
+Native
+```
+
+### Change summary
+
+Added `AccessTokenVerifierPort` (loan-service; `FakeVerifier` in presentation tests) and `QueueConsumerPort` + `run_consumer_loop` (notifications-worker application; `main.rs` still builds `ServiceBusRestConsumer`), and updated the clean-architecture memory. Commits ff6be2e, 49af68c, e8d7484 on `qa`; not pushed.
+
+### Validation and outcome
+
+`cargo test --workspace` passed (loan 17, worker 17 incl. 5 new loop tests); clippy `-D warnings` clean for both crates; a deliberate mutation was caught by `complete_failure_propagates`; `serena memories check` clean. Fresh-reviewer pass found no critical/important issues; minors deferred: no end-to-end signed-JWT router test, no test for loop continuing after renew/abandon failure.
+
+## 126 — 2026-11-19 — Ponytail audit of the QA branch
+
+### Exact input prompt
+
+```text
+Before pushing pls use this skill /ponytail:ponytail-audit and check the state of the QA branch with these changes
+```
+
+### Change summary
+
+Audit found no must-fix issues. Should fix: worker exits on one failed message complete; one outbox mark-published DB error stalls the rest of the batch for the lease; one unparsable outbox row blocks the publisher. Nice to have: new Postgres connection per request; no signed-JWT router test. The 3 local commits are safe to push; uncommitted header change needs untracked `frontend/public/brand/`. No project files changed apart from this log.
+
+### Validation and outcome
+
+Read code paths and ran `cargo test --workspace` earlier (pass), frontend `npm test` (40 passed), `tsc --noEmit` and lint (clean). Terraform, CI workflows, frontend pages and live Azure not audited.
+
+## 127 — 2026-11-19 — Architecture compliance of audit fixes
+
+### Exact input prompt
+
+```text
+If we fix these 5 issues, are we still in compliance wiith the architecture i provided?
+```
+
+### Change summary
+
+Answered yes: all five fixes stay inside existing layers and ownership rules (Loan outbox/publisher, Notifications at-least-once with Cosmos dedup, pooling only inside the Postgres adapter). Noted that #4 adds a dependency and #1 relies on Cosmos dedup, not exactly-once. No project files changed apart from this log.
+
+### Validation and outcome
+
+Checked against AGENTS.md architecture constraints and `mem:architecture/clean_architecture`; no code changed or run.
+
+## 128 — 2026-11-19 — Plan the audit fixes
+
+### Exact input prompt
+
+```text
+Plan the fix of these 5 issues
+```
+
+### Change summary
+
+Wrote `docs/superpowers/plans/2026-11-19-audit-fixes.md`: six tasks covering worker complete failure, publisher batch continuation, FAILED marking of unreadable outbox rows, an in-adapter connection idle list (no new dependency), a signed-JWT router test, and close-out. No code changed.
+
+### Validation and outcome
+
+Plan only, based on reading the affected code and the `0001` schema; nothing built or run.
+
+## 129 — 2026-11-19 — Execute audit fixes natively
+
+### Exact input prompt
+
+```text
+Native
+```
+
+### Change summary
+
+Fixed all five audit findings plus two review findings on `qa` (commits f943599..latest, not pushed): worker continues after a failed complete; publisher continues after a mark-published error; unreadable outbox rows marked FAILED and counted as failed; Postgres connections reused via an in-adapter idle list that ROLLBACKs on reuse; signed-JWT router test. Updated `mem:architecture/messaging`.
+
+### Validation and outcome
+
+`cargo test --workspace` (loan 21, worker 18) and clippy `-D warnings` pass; `make backend-test-postgres` 11/11 pass. Each new test seen failing first. Fresh review: two important findings fixed; deferred minors: no backoff/alert on repeated complete failures, no max connection age.
+
+## 130 — 2026-11-19 — Navy and tangerine frontend redesign
+
+### Exact input prompt
+
+```text
+Hello, let's do a redesign to the frontend. Also update the docs.
+
+Palette & Visual Identity: Swapped out the generic light purple/lavender theme for a high-contrast, collegiate modernist aesthetic pairing deep Oxford Navy (#0f172a / #172554) with punchy Vivid Tangerine (#f97316 / #ea580c).
+Header & Navigation: Clean navy typography and accents with energetic tangerine indicators for notifications and reservation cart counts.
+Hero & Catalog Metrics: Restyled the header banner and statistics cards into crisp navy, slate, and porcelain tones.
+Buttons & Interactive CTAs: Primary actions ("Reserve Device", "Join Waitlist", filter checkboxes) now feature vivid tangerine accents for strong visual hierarchy and clear calls-to-action.
+Badges & Cards: Calibrated status indicators with emerald for in-stock devices, vivid tangerine for low-stock alerts, and slate navy for waitlists.
+```
+
+### Change summary
+
+Replaced the purple theme tokens in `frontend/src/app/globals.css` (light and dark) with navy/slate surfaces, tangerine primary actions and badges, emerald/tangerine/navy status colours. Recoloured logo SVGs and regenerated PNG/ICO/apple icons; documented the palette in `frontend/public/brand/README.md`.
+
+### Validation and outcome
+
+`npx tsc --noEmit` passes; frontend has no lint script. Not visually checked in a browser.
+
+## 131 — 2026-11-19 — Navy selected category chips
+
+### Exact input prompt
+
+```text
+ Let's make these secondary buttons like this:
+```
+
+(Prompt included a screenshot of a navy "All Devices" chip with a tangerine icon and a tangerine "142" count badge.)
+
+### Change summary
+
+Selected category chips in `frontend/src/app/globals.css` are now navy with white text, a tangerine icon and a solid tangerine count badge.
+
+### Validation and outcome
+
+CSS-only change; not viewed in a browser.
+
+## 132 — 2026-11-19 — Mount frontend into make dev
+
+### Exact input prompt
+
+```text
+Can you pls mount the frontend files to the "make dev" docker
+```
+
+### Change summary
+
+`make dev` now builds the frontend `deps` stage (`rc-web:deps`) and runs `next dev` with `frontend/` bind-mounted for hot reload (node_modules from the image, `.next` in tmpfs, host uid). Changed `Makefile` and `infra/scripts/dev.sh`.
+
+### Validation and outcome
+
+`bash -n` passes. Not run end to end: an existing `make dev` stack was already on port 3000, so the test run was stopped before it could replace it.
+
+## 133 — 2026-11-19 — Slimmer category scrollbar
+
+### Exact input prompt
+
+```text
+ Let's make this lateral scrollbar more elegant
+```
+
+(Prompt included a screenshot of the category chip row with its thick grey horizontal scrollbar.)
+
+### Change summary
+
+The category chip row scrollbar in `frontend/src/app/globals.css` is now a thin, rounded, faint slate thumb on a transparent track that turns tangerine on hover.
+
+### Validation and outcome
+
+CSS-only change; not viewed in a browser.
+
+## 134 — 2026-11-19 — Navy staff stat cards
+
+### Exact input prompt
+
+```text
+ In the /staff route let's give some of the main cards the navy effect with white lettering.
+
+Image 1 shows the kind of aspect i want to give to the cards 
+Image 2 shows an example of the target cards.
+```
+
+(Prompt included two screenshots: a navy hero banner with white text, and the four staff stat cards.)
+
+### Change summary
+
+The four `/staff` stat cards in `frontend/src/app/globals.css` now have a navy gradient with a faint tangerine glow, white and slate text, glass icon tiles with tangerine icons, a light bar track, and red accents kept on the Overdue card.
+
+### Validation and outcome
+
+CSS-only change; not viewed in a browser.
+
+## 135 — 2026-11-19 — Uniform staff sidebar and sections
+
+### Exact input prompt
+
+```text
+ Let's make it more visual uniform,
+
+On the 2nd image, let's make the staff portal card the same design, also the selected route, i mean the active state will have the secondary button design we discussed earlier.
+
+Finally check all the /staff#(...) routes for visual uniform
+```
+
+(Prompt included screenshots of the /staff page and its sidebar.)
+
+### Change summary
+
+The Staff portal card is now navy. Sidebar links get an active state (`aria-current`, from the URL hash or a click; Overdue tracked separately from Loans) styled like the selected category chip. The Collection queue section is now a glass panel like Loans and Inventory. Changed `frontend/src/components/StaffDesk.tsx` and `frontend/src/app/globals.css`.
+
+### Validation and outcome
+
+`tsc` and vitest (40/40) pass. Viewed every staff section as the fake staff persona with a temporary Playwright screenshot spec (removed afterwards) against `next build` and the fake Loan API. Sections were viewed with empty queue and loan lists only.
+
+## 136 — 2026-11-19 — Staff sidebar follows scroll
+
+### Exact input prompt
+
+```text
+ Im on the Loans page and the loans button in the left sidebar does not appear as active
+```
+
+(Prompt included a screenshot of the /staff Loans section with no sidebar link highlighted.)
+
+### Change summary
+
+The sidebar active state in `frontend/src/components/StaffDesk.tsx` now tracks scroll position (the section nearest the top, Inventory at page bottom) instead of only the URL hash, so scrolling to Loans highlights Loans. After a click, Overdue stays highlighted while the Loans section is in view.
+
+### Validation and outcome
+
+`tsc` passes. A temporary Playwright spec (removed afterwards) passed against `next build` and the fake Loan API: Dashboard on load, Loans after scrolling there, Overdue after its click, Inventory at the bottom.
+
+## 137 — 2026-11-19 — Catalogue department/brand filters and pagination
+
+### Exact input prompt
+
+```text
+Hi, let's analyze the seed script of the products we have in our database and implement in the left sidebar of the products catalogue something like this.
+
+I also want to cap 8 products per page with a page selector to go front and back at the end.
+```
+
+(Prompt included a screenshot of a sidebar with Department checkboxes with counts and a two-column Manufacturer / Brand checkbox grid.)
+
+### Change summary
+
+The seed (`backend/catalogue/campus-items.json`, 36 models) has no department or brand field. So the catalogue sidebar in `frontend/src/components/Catalogue.tsx` now has Category checkboxes with counts (synced with the chips, multi-select) and a two-column Manufacturer / Brand grid, with brand taken from the model name. Results show 8 per page with Previous / page numbers / Next at the end (styles in `frontend/src/app/globals.css`). Tests are in `Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`tsc` and vitest (46/46) pass. Checked in the browser via `next dev` against a scratch API serving the 36 seed models: 8 cards per page, 5 pages, Next moves to page 2. Department filtering was not implemented because the data has no department field. `next dev` printed a Next.js security-upgrade notice that was not acted on.
+
+## 138 — 2026-11-19 — Filters panel scroll and Next.js security upgrade
+
+### Exact input prompt
+
+```text
+ The filters tab must have a different scrollbar than the rest of the page, now i cant scroll here untill i reach the very bottom of the page.
+
+Also update the dependencies to fix the warning
+```
+
+(Prompt included a screenshot of the catalogue with the Filters sidebar cut off at the Manufacturer / Brand list.)
+
+### Change summary
+
+On wide screens the sticky Filters panel now scrolls on its own (`max-height` plus `overflow-y: auto` in `frontend/src/app/globals.css`). Upgraded `next` 16.4.3 → 16.4.6 (2 moderate cache advisories) and `vitest` 3 → 5 (dev-only critical tinypool and moderate mocker advisories) in `frontend/package.json` and `package-lock.json`.
+
+### Validation and outcome
+
+`npm audit` reports 0 vulnerabilities. `tsc`, vitest 5 (43/43) and `next build` pass. In the browser at 1280×720, with the page scrolled 400px, the panel scrolled to its own bottom (606px panel showing 1378px of content).
+
+Correction to entry 137: vitest ran 43 tests, not 46.
+
+## 139 — 2026-11-19 — Single catalogue search with keyboard shortcut
+
+### Exact input prompt
+
+```text
+ Instead of having 2 searchbars, let's remove this at the navbar (image 1) and put the icon and ctrl+k or cmd+k trigger to the navbar in the filter area
+```
+
+(Prompt included screenshots of the header "Search equipment…" bar with a ⌘K badge, and the filter panel's "Name, category, description…" search field.)
+
+### Change summary
+
+Removed the header search (`HeaderSearch` in `frontend/src/components/HeaderParts.tsx` and its use in `AppHeader.tsx`). The catalogue's filter-panel search now has the search icon, a ⌘K (Mac) / Ctrl K badge, and the Ctrl/⌘+K shortcut that focuses it (`Catalogue.tsx`). The `.top-search` styles became `.search-box` in `globals.css`. `/?q=` links still pre-fill the search. Added a shortcut test in `Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`tsc` and vitest (44/44) pass. In the browser (dev server against the 36 seed models), the header has no search, Ctrl+K focuses the filter search, and typing "dell" shows 3 results.
+
+## 140 — 2026-11-19 — Branch, commit and open PR
+
+### Exact input prompt
+
+```text
+Great, let's wrap this up. Move all changes made in this branch into a new branch. Add and commit all changes made by logic group with professional messages and open a PR against QA
+```
+
+### Change summary
+
+Created `feat/catalogue-filters-and-rebrand` from local `qa` and committed all uncommitted work in 10 logical commits: theme, catalogue filters, search shortcut, dependency upgrade, Next agent guide, `make dev`, C4 diagrams, Stage 1 submission, explainer video, and this log. Added `docs/videos/architecture-decisions/.gitignore` so render caches stay out of git. Opened https://github.com/TeesideCoderProMax/resource.center/pull/16 against `qa`. It also carries the 10 local `qa` commits not yet on `origin/qa`.
+
+### Validation and outcome
+
+`tsc` and Vitest pass on the tip (44/44) and on the two partly staged frontend commits in a temporary worktree (40 and 43). Playwright e2e and Rust checks were not run.
+
+## 141 — 2026-11-19 — Remove the video from the PR
+
+### Exact input prompt
+
+```text
+Remove the video
+```
+
+### Change summary
+
+Added a commit to `feat/catalogue-filters-and-rebrand` that stops tracking `docs/videos/` and adds it to `.gitignore`, so PR 16's diff no longer contains the explainer video. The files remain on disk. Dropping the earlier commit with a history rewrite and force-push was blocked by the permission check. The ~35 MB still sits in the branch history unless the PR is squash-merged.
+
+### Validation and outcome
+
+`git diff origin/qa..HEAD -- docs/videos` is empty, and the MP4 is still on disk.
+
+## 142 — 2026-11-19 — Navy borrower note
+
+### Exact input prompt
+
+```text
+ Make this card in the filter area  with the same navy + white text we are using in the staff routes
+```
+
+(Prompt included a screenshot of the peach "Borrower note" tip card.)
+
+### Change summary
+
+The `.tip` card in `frontend/src/app/globals.css` now uses the staff navy gradient with a white heading, light slate body text and a tangerine icon. This matches the staff portal header. Not committed.
+
+### Validation and outcome
+
+CSS-only change. It was not viewed in the browser.
+
+## 143 — 2026-11-19 — Commit and push
+
+### Exact input prompt
+
+```text
+Commit and push
+```
+
+### Change summary
+
+Committed the navy borrower note style and the log as separate commits on `feat/catalogue-filters-and-rebrand` and pushed them to PR 16.
+
+### Validation and outcome
+
+The push succeeded. No further checks; this was a CSS-only change.
+
+## 144 — 2026-11-19 — Analyse Copilot PR review
+
+### Exact input prompt
+
+```text
+Copilot made a comment with issues on the PR. Can you fetch this comments and analyse them
+```
+
+### Change summary
+
+Fetched Copilot's 3 inline comments on PR 16 and checked each against the code. All 3 hold. (1) `.results` has no `scroll-margin-top`, so the page-change scroll hides the controls under the sticky header. (2) Pagination can unmount a card whose availability drops after a reservation, which loses the confirmation in `ReserveActions` state. (3) `dev.sh` cleanup uses `docker rm -f` without `-v`, which leaves anonymous `node_modules` volumes behind. The overview's stale-narration point applies to the video, which is no longer in the diff. No project files changed apart from the log.
+
+### Validation and outcome
+
+Verified by reading `globals.css`, `Catalogue.tsx` and `infra/scripts/dev.sh`. No fixes applied yet.
+
+## 145 — 2026-11-19 — Fix Copilot review issues
+
+### Exact input prompt
+
+```text
+Fix all three
+```
+
+### Change summary
+
+Fixed all 3 Copilot review issues and pushed them to PR 16. (1) `.results` gets `scroll-margin-top: 5.5rem` in `globals.css`, so a page change clears the sticky header. (2) After a reservation refresh, `Catalogue.tsx` keeps the visible list and order until the next filter or sort change, so the card and its confirmation stay in place; new test `Catalogue.refresh.test.tsx`. (3) `infra/scripts/dev.sh` cleanup uses `docker rm -fv`, which removes the anonymous `node_modules` volumes.
+
+### Validation and outcome
+
+`tsc` and vitest (45/45) pass. Not checked in the browser, and `make dev` was not run.
+
+## 146 — 2026-11-20 — Light-blue cards and clickable catalogue images
+
+### Exact input prompt
+
+```text
+Hi let's change the navy cards troughout the app to this color: #CBDBF5
+
+The secondary buttons stay with that dark blue accent.
+
+Also, when a user clicks on the image of a product on the product catalogue make it also open the product details page
+```
+
+### Change summary
+
+`globals.css`: the navy gradient cards (staff stat cards, staff sidebar header, catalogue borrower note) now use a solid `#CBDBF5` with dark text. Navy buttons and chips are unchanged. `DeviceCard.tsx` wraps the product image in a link to the detail page and keeps it out of the tab order.
+
+### Validation and outcome
+
+`tsc` and vitest (45/45) pass. Not checked in the browser.
+
+## 146 — 2026-11-20 — Electric header logo
+
+### Exact input prompt
+
+```text
+Hi, pls turn our logo into this:
+
+[pasted React Bits integration guide: "Integrate the <ElectricLogo /> component from React Bits" (JavaScript + CSS variant, dependency ogl), with usage example, props table, full component source and CSS]
+```
+
+### Change summary
+
+Added `ogl` and vendored React Bits `ElectricLogo` as `frontend/src/components/ElectricLogo.tsx` (+ `.css`). New client `BrandMark.tsx` overlays orange electric strands on the existing `logo-mark.svg` in `AppHeader.tsx`, switching light/dark theme with the colour scheme; wrapper styles in `globals.css`.
+
+### Validation and outcome
+
+`tsc` clean, vitest 45/45 (one earlier run had a failure that did not reproduce), `next build` succeeds. Not checked in a browser.
+
+## 147 — 2026-11-20 — ogl not found in dev stack
+
+### Exact input prompt
+
+```text
+Ive got this issue: Module not found: Can't resolve 'ogl'
+```
+
+### Change summary
+
+`ogl` is installed on the host, but the running `rc-dev-web` container uses `node_modules` from the `rc-web:deps` image, which was built before `ogl` was added. Restarting `make dev` rebuilds that image from the updated lockfile. No project files changed apart from the log.
+
+### Validation and outcome
+
+Confirmed `frontend/node_modules/ogl` exists on the host, the lockfile includes it, and the Makefile `dev` target rebuilds `rc-web:deps`. Did not restart the stack.
+
+## 148 — 2026-11-20 — Calmer logo interaction
+
+### Exact input prompt
+
+```text
+Awesome, it worls! Make the animation be less reactive
+```
+
+### Change summary
+
+Toned down the header logo's response to the pointer in `frontend/src/components/BrandMark.tsx`. The hover charge drops from 0.75 to 0.25, the charged radius from 40px to 25px, and random arcs happen half as often.
+
+### Validation and outcome
+
+Prop change only; not checked in a browser.
+
+## 149 — 2026-11-20 — Calmer idle logo animation
+
+### Exact input prompt
+
+```text
+I was not talking on the mouse, but on it's normal state, make the "eletric lines" be less reactive
+```
+
+### Change summary
+
+Calmed the header logo's idle strands in `frontend/src/components/BrandMark.tsx` (speed 2.5→1.2, bend 0.4→0.25, crackle 1→0.6, flicker 0.6→0.25) and kept random arcs at 0.5. Restored the previous mouse settings (default cursor intensity, 40px radius).
+
+### Validation and outcome
+
+Prop change only; not checked in a browser.
+
+## 150 — 2026-11-20 — Orange accent on brand name
+
+### Exact input prompt
+
+```text
+Awesome! Can we add some of these orange accents to the letters? [Image #2]
+```
+
+### Change summary
+
+In `AppHeader.tsx`, "Hub" in the header brand now sits in a `.brand-accent` span. `globals.css` gives it the primary orange with a soft glow to match the electric logo.
+
+### Validation and outcome
+
+Not checked in a browser.
+
+## 147 — 2026-11-20 — Light-blue logo and secondary buttons
+
+### Exact input prompt
+
+```text
+Allright so let's bet on this lighter blue for the rest of the app. Change the Logo colors and the secondary button now have this color as well
+```
+
+### Change summary
+
+The logo (`logo.svg`, `logo-mark.svg`, `icon.svg`) now has a `#CBDBF5` tile with a navy screen and an `#EA580C` arrow. Its PNG exports, `apple-icon.png` and `favicon.ico` were regenerated from the SVGs, and the palette note in `public/brand/README.md` was updated. Secondary `.btn` buttons in `globals.css` now have a `#CBDBF5` background with navy text and a `#B6CBEF` hover.
+
+### Validation and outcome
+
+vitest (45/45) passes, and the rendered `logo.png` was checked visually. The app itself was not checked in the browser.
+
+## 148 — 2026-11-20 — Light-blue brand text and selected chip, white pager
+
+### Exact input prompt
+
+```text
+Great! Put this blue accent on image 1 and 2 
+
+Image 3 stays whit as it was.
+
+[Image #1] [Image #2] [Image #3]
+```
+
+### Change summary
+
+In `globals.css`, the header brand text and the selected category chip now use `#CBDBF5`, and the chip text is navy. The pagination buttons are back to the white surface with navy text.
+
+### Validation and outcome
+
+vitest (45/45) passes. The app was not checked in the browser. Light-blue brand text on the near-white header background has very low contrast.
+
+## 149 — 2026-11-20 — Why the chip blue looks darker
+
+### Exact input prompt
+
+```text
+So [Image #4] the blue on the cards appear to be more darker, why is that? I like the more darker the best
+```
+
+### Change summary
+
+Explained that the chip and the brand text use the same `#CBDBF5`. A solid filled area looks more saturated than thin anti-aliased text on a near-white background, so the text appears lighter. Offered a darker text shade. No project files changed apart from the log.
+
+### Validation and outcome
+
+Checked `.brand` and `.chip[aria-pressed]` in `globals.css`. Both use `#cbdbf5`.
+
+## 150 — 2026-11-20 — Darker brand text blue
+
+### Exact input prompt
+
+```text
+Yes
+```
+
+### Change summary
+
+The `.brand` header text colour in `frontend/src/app/globals.css` changed from `#cbdbf5` to `#9db8e8`, so it looks like the chip's blue.
+
+### Validation and outcome
+
+Confirmed with grep that the rule changed. It was not checked in the browser. Contrast is still low on the near-white header (about 2:1).
+
+## 151 — 2026-11-20 — Darker brand text blue (again)
+
+### Exact input prompt
+
+```text
+More dark pls
+```
+
+### Change summary
+
+The `.brand` header text in `frontend/src/app/globals.css` changed from `#9db8e8` to `#4a74c4`. This is a medium blue in the same family that reaches about 4.5:1 contrast on the header.
+
+### Validation and outcome
+
+Confirmed with grep that the rule changed. It was not checked in the browser.
+
+## 152 — 2026-11-20 — Revert logo and brand text to navy
+
+### Exact input prompt
+
+```text
+Okay so let's revert the logo and lettering to the navy blue we were using
+```
+
+### Change summary
+
+Restored the navy logo assets from git: `public/brand/*` (SVGs, PNGs and README) plus `src/app/icon.svg`, `apple-icon.png` and `favicon.ico`. The `.brand` header text in `globals.css` is back to `var(--accent)` (navy). The light-blue cards, chips and secondary buttons are unchanged.
+
+### Validation and outcome
+
+`git status` shows the brand assets clean. Grep confirmed the `.brand` rule changed. It was not checked in the browser.
+
+## 153 — 2026-11-20 — Options for the orange "Hub" and logo glow
+
+### Exact input prompt
+
+```text
+Awesome, [Image #5] the orange does not stay good in here. What are the options?
+```
+
+### Change summary
+
+Found where the orange in the header comes from: `.brand-accent` in `globals.css` (`var(--primary)` plus an orange glow) on "Hub", and the `ElectricLogo` glow (`#fed7aa`/`#f97316`) in `BrandMark.tsx`. Proposed options without applying any. No project files changed apart from the log.
+
+### Validation and outcome
+
+Read `AppHeader.tsx` (uncommitted), `BrandMark.tsx` and `globals.css`. Nothing was applied.
+
+## 154 — 2026-11-20 — Light-blue "Hub" and logo glow
+
+### Exact input prompt
+
+```text
+Let's go 2 + A but keep the 1+A in memory, if i say to go with the second option
+```
+
+### Change summary
+
+"Hub" (`.brand-accent` in `globals.css`) is now `#4a74c4` without the orange glow. The logo mark's shadow and the ElectricLogo glow in `BrandMark.tsx` now use light blue (`#cbdbf5`/`#9db8e8`). The "1 + A" fallback (all-navy text plus the light-blue glow) was saved to Claude's user memory, not the repository.
+
+### Validation and outcome
+
+`tsc` passes. Not checked in the browser.
+
+## 155 — 2026-11-20 — Switch header brand to option 1 + A
+
+### Exact input prompt
+
+```text
+Let's go with the 2nd choice
+```
+
+### Change summary
+
+Applied the saved fallback: `.brand-accent` in `globals.css` now uses `color: inherit`, so "Hub" is navy like the rest of the brand text. The light-blue logo glow is unchanged.
+
+### Validation and outcome
+
+Confirmed with grep that the rule changed. Not checked in the browser.
+
+## 156 — 2026-11-20 — Light/dark mode toggle with sun/moon animation
+
+### Exact input prompt
+
+```text
+Great! Can we add a light/dark mode toggle with a sun and moon animation?
+```
+
+### Change summary
+
+Added `ThemeToggle.tsx`, a header button whose sun turns into a moon (the rays fold away and a cutout slides in). It stores the choice in `localStorage` and sets `data-theme` on `<html>`. With no stored choice, the OS setting still applies. `globals.css` now scopes the dark tokens to `:root:not([data-theme="light"])` under the media query and to `:root[data-theme="dark"]`, and adds the animation CSS, which respects reduced motion. `layout.tsx` adds an inline head script so a stored choice doesn't flash the other theme on load. `BrandMark.tsx` uses the shared `useDarkTheme` hook. `AppHeader.tsx` renders the toggle. New test: `ThemeToggle.test.tsx`.
+
+### Validation and outcome
+
+`tsc` and vitest (46/46) pass. ESLint isn't configured for this command. Not checked in the browser. The CSS `r`/`cx` transitions need a current browser (Safari support is partial).
+
+
+## 157 — 2026-11-20 — Spice up header logo typography
+
+### Exact input prompt
+
+```text
+Hi! The logo letters look kind of like food without salt. Can you spice it up pls
+```
+
+### Change summary
+
+Wrapped the header wordmark in `.brand-wordmark` / `.brand-name` in `frontend/src/components/AppHeader.tsx` (fixing the unintended flex gap between "Device" and "Hub") and styled it in `frontend/src/app/globals.css` with `Space Grotesk`, a subtle navy-to-electric-blue gradient (ice-blue in dark mode) with hover shimmer, and a dark navy `Hub` badge with a tangerine spark dot. Added reduced-motion and Forced Colors Mode fallbacks.
+
+### Validation and outcome
+
+`npm run typecheck` (`tsc --noEmit`) and `npm test` (vitest, 13 files / 46 tests) pass in `frontend/`. Not visually verified in a running browser.
+
+
+## 158 — 2026-11-20 — Fix breadcrumb navigation and category filtering
+
+### Exact input prompt
+
+```text
+Awesome! Let's fix the breadcrumbs. The home goes nowhere and if you enter a product detail, you cant go back to the filtred category , in this case the "Acessory"
+```
+
+### Change summary
+
+Removed the redundant dead `Home` crumb and unified breadcrumbs on `Catalog` (`/`) across `Catalogue.tsx`, `DeviceDetail.tsx`, and `StaffDesk.tsx` using semantic `<nav aria-label="Breadcrumbs"><ol>` markup and CSS-generated dividers in `globals.css`. Wired `/?category=…` support in `page.tsx` and `Catalogue.tsx` (including URL sync and `Catalog` reset click) and turned the device detail category crumb into a working link back to the filtered category; added a unit test in `Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`npm run typecheck` (`tsc --noEmit`) and `npm test` (vitest, 13 files / 47 tests) pass in `frontend/`. Not visually verified in a running browser.
+
+## 159 — 2026-11-20 — Commit and push the branch
+
+### Exact input prompt
+
+```text
+Go ahead and commit the changes on this branch. Push it at the end
+```
+
+### Change summary
+
+Committed the branch's changes in 4 groups: linked breadcrumbs and the category kept in the URL (85231c4), the clickable catalogue image (b0e422c), the light-blue accents with the electric header logo and the light/dark toggle (e44f2cf), and the AI log (2f5a6a2). Pushed them to `feat/catalogue-filters-and-rebrand`.
+
+### Validation and outcome
+
+The push succeeded (cf4ab69..2f5a6a2). The breadcrumb hunk in `globals.css` was staged on its own with its commit. The suite wasn't re-run before committing; the last run was 46/46.
+
+## 160 — 2026-11-20 — Unify frontend color palette and visual styling
+
+### Exact input prompt
+
+```text
+Can you make this app frontend be visual uniform, I feel like there are just too many different colors pulling each other appart
+```
+
+### Change summary
+
+Unified the frontend design tokens and styling in `frontend/src/app/globals.css` onto a single Cool Slate neutral scale with a Cobalt Blue brand accent (`--primary`, `--accent`, `--primary-soft`, `--on-primary-soft`) and restrained semantic status colors (`--good`, `--warn`, `--err`, `--wait`), removing competing orange accents and hardcoded `#cbdbf5` / `#0f172a` overrides across buttons, category chips, tips, staff sidebar, and stat cards so light and dark modes stay consistent. Fixed `.loan-period select` to use theme tokens instead of hardcoded white/legacy variables, and aligned the brand mark glow and SVG stroke to the same cobalt family in `frontend/src/components/BrandMark.tsx`, `frontend/public/brand/logo-mark.svg`, and `frontend/src/app/icon.svg`.
+
+### Validation and outcome
+
+`npm run typecheck` (`tsc --noEmit`) and `npm test` (vitest, 13 files / 47 tests) pass in `frontend/`. Not visually verified in a running browser.
+
+## 161 — 2026-11-20 — Explain Staff desk card data and 6% in use calculation
+
+### Exact input prompt
+
+```text
+Is this cards mocked data? In the equipment it states 6% in use but no equipment is handed out
+```
+
+### Change summary
+
+No project files changed apart from `AI_LOG.md`. Explained that the Staff desk summary cards are live values calculated by `deskStats` in `frontend/src/components/StaffDesk.tsx` from the real catalogue and reservations APIs, not mocked data; the `6% in use` figure (`Math.round(((80 - 75) / 80) * 100)`) comes from 5 of the 80 seeded units in `backend/catalogue/campus-items.json` and `backend/crates/loan-service/migrations/demo_seed.sql` having `MAINTENANCE` status (1 Sony Alpha a6400 Kit, 2 Blue Yeti USB Microphones, and 2 Raspberry Pi 5 8 GB Kits), which `deskStats` counts alongside loaned/reserved units by subtracting `availableUnits` from `totalUnits`.
+
+### Validation and outcome
+
+Read-only inspection of `frontend/src/components/StaffDesk.tsx`, `frontend/src/app/staff/page.tsx`, `backend/catalogue/campus-items.json`, and `backend/crates/loan-service/migrations/demo_seed.sql`; no code changes or tests run.
+
+## 162 — 2026-11-20 — Explain what prevents sending and receiving emails
+
+### Exact input prompt
+
+```text
+Awesome. What is preventing this current app to send and receive emails?
+```
+
+### Change summary
+
+No project files changed apart from `AI_LOG.md`. Summarized the design and configuration barriers blocking email in the current app: the system is outbound-only (no inbound email receiving) and only enqueues outbox events on staff collection, staff return, and return-triggered waitlist notifications; local `make dev` (`infra/scripts/dev.sh`) omits `loan-publisher` and `notifications-worker` because they require Azure Managed Identity, Service Bus, and Cosmos DB; and the Azure workload configuration (`infra/environments/test/workloads.tfvars`, `infra/workloads/main.tf`, `backend/crates/notifications-worker/src/{main,infrastructure}.rs`) leaves `EMAIL_DELIVERY_MODE` set to `"fake"`, omits `RESEND_FROM_ADDRESS` (falling back to `noreply@resource.center.example`) and `RESEND_AUTHORIZED_RECIPIENTS` (defaulting empty and rejecting all sends in `resend` mode), does not populate Key Vault secret `resend-api-key`, and requires a verified Resend sending domain/sender plus Auth0-sourced recipient emails matching the allowlist.
+
+### Validation and outcome
+
+Read-only inspection of `infra/scripts/dev.sh`, `infra/workloads/main.tf`, `infra/workloads/variables.tf`, `infra/environments/test/workloads.tfvars`, `backend/crates/notifications-worker/src/main.rs`, `backend/crates/notifications-worker/src/infrastructure.rs`, `backend/crates/loan-service/src/application.rs`, and `docs/backend/phase-2-handoff.md`; no code changes or tests run.
+
+## 163 — 2026-11-20 — Clarify whether Azure default domains work as a Resend sender domain
+
+### Exact input prompt
+
+```text
+the azure domains work as the resend sender domain?
+```
+
+### Change summary
+
+No project files changed apart from `AI_LOG.md`. Explained that Azure-managed default hostnames (such as `*.azurecontainerapps.io` or `*.azurewebsites.net`) cannot be used as a Resend sender domain because Resend requires adding DNS verification records (DKIM `TXT` and SPF `TXT`/`MX` or `CNAME` records) and Microsoft owns DNS for those hostnames. Summarized the working alternatives: using `onboarding@resend.dev` for free testing to the Resend account owner's email (or `delivered@resend.dev`), verifying a custom domain/subdomain where the user controls DNS, or noting that Azure-managed sender domains (`*.azurecomm.net`) only exist on Azure Communication Services Email (not Resend).
+
+### Validation and outcome
+
+Checked current Resend documentation via Context7 (`/websites/resend`) for domain verification DNS requirements and `onboarding@resend.dev` testing rules; no code changes or tests run.
+
+## 164 — 2026-11-20 — Report Azure Communication Services Email pricing and limits
+
+### Exact input prompt
+
+```text
+what is the price of Azure communication services email?
+```
+
+### Change summary
+
+No project files changed apart from `AI_LOG.md`. Reported official Azure Communication Services Email pay-as-you-go pricing ($0.00025 per email sent plus $0.00012 per MB of data transferred, with no base monthly fee), noted the testing-only rate limits on Azure-managed `*.azurecomm.net` domains (~5/min, 10/hour; custom domain required for production/higher quotas), and noted that this project's accepted stack already implements Resend rather than ACS Email.
+
+### Validation and outcome
+
+Checked official Microsoft Azure / Microsoft Learn documentation via web search; no code changes or tests run.
+
+## 165 — 2026-11-20 — Staff dashboard route request (partial prompt)
+
+### Exact input prompt
+
+```text
+I want to put these 3 categories (img 1) inside the dashboard and create a dedicated /staff/dashboard route.
+
+Then i want to create /
+```
+
+### Change summary
+
+Accidental partial prompt submission; no work performed on this entry. Superseded immediately by entry 166.
+
+### Validation and outcome
+
+None.
+
+## 166 — 2026-11-20 — Add /staff/dashboard tree navigation and manageable /staff/inventory
+
+### Exact input prompt
+
+```text
+I want to put these 3 categories (img 1) inside the dashboard and create a dedicated /staff/dashboard route.
+  
+  Then i want to create /staff/inventory with the inventory there. I also wish to create an easy manageable inventory. SO me as a staff can easily add or remove items from here, while also moving them to maintenance. The add should accept all fields a product carries and make them mandatory(images, description etc..)
+
+For the dasboard route, when clicked, the subitems are opened in a tree-like system
+```
+
+### Change summary
+
+Added dedicated `/staff/dashboard` (`frontend/src/app/staff/dashboard/page.tsx`) and `/staff/inventory` (`frontend/src/app/staff/inventory/page.tsx`) routes, updating `/staff` (`frontend/src/app/staff/page.tsx`) to enforce staff access and redirect to `/staff/dashboard`. Extracted `frontend/src/components/StaffSidebar.tsx` with a collapsible tree under `Dashboard` (`Collection queue`, `Loans`, and `Overdue`) and sibling `Inventory` link, removed the inline inventory section from `frontend/src/components/StaffDesk.tsx`, and built `frontend/src/components/StaffInventory.tsx` + `frontend/src/app/globals.css` styles for managing models/units, toggling `AVAILABLE`/`MAINTENANCE`, adding units, safely removing unloaned models/units, and creating new equipment in a native `<dialog>` modal with all product fields mandatory. Added full staff inventory CRUD/status endpoints across `backend/crates/loan-service/src/{domain,application,infrastructure,presentation,test_support,postgres_tests}.rs`, `frontend/src/lib/{loan,bff,api-client,observability}.ts`, `frontend/src/app/api/loan/[...path]/route.ts`, `frontend/fake/loan-api.mjs`, and unit/E2E tests in `frontend/src/lib/{bff,observability}.test.ts`, `frontend/src/components/{StaffDesk,StaffInventory}.test.tsx`, and `frontend/e2e/flows.spec.ts`.
+
+### Validation and outcome
+
+`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` passed in `backend/` (43 passed, 13 `#[ignore]` live Postgres/Cosmos tests not run, including `postgres_tests_staff_inventory_crud_and_maintenance`). In `frontend/`, `npm run typecheck`, `npm test` (Vitest, 14 files / 51 tests), `npm run build` (`next build`), and `npm run e2e` (Playwright, 16/16 tests against `fake/loan-api.mjs`) all passed; `flows.spec.ts` line 23 was also updated to scope the catalogue link check to the card heading link.
+
+## 167 — 2026-11-21 — Make product catalogue filters collapsible on mobile
+
+### Exact input prompt
+
+```text
+Can you make the filters in the product catalogue page be colapsable in mobile devices=)
+```
+
+### Change summary
+
+Made the product catalogue filter sidebar collapsible below `1024px` (starting collapsed on mobile while staying always expanded on desktop) in `frontend/src/components/Catalogue.tsx` and `frontend/src/app/globals.css`, adding a `Filters` toggle button (`aria-expanded`, `aria-controls`), active filter count badge, `Ctrl/⌘+K` auto-expand before focusing search, and `100dvh` sticky filter panel height on desktop. Added unit and mobile E2E coverage in `frontend/src/components/Catalogue.test.tsx` and `frontend/e2e/flows.spec.ts`.
+
+### Validation and outcome
+
+`npm run typecheck`, `npm test` (Vitest: 14 files, 52/52 tests), `npm run build` (`next build`), and `npm run e2e` (Playwright: 16/16 tests against `fake/loan-api.mjs`, including `390x844` mobile filter collapse/expand and `1440x1000` desktop visibility) all passed in `frontend/`.
+
+## 168 — 2026-11-21 — Make categories lateral scrollbar move on tap
+
+### Exact input prompt
+
+```text
+Make the categories lateral scrollbar move on tap
+```
+
+### Change summary
+
+Updated the horizontal categories strip in `frontend/src/components/Catalogue.tsx` and `frontend/src/app/globals.css` with a tap-responsive `.chips-rail` scrollbar track (jumping `scrollLeft` smoothly to the tapped position), `Scroll categories left`/`Scroll categories right` navigation buttons (redirecting focus to the opposite button when an edge disables the focused one), and chip tap-to-center `scrollIntoView` behavior, keeping native horizontal touch/wheel scrolling with `overscroll-behavior-x: contain` and `touch-action: manipulation`. Added unit and mobile E2E coverage in `frontend/src/components/Catalogue.test.tsx` and `frontend/e2e/flows.spec.ts`.
+
+### Validation and outcome
+
+`npm run typecheck`, `npm test` (Vitest: 14 files, 53/53 tests), `npm run build` (`next build`), and `npm run e2e` (Playwright: 16/16 tests against `fake/loan-api.mjs`, including tapping the categories next button and `.chips-rail` on a `390x844` viewport) all passed in `frontend/`.
+
+## 169 — 2026-11-21 — Remove catalogue layout toggle (grid view only)
+
+### Exact input prompt
+
+```text
+Also Remove this option, only grid view is available
+```
+
+### Change summary
+
+Removed the Grid/List `.segmented` layout switcher and `layout` state from `frontend/src/components/Catalogue.tsx` so the equipment catalogue always renders in grid view (`.device-grid`). Removed the unused `layout` prop from `DeviceCard` in `frontend/src/components/DeviceCard.tsx`, deleted unused `.segmented`, `.device-list`, and `.device-card.list*` styles from `frontend/src/app/globals.css`, and added a regression assertion in `frontend/src/components/Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`npm --prefix frontend run typecheck`, `npm --prefix frontend test` (Vitest: 14 files, 53/53 tests passed), and `npm --prefix frontend run build` (`next build`) all passed. A repository search under `frontend/src` and `frontend/e2e` confirmed no remaining references to `.segmented`, `.device-list`, `.device-card.list`, or `layout=`.
+
+## 170 — 2026-11-21 — Revert categories strip to original native scrollbar
+
+### Exact input prompt
+
+```text
+REvert to the old scrollbar without the icons
+```
+
+### Change summary
+
+Reverted Entry 168's custom categories scrollbar rail (`.chips-rail`) and left/right chevron icon buttons (`.chips-controls`) from `frontend/src/components/Catalogue.tsx` and `frontend/src/app/globals.css`, restoring the original native thin horizontal `.chips` scrollbar styled with the unified `oklab` palette tokens. Updated unit and E2E tests in `frontend/src/components/Catalogue.test.tsx` and `frontend/e2e/flows.spec.ts` to remove the chevron/rail assertions and assert that those controls are no longer rendered.
+
+### Validation and outcome
+
+`npm --prefix frontend run typecheck`, `npm --prefix frontend test` (Vitest: 14 files, 52/52 tests passed), `npm --prefix frontend run build` (`next build`), and `npm --prefix frontend run e2e` (Playwright: 16/16 tests passed against `fake/loan-api.mjs`) all passed. A repository search across `frontend/src` and `frontend/e2e` confirmed no remaining `.chips-controls`, `.chips-nav-btn`, or rendered `.chips-rail` references.
+
+## 171 — 2026-11-21 — Main-page addition inquiry
+
+### Exact input prompt
+
+```text
+So, I want to create something in the main page of the campus device hub, so this project, the resource center.
+```
+
+### Change summary
+
+Paused repository inspection at the user's follow-up request (entry 172) before specifying the feature in entry 173. No project files changed apart from `AI_LOG.md`.
+
+### Validation and outcome
+
+Superseded by entries 172–173; no code changes or tests run for this initial prompt.
+
+## 172 — 2026-11-21 — Scope plan request before repository inspection
+
+### Exact input prompt
+
+```text
+Before you look into it, let's draft a plan so you have a clear scope of what you are looking into.
+```
+
+### Change summary
+
+Deferred codebase edits until the user clarified the main-page target (light/dark navbar toggle screen transition in entry 173). No project files changed apart from `AI_LOG.md`.
+
+### Validation and outcome
+
+Superseded by entry 173 once the target scope was defined; no code changes run for this scoping turn.
+
+## 173 — 2026-11-21 — Smooth out light/dark mode screen transition animation
+
+### Exact input prompt
+
+```text
+So I was thinking about, can you see in the navbar the toggle of the light and dark mode? Right now they make a cute animation, but the screen turns dark and white really fast and in a very hassle way. So I want to smooth out this animation to make a white into dark into a smooth, smoother animation.
+```
+
+### Change summary
+
+Updated `frontend/src/components/ThemeToggle.tsx` and `frontend/src/app/globals.css` to smoothly reveal theme switches across the viewport via the View Transitions API (`600ms` radial `clip-path` expansion from the navbar toggle button using `flushSync`, with `storage` sync and sequence-guarded cleanup), plus a `450ms` CSS surface/color fade fallback when `startViewTransition` is unavailable and instant updates under `prefers-reduced-motion: reduce`. Added unit and E2E coverage in `frontend/src/components/ThemeToggle.test.tsx` and `frontend/e2e/flows.spec.ts`.
+
+### Validation and outcome
+
+`npm --prefix frontend run typecheck`, `npm --prefix frontend test` (Vitest: 14 files, 55/55 tests), `npm --prefix frontend run build`, `npm --prefix frontend audit --omit=dev` (0 vulnerabilities), `npm --prefix frontend run e2e` (Playwright: 17/17 tests against `fake/loan-api.mjs`), and `serena memories check` all passed. Serena MCP `initial_instructions` timed out (`context deadline exceeded`), so `.serena/memories/` markdown files were read directly per `AGENTS.md`.
+
+## 174 — 2026-11-21 — Slower, smoother theme transition velocity and redesigned sun/moon icon
+
+### Exact input prompt
+
+```text
+Can you please make the animation smoother? So I'm talking about the velocity of the transition. Please also alter the icon, make a new one from scratch, but with the same concept of the sun and the moon. 
+```
+
+### Change summary
+
+Adjusted the theme transition velocity in `frontend/src/components/ThemeToggle.tsx` and `frontend/src/app/globals.css` (`850ms` radial view transition and `750ms` CSS fade fallback using symmetrical `cubic-bezier(0.37, 0, 0.63, 1)` easing). Replaced the `#moon-mask` SVG in `ThemeToggle.tsx` with a two-layer sun (core, halo, eight rays) and crescent-moon-with-two-stars icon animated solely with compositor `transform` and `opacity` properties, and updated unit tests in `frontend/src/components/ThemeToggle.test.tsx`.
+
+### Validation and outcome
+
+`npm --prefix frontend run typecheck`, `npm --prefix frontend test` (Vitest: 14 files, 56/56 tests), `npm --prefix frontend run build`, `npm --prefix frontend run e2e` (Playwright: 17/17 tests against `fake/loan-api.mjs`), and `git diff --check` on `ThemeToggle.tsx`, `ThemeToggle.test.tsx`, and `globals.css` all passed.
+
+## 175 — 2026-11-26 — Commit and push pending work
+
+### Exact input prompt
+
+```text
+pls commit
+```
+
+### Change summary
+
+Committed the pending work in logical groups (Loan staff inventory API, theme transition, remaining web changes, Stage 2 MVP plan, activity log) and pushed to `origin/feat/catalogue-filters-and-rebrand`.
+
+### Validation and outcome
+
+`make check` passed through catalogue/release checks, Rust fmt/clippy/tests, frontend typecheck, Vitest (56/56), build, audit (0 vulnerabilities), Playwright (17/17) and `terraform fmt`, then failed at `infra-validate ENV=test` because Azure CLI MFA had expired; Terraform validation did not complete (no infra files changed). `make backend-test-postgres` passed (12/12). Intermediate commits were not built individually.
+

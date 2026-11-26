@@ -14,123 +14,19 @@
 
 ## 1. Stage 1 — Architecture & C4 Diagrams
 
-Topology reflects the selected design. Backend phase 1 is verified locally, not deployed by this change. Browser sign-in/actions remain phase 3 work. Stored Test results below are not a fresh live check.
+Diagrams are exported from the editable draw.io source [`resource-center-c4.drawio`](../architecture/diagrams/resource-center-c4.drawio) (pages 1–4). Topology reflects the selected design. Backend phase 1 is verified locally, not deployed by this change. Browser sign-in/actions remain phase 3 work. Stored Test results below are not a fresh live check.
 
 ### 1.1 C4 Level 1 — System Context Diagram
 
-```mermaid
-flowchart TB
-    student["Student User\n(Authenticated via Auth0 OIDC/PKCE\nRole: student)"]
-    staff["Staff User\n(Authenticated via Auth0 OIDC/PKCE\nRole: staff)"]
-    anon["Unauthenticated Visitor\n(Campus Browser)"]
-
-    rc["Campus Device Loan System\n(Resource Center)\nAzure Cloud-Native Platform"]
-
-    auth0["Auth0 Identity Provider\n(External OAuth2 / OIDC + JWKS)"]
-    resend["Resend Email API\n(External Transactional Email Provider)"]
-
-    anon -->|"Browses device catalogue & availability (HTTPS)"| rc
-    student -->|"Views availability, reserves available device (2-day loan),\nsubscribes to waitlist notifications (HTTPS + Bearer JWT)"| rc
-    staff -->|"Views reservations, records physical collection\nand device return (HTTPS + Bearer JWT)"| rc
-
-    rc -->|"Authenticates users (OIDC/PKCE) &\nvalidates RS256 Bearer JWTs via JWKS"| auth0
-    rc -->|"Sends collection, return & availability\ntransactional emails (HTTPS API)"| resend
-```
+![C4 System Context diagram](../architecture/diagrams/1-context.png)
 
 ### 1.2 C4 Level 2 — Container Diagram
 
-```mermaid
-flowchart TB
-    subgraph Users["Campus Users"]
-        browser["Web Browser\n(Unauthenticated / Student / Staff)"]
-    end
-
-    subgraph External["External SaaS Providers"]
-        auth0["Auth0\n(OAuth2/OIDC + JWKS)"]
-        resend["Resend Email Service\n(Transactional Email API)"]
-    end
-
-    subgraph Azure["Azure Resource Center Platform (francecentral)"]
-        ingress["Container Apps managed HTTPS ingress\n(TLS termination; no Nginx/Let's Encrypt, ADR 0003)"]
-        web["Web Frontend Container App\n(Next.js 16 SSR + BFF proxy /api/loan/*,\nAuth0 server session; /api/health, /api/ready)\nrc-test-0330980f-web"]
-
-        subgraph LoanBoundary["Loan Service Boundary (Authoritative Business State)"]
-            loan_api["Loan API Container App\n(Rust 1.94 / Tokio / Axum)\nrc-test-0330980f-loan-api"]
-            migrations["Loan Migrations Job\n(Container Apps Job: loan-service migrate)\nrc-test-0330980f-migrations"]
-            publisher["Loan Outbox Publisher Job\n(Scheduled Container Apps Job: */1 * * * *)\nrc-test-0330980f-loan-publisher"]
-            pg[("Azure PostgreSQL Flexible Server\n(Private VNet 10.42.2.0/24, database: loan)\nTables: device_models, device_units,\nreservations, availability_subscriptions, outbox_events")]
-        end
-
-        sb[["Azure Service Bus Queue\n(Basic Tier: notification-requests-v1\n+ $DeadLetterQueue)"]]
-
-        subgraph NotifBoundary["Notifications Service Boundary (Delivery & Deduplication State)"]
-            notif_worker["Notifications Worker Container App\n(Rust 1.94 / Tokio + KEDA Queue Scaler)\nrc-test-0330980f-notifications"]
-            cosmos[("Azure Cosmos DB for NoSQL\n(Database: notifications, Container: jobs\nPartition Key: /eventId, ETag concurrency)")]
-            kv["Azure Key Vault\n(rctest0330980fnkv\nSecret: resend-api-key)"]
-        end
-
-        monitor["Azure Monitor & Log Analytics\n(rc-test-0330980f-logs + 6 Metric Alerts\n+ Action Group rc-test-0330980f-ops-ag)"]
-    end
-
-    browser -->|"HTTPS pages + same-origin /api/loan/*\n(encrypted HttpOnly session cookie; no token in browser)"| ingress
-    ingress --> web
-    browser -->|"OIDC Authorization Code + PKCE sign-in"| auth0
-    web -->|"Server-side /api/v1/* with Bearer access token\n+ x-correlation-id (contract routes only)"| loan_api
-    loan_api -->|"Validates JWT signature, iss, aud, exp & role"| auth0
-
-    migrations -->|"Applies SQL migrations & seeds models\n(Entra Managed Identity)"| pg
-    loan_api -->|"Atomic ACID transactions:\nApplication use cases + domain rules; model-first locks; state + outbox_events"| pg
-    publisher -->|"Claims unpublished outbox_events\n(FOR UPDATE SKIP LOCKED, 60s lease)"| pg
-    publisher -->|"Publishes self-contained JSON event\n(MessageId = eventId, CorrelationId)"| sb
-
-    sb -->|"Triggers KEDA scale-from-zero &\ndelivers PeekLock messages"| notif_worker
-    notif_worker -->|"Upserts job state & ETag precondition\n(id = eventId)"| cosmos
-    notif_worker -->|"Reads resend-api-key via RBAC"| kv
-    notif_worker -->|"Delivers email (or FakeEmailSender in Test)"| resend
-
-    web -.->|"Structured JSON proxy logs\n(route template, status, duration, correlation ID)"| monitor
-    loan_api -.->|"Structured JSON logs + metrics"| monitor
-    publisher -.->|"Structured JSON logs + job metrics"| monitor
-    notif_worker -.->|"Structured JSON logs + metrics"| monitor
-```
+![C4 Container diagram](../architecture/diagrams/2-container.png)
 
 ### 1.3 Cloud Deployment & Network Isolation Diagram
 
-```mermaid
-flowchart LR
-    internet(("Public Internet"))
-
-    subgraph VNet["Virtual Network: rc-test-0330980f-vnet (10.42.0.0/16)"]
-        subgraph CAE["Subnet: container-apps (10.42.0.0/23)"]
-            web_app["rc-test-0330980f-web\n(External HTTPS Ingress :3000\nScale: 0..2 replicas)"]
-            api_app["rc-test-0330980f-loan-api\n(External HTTPS Ingress :8080\nScale: 0..3 replicas)"]
-            notif_app["rc-test-0330980f-notifications\n(No Ingress; KEDA Service Bus\nScale: 0..3 replicas)"]
-            pub_job["rc-test-0330980f-loan-publisher\n(Cron Job: */1 * * * *)"]
-            mig_job["rc-test-0330980f-migrations\n(Manual Job)"]
-        end
-
-        subgraph PGSubnet["Subnet: postgres (10.42.2.0/24 — Delegated)"]
-            pg_srv[("rc-test-0330980f-loan-pg\n(Public Network Access: Disabled\nPrivate DNS: privatelink.postgres.database.azure.com)")]
-        end
-    end
-
-    internet -->|"TLS 1.2/1.3 Managed Ingress"| web_app
-    internet -->|"TLS 1.2/1.3 Managed Ingress"| api_app
-    api_app -->|"Private VNet TCP :5432\n(Entra Token: rc-test-0330980f-loan)"| pg_srv
-    pub_job -->|"Private VNet TCP :5432\n(Entra Token: rc-test-0330980f-publisher)"| pg_srv
-    mig_job -->|"Private VNet TCP :5432\n(Entra Token: rc-test-0330980f-migrations)"| pg_srv
-    servicebus["Azure Service Bus Basic / notification-requests-v1"]
-    cosmos_jobs[("Cosmos DB for NoSQL / notifications / jobs")]
-    keyvault["Key Vault / resend-api-key"]
-    email["Resend HTTPS API; Test stored checks use fake email"]
-    identity["Auth0 HTTPS JWKS; live setup pending"]
-    pub_job -->|"HTTPS / managed identity sender"| servicebus
-    servicebus -->|"HTTPS PeekLock / receiver identity / KEDA"| notif_app
-    notif_app -->|"HTTPS / worker identity / ETag"| cosmos_jobs
-    notif_app -->|"HTTPS / secret-reader identity"| keyvault
-    notif_app -->|"HTTPS in live delivery mode"| email
-    api_app -->|"HTTPS / signature verification"| identity
-```
+![Deployment diagram](../architecture/diagrams/3-deployment.png)
 
 ---
 

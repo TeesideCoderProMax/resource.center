@@ -28,7 +28,9 @@ const PATHS = {
   trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13",
   chevronLeft: "M15 6l-6 6 6 6",
   chevronRight: "M9 6l6 6-6 6",
+  chevronDown: "M6 9l6 6 6-6",
   refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7",
+  wrench: "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z",
 } as const;
 
 export type IconName = keyof typeof PATHS;

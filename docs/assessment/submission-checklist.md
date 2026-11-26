@@ -37,7 +37,7 @@ emails and unrelated browser tabs.
 
 Use [phase 4 handoff](../backend/phase-4-handoff.md) as the current results index,
 [release runbook](../backend/release-runbook.md) for safe operations, and
-[assessment map](../cloud/assessment-evidence.md) for diagrams. Preserve dated older
+[assessment map](../cloud/assessment-evidence.md) for diagrams. The C4 Context, Container, Deployment and Stage 2 PNGs and their draw.io source live in [`docs/architecture/diagrams/`](../architecture/diagrams/). Preserve dated older
 evidence; do not relabel it as a new run. Confirm Stage 2 approval with the tutor.
 
 ## Build the ZIP after final inputs exist

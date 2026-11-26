@@ -69,7 +69,9 @@ frontend-e2e:
 	npm --prefix frontend run e2e
 
 # Local stack: PostgreSQL + Loan API + web (images rebuilt first). Ctrl-C stops it.
-dev: docker-build
+dev:
+	docker build -t rc-backend:ci backend
+	docker build --target deps -t rc-web:deps frontend
 	./infra/scripts/dev.sh
 
 .PHONY: catalogue-check

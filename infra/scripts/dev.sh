@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `make dev`: PostgreSQL 17 (TLS) + Loan API + web from the local images, kept running
+# `make dev`: PostgreSQL 17 (TLS) + Loan API from the local image + web (next dev, hot reload), kept running
 # until Ctrl-C. Publisher and Notifications need Azure Service Bus/Cosmos and are not
 # started. Without Auth0 env vars the stack is signed-out only (writes fail closed).
 set -euo pipefail
@@ -17,7 +17,7 @@ api_port="${DEV_API_PORT:-8080}"
 web_port="${DEV_WEB_PORT:-3000}"
 cleanup() {
   echo "Stopping $prefix stack"
-  docker rm -f "$prefix-web" "$prefix-api" "$prefix-pg" >/dev/null 2>&1 || true
+  docker rm -fv "$prefix-web" "$prefix-api" "$prefix-pg" >/dev/null 2>&1 || true
   docker network rm "$prefix" >/dev/null 2>&1 || true
   rm -rf "${cert_dir:-}"
 }
@@ -51,8 +51,13 @@ done
 [[ ${#web_auth[@]} -eq 0 ]] && web_auth+=(-e ALLOW_UNCONFIGURED_AUTH=true)
 docker run -d --name "$prefix-api" --network-alias api "${pg_args[@]}" "${auth_args[@]}" \
   -p "127.0.0.1:$api_port:8080" -e SERVICE_VERSION=dev -e CORS_ALLOWED_ORIGINS="http://localhost:$web_port" rc-backend:ci api >/dev/null
+# Web runs `next dev` on the mounted frontend/ source for hot reload. node_modules
+# comes from the image's deps stage; .next lives in tmpfs so the host tree stays clean.
 docker run -d --name "$prefix-web" --network "$prefix" "${web_auth[@]}" -p "127.0.0.1:$web_port:3000" \
-  -e RC_VERSION=dev -e LOAN_API_BASE_URL=http://api:8080 -e APP_BASE_URL="http://localhost:$web_port" rc-web:ci >/dev/null
+  --user "$(id -u):$(id -g)" -v "$PWD/frontend:/app" -v /app/node_modules \
+  --tmpfs "/app/.next:uid=$(id -u),gid=$(id -g),exec" -e NEXT_TELEMETRY_DISABLED=1 \
+  -e RC_VERSION=dev -e LOAN_API_BASE_URL=http://api:8080 -e APP_BASE_URL="http://localhost:$web_port" \
+  rc-web:deps npm run dev -- -H 0.0.0.0 -p 3000 >/dev/null
 
 cat <<EOF
 

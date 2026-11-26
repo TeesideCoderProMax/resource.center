@@ -1,0 +1,66 @@
+<!doctype html>
+<!-- Stage 1 accompanying note (page 4 of the Stage 1 PDF). Edit the text here, then rebuild the PDF. -->
+<html><head><meta charset="utf-8"><title>Stage 1 note</title>
+<style>
+body{font:10pt/1.33 Arial,Helvetica,sans-serif;color:#222;margin:0}
+h1{font-size:16pt;margin:0 0 2px}
+.sub{color:#666;margin:0 0 10px}
+.lead{margin:0 0 6px}
+h2{font-size:11.5pt;margin:8px 0 3px;color:#0D5091}
+ul,ol{margin:0;padding-left:20px}
+li{margin:1px 0}
+</style></head><body>
+<h1>Stage 1 — Accompanying note</h1>
+<p class="sub">Campus Device Loan System (Resource Center) · Afonso Caboz · Diagrams: C4 Context, C4 Container, Deployment</p>
+
+
+<h2>Intended MVP scope</h2>
+<ul>
+<li><b>Loan service</b> (Rust API, PostgreSQL, outbox publisher) holds the authoritative state:
+  <ul>
+  <li>a public catalogue with available counts</li>
+  <li>reservations with a due date two days ahead</li>
+  <li>a waitlist for each device model</li>
+  <li>staff collection and return</li>
+  </ul>
+  Row locks mean only one student can get the last unit.</li>
+<li><b>Notifications service</b> (Rust worker, Cosmos DB) sends collection and return confirmations. When a device comes back, it emails every student on that model's waitlist.</li>
+<li><b>Web frontend</b> (Next.js) gives visitors, students and staff the pages for these actions.</li>
+<li><b>Deferred:</b>
+  <ul>
+  <li>catalogue administration</li>
+  <li>deployed Staging and Production environments</li>
+  <li>real email in the demo; a fake sender records each delivery instead, so the full job lifecycle stays visible</li>
+  </ul></li>
+</ul>
+
+<h2>Main technology choices</h2>
+<ul>
+<li><b>PostgreSQL</b> because allocation needs locking and transactions. A transactional outbox stores each state change and its notification request in the same commit, so neither can exist without the other.</li>
+<li><b>Azure Service Bus</b> sits between the two services. It delivers each message at least once and moves failures to a dead-letter queue. The worker deduplicates by event ID, so a repeated message does not send a second email. Exactly-once delivery is not claimed.</li>
+<li><b>Cosmos DB</b> belongs to Notifications alone, holding delivery jobs and attempts. Neither service reads the other's database.</li>
+<li><b>Rust (Tokio, Axum)</b> for both backend processes: small images and fast start-up, which suit scale-to-zero.</li>
+<li><b>Azure Container Apps</b> provides managed TLS ingress, autoscaling on HTTP load and queue depth, and scale to zero.</li>
+<li><b>Terraform</b> defines every Azure resource, and <b>GitHub Actions</b> builds, tests and deploys.</li>
+</ul>
+
+<h2>Authentication, RBAC and personal data</h2>
+<ul>
+<li>Users sign in with Auth0 (OIDC authorisation code with PKCE). Next.js holds the session in an encrypted HttpOnly cookie, so access tokens never reach browser scripts.</li>
+<li>The Loan API checks each RS256 JWT's issuer, audience, expiry and role claim:
+  <ul>
+  <li>students can reserve and join a waitlist</li>
+  <li>only staff can record collection and return</li>
+  <li>catalogue reads need no sign-in</li>
+  </ul></li>
+<li><b>Personal data is limited to the Auth0 user ID and the student's email.</b> Both are stored with reservations and waitlist entries. The email is copied into notification requests only so it can be sent, and it is redacted in logs.</li>
+<li>No passwords are stored anywhere. Azure services authenticate with managed identities, the database has no public endpoint, and the email API key is kept in Key Vault.</li>
+</ul>
+
+<h2>Open questions for my tutor</h2>
+<ol>
+<li>Should the two-day loan period start at reservation (current design) or at collection?</li>
+<li>Is a fake email sender acceptable in the demo, or must real delivery be shown?</li>
+<li>What retention period is expected for student emails and notification records?</li>
+</ol>
+</body></html>

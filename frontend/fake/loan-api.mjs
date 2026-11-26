@@ -10,19 +10,28 @@ import { randomUUID } from "node:crypto";
 const ROLES_CLAIM = process.env.AUTH0_ROLES_CLAIM || "https://resource-center.campus/roles";
 const EMAIL_CLAIM = process.env.AUTH0_EMAIL_CLAIM || "https://resource-center.campus/email";
 const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+const MODEL_SLUG = "[a-z0-9][a-z0-9-]{0,62}[a-z0-9]";
+const UNIT_ID = "[A-Za-z0-9._-]+";
 const HOUR = 3600_000;
 
 const MODELS = [
-  { id: "dell-latitude-7440", name: "Dell Latitude 7440", category: "laptop", description: "14-inch business laptop", loanDurationDays: 14, units: 2 },
-  { id: "ipad-air-m2", name: "iPad Air M2", category: "tablet", description: "11-inch tablet with pencil", loanDurationDays: 14, units: 1 },
-  { id: "canon-r50", name: "Canon EOS R50", category: "camera", description: "Mirrorless camera kit", loanDurationDays: 14, units: 0 },
+  { id: "dell-latitude-7440", name: "Dell Latitude 7440", category: "laptop", description: "14-inch business laptop", loanDurationDays: 14, units: 2, imageUrl: "/catalogue/dell-latitude-7440.webp", imageAlt: "Dell Latitude 7440", specifications: [{ label: "Configuration", value: "14-inch business laptop" }] },
+  { id: "ipad-air-m2", name: "iPad Air M2", category: "tablet", description: "11-inch tablet with pencil", loanDurationDays: 14, units: 1, imageUrl: "/catalogue/ipad-air-m2.webp", imageAlt: "iPad Air M2", specifications: [{ label: "Configuration", value: "11-inch tablet with pencil" }] },
+  { id: "canon-r50", name: "Canon EOS R50", category: "camera", description: "Mirrorless camera kit", loanDurationDays: 14, units: 0, imageUrl: "/catalogue/canon-eos-r50.webp", imageAlt: "Canon EOS R50", specifications: [{ label: "Configuration", value: "Mirrorless camera kit" }] },
 ];
 
 let state;
 export function reset() {
   state = { models: structuredClone(MODELS), units: [], reservations: [], subscriptions: [], events: [] };
   for (const m of state.models) {
-    for (let i = 1; i <= Math.max(m.units, 1); i++) state.units.push({ id: `${m.id}-u${i}`, modelId: m.id, status: m.units === 0 ? "MAINTENANCE" : "AVAILABLE" });
+    for (let i = 1; i <= Math.max(m.units, 1); i++) {
+      state.units.push({
+        id: `${m.id}-u${i}`,
+        modelId: m.id,
+        serialNumber: `FAKE-${m.id.toUpperCase()}-${i}`,
+        status: m.units === 0 ? "MAINTENANCE" : "AVAILABLE",
+      });
+    }
   }
 }
 reset();
@@ -30,11 +39,39 @@ reset();
 const summary = (m) => ({
   id: m.id, name: m.name, category: m.category, description: m.description, loanDurationDays: m.loanDurationDays,
   totalUnits: state.units.filter((u) => u.modelId === m.id).length,
-  imageUrl: `/catalogue/${m.id === "canon-r50" ? "canon-eos-r50" : m.id}.webp`,
-  imageAlt: m.name,
-  specifications: [{ label: "Configuration", value: m.description }],
+  imageUrl: m.imageUrl,
+  imageAlt: m.imageAlt,
+  specifications: m.specifications,
   availableUnits: state.units.filter((u) => u.modelId === m.id && u.status === "AVAILABLE").length,
 });
+
+const staffInventorySummary = (m) => ({
+  ...summary(m),
+  units: state.units
+    .filter((u) => u.modelId === m.id)
+    .map((u) => ({
+      unitId: u.id,
+      serialNumber: u.serialNumber,
+      status: u.status === "LOANED" ? "COLLECTED" : u.status,
+    })),
+});
+
+function validateImageUrl(raw) {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  if (!s || s.length > 700_000) return false;
+  if (s.startsWith("/catalogue/")) return s.length > "/catalogue/".length && !s.includes("..") && !s.includes("\\") && !/\s/.test(s);
+  if (s.startsWith("https://")) return s.length > "https://".length && s.length <= 2048 && !/\s/.test(s);
+  return /^data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(s);
+}
+
+function notifySubscribersIfRestored(model, wasAvailableCount) {
+  if (wasAvailableCount !== 0) return;
+  const subs = state.subscriptions.filter((s) => s.modelId === model.id && s.status === "ACTIVE");
+  for (const email of new Set(subs.map((s) => s.email))) {
+    state.events.push({ eventId: `evt-${randomUUID()}`, type: "DeviceAvailabilityNotificationRequested", recipient: email, deviceModel: model.name });
+  }
+  subs.forEach((s) => (s.status = "NOTIFIED"));
+}
 
 function actor(req) {
   const h = req.headers.authorization ?? "";
@@ -128,6 +165,108 @@ async function handle(req, cid) {
     for (const email of new Set(subs.map((s) => s.email))) push("DeviceAvailabilityNotificationRequested", email);
     subs.forEach((s) => (s.status = "NOTIFIED"));
     return [200, { reservationId: r.reservationId, unitId: r.unitId, modelId: r.modelId, status: r.status, returnedAt: now, outboxEventIds: ids }];
+  }
+
+  if (path.startsWith("/api/v1/staff/inventory")) {
+    if (!a.roles.includes("staff")) return [403, { error: "ForbiddenRole", message: "staff role required" }];
+    if (req.method === "GET" && path === "/api/v1/staff/inventory") {
+      return [200, { items: state.models.map(staffInventorySummary), correlationId: cid }];
+    }
+    if (req.method === "POST" && path === "/api/v1/staff/inventory/models") {
+      const id = typeof body.id === "string" ? body.id.trim() : "";
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      const category = typeof body.category === "string" ? body.category.trim() : "";
+      const description = typeof body.description === "string" ? body.description.trim() : "";
+      const imageAlt = typeof body.imageAlt === "string" ? body.imageAlt.trim() : "";
+      if (!new RegExp(`^${MODEL_SLUG}$`).test(id) || id.includes("--")) return [400, { error: "InvalidInput", message: "id must be 2–64 lowercase letters, digits, or single hyphens" }];
+      if (!name || !category || !description || !imageAlt) return [400, { error: "InvalidInput", message: "name, category, description, and imageAlt are required" }];
+      if (!Number.isInteger(body.loanDurationDays) || body.loanDurationDays < 1 || body.loanDurationDays > 14) return [400, { error: "InvalidInput", message: "loanDurationDays must be between 1 and 14" }];
+      if (!validateImageUrl(body.imageUrl)) return [400, { error: "InvalidInput", message: "imageUrl must be a /catalogue/ path, https:// URL, or base64 webp/png/jpeg image" }];
+      if (!Array.isArray(body.specifications) || body.specifications.length === 0 || body.specifications.some((s) => !s?.label?.trim() || !s?.value?.trim())) {
+        return [400, { error: "InvalidInput", message: "at least 1 complete specification is required" }];
+      }
+      if (!Array.isArray(body.units) || body.units.length === 0) return [400, { error: "InvalidInput", message: "at least 1 initial unit is required" }];
+      const normalizedUnits = [];
+      const seen = new Set();
+      for (const u of body.units) {
+        const serial = typeof u?.serialNumber === "string" ? u.serialNumber.trim() : "";
+        const status = typeof u?.status === "string" ? u.status.trim().toUpperCase() : "";
+        if (!serial || (status !== "AVAILABLE" && status !== "MAINTENANCE")) return [400, { error: "InvalidInput", message: "each unit requires serialNumber and status AVAILABLE or MAINTENANCE" }];
+        if (seen.has(serial.toLowerCase())) return [400, { error: "InvalidInput", message: "unit serial numbers must be unique" }];
+        seen.add(serial.toLowerCase());
+        normalizedUnits.push({ serialNumber: serial, status });
+      }
+      if (state.models.some((x) => x.id === id)) return [409, { error: "AlreadyExists", message: `device model '${id}' already exists` }];
+      if (normalizedUnits.some((u) => state.units.some((existing) => existing.serialNumber.toLowerCase() === u.serialNumber.toLowerCase()))) {
+        return [409, { error: "AlreadyExists", message: "a unit with this serial number already exists" }];
+      }
+      const created = {
+        id,
+        name,
+        category,
+        description,
+        loanDurationDays: body.loanDurationDays,
+        imageUrl: body.imageUrl.trim(),
+        imageAlt,
+        specifications: body.specifications.map((s) => ({ label: s.label.trim(), value: s.value.trim() })),
+      };
+      state.models.push(created);
+      normalizedUnits.forEach((u, idx) => {
+        state.units.push({ id: `campus-${id}-${String(idx + 1).padStart(3, "0")}`, modelId: id, serialNumber: u.serialNumber, status: u.status });
+      });
+      return [201, staffInventorySummary(created)];
+    }
+    const delModel = path.match(new RegExp(`^/api/v1/staff/inventory/models/(${MODEL_SLUG})$`));
+    if (req.method === "DELETE" && delModel) {
+      const modelId = delModel[1];
+      if (!state.models.some((x) => x.id === modelId)) return [404, { error: "NotFound", message: "model not found" }];
+      if (state.units.some((u) => u.modelId === modelId && (u.status === "RESERVED" || u.status === "LOANED"))) {
+        return [409, { error: "ResourceInUse", message: "cannot remove a model while units are reserved or collected" }];
+      }
+      if (state.reservations.some((r) => r.modelId === modelId)) {
+        return [409, { error: "ResourceInUse", message: "cannot remove a model with past loan records; move its units to maintenance instead" }];
+      }
+      state.subscriptions = state.subscriptions.filter((s) => s.modelId !== modelId);
+      state.units = state.units.filter((u) => u.modelId !== modelId);
+      state.models = state.models.filter((x) => x.id !== modelId);
+      return [200, { deleted: true, correlationId: cid }];
+    }
+    const addUnit = path.match(new RegExp(`^/api/v1/staff/inventory/models/(${MODEL_SLUG})/units$`));
+    if (req.method === "POST" && addUnit) {
+      const model = state.models.find((x) => x.id === addUnit[1]);
+      if (!model) return [404, { error: "NotFound", message: "model not found" }];
+      const serial = typeof body.serialNumber === "string" ? body.serialNumber.trim() : "";
+      const status = typeof body.status === "string" ? body.status.trim().toUpperCase() : "";
+      if (!serial || (status !== "AVAILABLE" && status !== "MAINTENANCE")) return [400, { error: "InvalidInput", message: "serialNumber and status AVAILABLE or MAINTENANCE are required" }];
+      if (state.units.some((u) => u.serialNumber.toLowerCase() === serial.toLowerCase())) return [409, { error: "AlreadyExists", message: "a unit with this serial number already exists" }];
+      const wasAvail = state.units.filter((u) => u.modelId === model.id && u.status === "AVAILABLE").length;
+      const unit = { id: `unit-${model.id}-${randomUUID().slice(0, 8)}`, modelId: model.id, serialNumber: serial, status };
+      state.units.push(unit);
+      if (status === "AVAILABLE") notifySubscribersIfRestored(model, wasAvail);
+      return [201, { unitId: unit.id, serialNumber: unit.serialNumber, status: unit.status }];
+    }
+    const unitRoute = path.match(new RegExp(`^/api/v1/staff/inventory/units/(${UNIT_ID})$`));
+    if (unitRoute) {
+      const unit = state.units.find((u) => u.id === unitRoute[1]);
+      if (!unit) return [404, { error: "NotFound", message: "unit not found" }];
+      const model = state.models.find((x) => x.id === unit.modelId);
+      if (req.method === "PATCH") {
+        const target = typeof body.status === "string" ? body.status.trim().toUpperCase() : "";
+        if (target !== "AVAILABLE" && target !== "MAINTENANCE") return [400, { error: "InvalidInput", message: "status must be AVAILABLE or MAINTENANCE" }];
+        if (unit.status === "RESERVED" || unit.status === "LOANED") return [409, { error: "InvalidTransition", message: "cannot change status of a reserved or collected unit" }];
+        const wasAvail = state.units.filter((u) => u.modelId === unit.modelId && u.status === "AVAILABLE").length;
+        const prev = unit.status;
+        unit.status = target;
+        if (prev === "MAINTENANCE" && target === "AVAILABLE") notifySubscribersIfRestored(model, wasAvail);
+        return [200, { unitId: unit.id, serialNumber: unit.serialNumber, status: unit.status }];
+      }
+      if (req.method === "DELETE") {
+        if (unit.status === "RESERVED" || unit.status === "LOANED") return [409, { error: "ResourceInUse", message: "cannot remove a unit that is currently reserved or out on loan" }];
+        if (state.reservations.some((r) => r.unitId === unit.id)) return [409, { error: "ResourceInUse", message: "cannot remove a unit with past loan records; move it to maintenance instead" }];
+        state.units = state.units.filter((u) => u.id !== unit.id);
+        return [200, { deleted: true, correlationId: cid }];
+      }
+    }
   }
   return [404, { error: "NotFound", message: "unknown route" }];
 }

@@ -13,6 +13,35 @@ export interface DeviceModelSummary {
   availableUnits: number;
 }
 
+export type DeviceUnitStatus = "AVAILABLE" | "RESERVED" | "COLLECTED" | "MAINTENANCE";
+
+export interface DeviceUnitSummary {
+  unitId: string;
+  serialNumber: string;
+  status: DeviceUnitStatus;
+}
+
+export interface StaffInventoryModel extends DeviceModelSummary {
+  units: DeviceUnitSummary[];
+}
+
+export interface NewDeviceUnitInput {
+  serialNumber: string;
+  status: "AVAILABLE" | "MAINTENANCE";
+}
+
+export interface CreateDeviceModelInput {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  loanDurationDays: number;
+  imageUrl: string;
+  imageAlt: string;
+  specifications: { label: string; value: string }[];
+  units: NewDeviceUnitInput[];
+}
+
 export interface ReservationRow {
   reservationId: string;
   modelId: string;

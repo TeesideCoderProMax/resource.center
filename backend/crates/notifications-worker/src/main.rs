@@ -5,7 +5,7 @@ pub mod domain;
 pub mod infrastructure;
 
 use application::{
-    CreateJobOutcome, MessageDisposition, NotificationJobStorePort, NotificationProcessor,
+    run_consumer_loop, CreateJobOutcome, NotificationJobStorePort, NotificationProcessor,
     ReplaceJobOutcome,
 };
 use chrono::Utc;
@@ -20,8 +20,7 @@ use rc_shared::{
 };
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Duration;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -135,103 +134,7 @@ async fn run_worker(
         "starting notifications-worker loop"
     );
 
-    let mut processed_count = 0usize;
-    loop {
-        let wait_secs = if drain_once { 5 } else { 20 };
-        let receive_fut = consumer.receive_peek_lock(wait_secs);
-
-        let maybe_msg = tokio::select! {
-            _ = shutdown_signal() => {
-                info!(processed_count = processed_count, "shutdown signal received while waiting for Service Bus message; exiting cleanly");
-                break;
-            }
-            res = receive_fut => {
-                match res {
-                    Ok(m) => m,
-                    Err(err) => {
-                        error!(error = %err, "error polling Service Bus queue");
-                        if drain_once {
-                            return Err(err.into());
-                        }
-                        tokio::time::sleep(Duration::from_secs(5)).await;
-                        continue;
-                    }
-                }
-            }
-        };
-
-        let Some(msg) = maybe_msg else {
-            if drain_once {
-                info!(
-                    processed_count = processed_count,
-                    "queue returned 204 No Content in drain-once mode; exiting"
-                );
-                break;
-            }
-            continue;
-        };
-
-        // Keep retries on this locked delivery, so waiting does not consume the
-        // broker delivery budget. Dropping either future cancels in-flight work.
-        let processing = processor.process_until_settled(&msg.body);
-        let renewals = async {
-            loop {
-                tokio::time::sleep(Duration::from_secs(10)).await;
-                match tokio::time::timeout(
-                    Duration::from_secs(10),
-                    consumer.renew_lock(&msg.lock_location),
-                )
-                .await
-                {
-                    Ok(Ok(())) => {}
-                    _ => break,
-                }
-            }
-        };
-        let result = tokio::select! {
-            biased;
-            _ = shutdown_signal() => {
-                // Retain the message and Cosmos lease for recovery after expiry.
-                info!("shutdown: cancelled processing; retained work will recover");
-                break;
-            }
-            _ = renewals => {
-                warn!("broker lock renewal failed; cancelled processing");
-                continue;
-            }
-            result = processing => result,
-        };
-
-        match result {
-            MessageDisposition::Complete {
-                event_id,
-                duplicate_skipped,
-                final_status,
-            } => {
-                consumer.complete_message(&msg.lock_location).await?;
-                processed_count += 1;
-                info!(
-                    event_id = %event_id,
-                    duplicate_skipped = duplicate_skipped,
-                    final_status = ?final_status,
-                    delivery_count = ?msg.delivery_count,
-                    "settled (completed) Service Bus notification message"
-                );
-            }
-            MessageDisposition::Wait { .. } => {
-                unreachable!("wait handled inside processing loop")
-            }
-            MessageDisposition::Abandon { event_id, reason } => {
-                warn!(
-                    event_id = %event_id,
-                    reason = %reason,
-                    delivery_count = ?msg.delivery_count,
-                    "abandoning Service Bus message for retry or dead-letter"
-                );
-                let _ = consumer.abandon_message(&msg.lock_location).await;
-            }
-        }
-    }
+    run_consumer_loop(consumer.as_ref(), &processor, drain_once, shutdown_signal).await?;
 
     Ok(())
 }
