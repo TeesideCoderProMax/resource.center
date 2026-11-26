@@ -3502,3 +3502,266 @@ Committed the branch's changes in 4 groups: linked breadcrumbs and the category 
 ### Validation and outcome
 
 The push succeeded (cf4ab69..2f5a6a2). The breadcrumb hunk in `globals.css` was staged on its own with its commit. The suite wasn't re-run before committing; the last run was 46/46.
+
+## 160 — 2026-11-20 — Unify frontend color palette and visual styling
+
+### Exact input prompt
+
+```text
+Can you make this app frontend be visual uniform, I feel like there are just too many different colors pulling each other appart
+```
+
+### Change summary
+
+Unified the frontend design tokens and styling in `frontend/src/app/globals.css` onto a single Cool Slate neutral scale with a Cobalt Blue brand accent (`--primary`, `--accent`, `--primary-soft`, `--on-primary-soft`) and restrained semantic status colors (`--good`, `--warn`, `--err`, `--wait`), removing competing orange accents and hardcoded `#cbdbf5` / `#0f172a` overrides across buttons, category chips, tips, staff sidebar, and stat cards so light and dark modes stay consistent. Fixed `.loan-period select` to use theme tokens instead of hardcoded white/legacy variables, and aligned the brand mark glow and SVG stroke to the same cobalt family in `frontend/src/components/BrandMark.tsx`, `frontend/public/brand/logo-mark.svg`, and `frontend/src/app/icon.svg`.
+
+### Validation and outcome
+
+`npm run typecheck` (`tsc --noEmit`) and `npm test` (vitest, 13 files / 47 tests) pass in `frontend/`. Not visually verified in a running browser.
+
+## 161 — 2026-11-20 — Explain Staff desk card data and 6% in use calculation
+
+### Exact input prompt
+
+```text
+Is this cards mocked data? In the equipment it states 6% in use but no equipment is handed out
+```
+
+### Change summary
+
+No project files changed apart from `AI_LOG.md`. Explained that the Staff desk summary cards are live values calculated by `deskStats` in `frontend/src/components/StaffDesk.tsx` from the real catalogue and reservations APIs, not mocked data; the `6% in use` figure (`Math.round(((80 - 75) / 80) * 100)`) comes from 5 of the 80 seeded units in `backend/catalogue/campus-items.json` and `backend/crates/loan-service/migrations/demo_seed.sql` having `MAINTENANCE` status (1 Sony Alpha a6400 Kit, 2 Blue Yeti USB Microphones, and 2 Raspberry Pi 5 8 GB Kits), which `deskStats` counts alongside loaned/reserved units by subtracting `availableUnits` from `totalUnits`.
+
+### Validation and outcome
+
+Read-only inspection of `frontend/src/components/StaffDesk.tsx`, `frontend/src/app/staff/page.tsx`, `backend/catalogue/campus-items.json`, and `backend/crates/loan-service/migrations/demo_seed.sql`; no code changes or tests run.
+
+## 162 — 2026-11-20 — Explain what prevents sending and receiving emails
+
+### Exact input prompt
+
+```text
+Awesome. What is preventing this current app to send and receive emails?
+```
+
+### Change summary
+
+No project files changed apart from `AI_LOG.md`. Summarized the design and configuration barriers blocking email in the current app: the system is outbound-only (no inbound email receiving) and only enqueues outbox events on staff collection, staff return, and return-triggered waitlist notifications; local `make dev` (`infra/scripts/dev.sh`) omits `loan-publisher` and `notifications-worker` because they require Azure Managed Identity, Service Bus, and Cosmos DB; and the Azure workload configuration (`infra/environments/test/workloads.tfvars`, `infra/workloads/main.tf`, `backend/crates/notifications-worker/src/{main,infrastructure}.rs`) leaves `EMAIL_DELIVERY_MODE` set to `"fake"`, omits `RESEND_FROM_ADDRESS` (falling back to `noreply@resource.center.example`) and `RESEND_AUTHORIZED_RECIPIENTS` (defaulting empty and rejecting all sends in `resend` mode), does not populate Key Vault secret `resend-api-key`, and requires a verified Resend sending domain/sender plus Auth0-sourced recipient emails matching the allowlist.
+
+### Validation and outcome
+
+Read-only inspection of `infra/scripts/dev.sh`, `infra/workloads/main.tf`, `infra/workloads/variables.tf`, `infra/environments/test/workloads.tfvars`, `backend/crates/notifications-worker/src/main.rs`, `backend/crates/notifications-worker/src/infrastructure.rs`, `backend/crates/loan-service/src/application.rs`, and `docs/backend/phase-2-handoff.md`; no code changes or tests run.
+
+## 163 — 2026-11-20 — Clarify whether Azure default domains work as a Resend sender domain
+
+### Exact input prompt
+
+```text
+the azure domains work as the resend sender domain?
+```
+
+### Change summary
+
+No project files changed apart from `AI_LOG.md`. Explained that Azure-managed default hostnames (such as `*.azurecontainerapps.io` or `*.azurewebsites.net`) cannot be used as a Resend sender domain because Resend requires adding DNS verification records (DKIM `TXT` and SPF `TXT`/`MX` or `CNAME` records) and Microsoft owns DNS for those hostnames. Summarized the working alternatives: using `onboarding@resend.dev` for free testing to the Resend account owner's email (or `delivered@resend.dev`), verifying a custom domain/subdomain where the user controls DNS, or noting that Azure-managed sender domains (`*.azurecomm.net`) only exist on Azure Communication Services Email (not Resend).
+
+### Validation and outcome
+
+Checked current Resend documentation via Context7 (`/websites/resend`) for domain verification DNS requirements and `onboarding@resend.dev` testing rules; no code changes or tests run.
+
+## 164 — 2026-11-20 — Report Azure Communication Services Email pricing and limits
+
+### Exact input prompt
+
+```text
+what is the price of Azure communication services email?
+```
+
+### Change summary
+
+No project files changed apart from `AI_LOG.md`. Reported official Azure Communication Services Email pay-as-you-go pricing ($0.00025 per email sent plus $0.00012 per MB of data transferred, with no base monthly fee), noted the testing-only rate limits on Azure-managed `*.azurecomm.net` domains (~5/min, 10/hour; custom domain required for production/higher quotas), and noted that this project's accepted stack already implements Resend rather than ACS Email.
+
+### Validation and outcome
+
+Checked official Microsoft Azure / Microsoft Learn documentation via web search; no code changes or tests run.
+
+## 165 — 2026-11-20 — Staff dashboard route request (partial prompt)
+
+### Exact input prompt
+
+```text
+I want to put these 3 categories (img 1) inside the dashboard and create a dedicated /staff/dashboard route.
+
+Then i want to create /
+```
+
+### Change summary
+
+Accidental partial prompt submission; no work performed on this entry. Superseded immediately by entry 166.
+
+### Validation and outcome
+
+None.
+
+## 166 — 2026-11-20 — Add /staff/dashboard tree navigation and manageable /staff/inventory
+
+### Exact input prompt
+
+```text
+I want to put these 3 categories (img 1) inside the dashboard and create a dedicated /staff/dashboard route.
+  
+  Then i want to create /staff/inventory with the inventory there. I also wish to create an easy manageable inventory. SO me as a staff can easily add or remove items from here, while also moving them to maintenance. The add should accept all fields a product carries and make them mandatory(images, description etc..)
+
+For the dasboard route, when clicked, the subitems are opened in a tree-like system
+```
+
+### Change summary
+
+Added dedicated `/staff/dashboard` (`frontend/src/app/staff/dashboard/page.tsx`) and `/staff/inventory` (`frontend/src/app/staff/inventory/page.tsx`) routes, updating `/staff` (`frontend/src/app/staff/page.tsx`) to enforce staff access and redirect to `/staff/dashboard`. Extracted `frontend/src/components/StaffSidebar.tsx` with a collapsible tree under `Dashboard` (`Collection queue`, `Loans`, and `Overdue`) and sibling `Inventory` link, removed the inline inventory section from `frontend/src/components/StaffDesk.tsx`, and built `frontend/src/components/StaffInventory.tsx` + `frontend/src/app/globals.css` styles for managing models/units, toggling `AVAILABLE`/`MAINTENANCE`, adding units, safely removing unloaned models/units, and creating new equipment in a native `<dialog>` modal with all product fields mandatory. Added full staff inventory CRUD/status endpoints across `backend/crates/loan-service/src/{domain,application,infrastructure,presentation,test_support,postgres_tests}.rs`, `frontend/src/lib/{loan,bff,api-client,observability}.ts`, `frontend/src/app/api/loan/[...path]/route.ts`, `frontend/fake/loan-api.mjs`, and unit/E2E tests in `frontend/src/lib/{bff,observability}.test.ts`, `frontend/src/components/{StaffDesk,StaffInventory}.test.tsx`, and `frontend/e2e/flows.spec.ts`.
+
+### Validation and outcome
+
+`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` passed in `backend/` (43 passed, 13 `#[ignore]` live Postgres/Cosmos tests not run, including `postgres_tests_staff_inventory_crud_and_maintenance`). In `frontend/`, `npm run typecheck`, `npm test` (Vitest, 14 files / 51 tests), `npm run build` (`next build`), and `npm run e2e` (Playwright, 16/16 tests against `fake/loan-api.mjs`) all passed; `flows.spec.ts` line 23 was also updated to scope the catalogue link check to the card heading link.
+
+## 167 — 2026-11-21 — Make product catalogue filters collapsible on mobile
+
+### Exact input prompt
+
+```text
+Can you make the filters in the product catalogue page be colapsable in mobile devices=)
+```
+
+### Change summary
+
+Made the product catalogue filter sidebar collapsible below `1024px` (starting collapsed on mobile while staying always expanded on desktop) in `frontend/src/components/Catalogue.tsx` and `frontend/src/app/globals.css`, adding a `Filters` toggle button (`aria-expanded`, `aria-controls`), active filter count badge, `Ctrl/⌘+K` auto-expand before focusing search, and `100dvh` sticky filter panel height on desktop. Added unit and mobile E2E coverage in `frontend/src/components/Catalogue.test.tsx` and `frontend/e2e/flows.spec.ts`.
+
+### Validation and outcome
+
+`npm run typecheck`, `npm test` (Vitest: 14 files, 52/52 tests), `npm run build` (`next build`), and `npm run e2e` (Playwright: 16/16 tests against `fake/loan-api.mjs`, including `390x844` mobile filter collapse/expand and `1440x1000` desktop visibility) all passed in `frontend/`.
+
+## 168 — 2026-11-21 — Make categories lateral scrollbar move on tap
+
+### Exact input prompt
+
+```text
+Make the categories lateral scrollbar move on tap
+```
+
+### Change summary
+
+Updated the horizontal categories strip in `frontend/src/components/Catalogue.tsx` and `frontend/src/app/globals.css` with a tap-responsive `.chips-rail` scrollbar track (jumping `scrollLeft` smoothly to the tapped position), `Scroll categories left`/`Scroll categories right` navigation buttons (redirecting focus to the opposite button when an edge disables the focused one), and chip tap-to-center `scrollIntoView` behavior, keeping native horizontal touch/wheel scrolling with `overscroll-behavior-x: contain` and `touch-action: manipulation`. Added unit and mobile E2E coverage in `frontend/src/components/Catalogue.test.tsx` and `frontend/e2e/flows.spec.ts`.
+
+### Validation and outcome
+
+`npm run typecheck`, `npm test` (Vitest: 14 files, 53/53 tests), `npm run build` (`next build`), and `npm run e2e` (Playwright: 16/16 tests against `fake/loan-api.mjs`, including tapping the categories next button and `.chips-rail` on a `390x844` viewport) all passed in `frontend/`.
+
+## 169 — 2026-11-21 — Remove catalogue layout toggle (grid view only)
+
+### Exact input prompt
+
+```text
+Also Remove this option, only grid view is available
+```
+
+### Change summary
+
+Removed the Grid/List `.segmented` layout switcher and `layout` state from `frontend/src/components/Catalogue.tsx` so the equipment catalogue always renders in grid view (`.device-grid`). Removed the unused `layout` prop from `DeviceCard` in `frontend/src/components/DeviceCard.tsx`, deleted unused `.segmented`, `.device-list`, and `.device-card.list*` styles from `frontend/src/app/globals.css`, and added a regression assertion in `frontend/src/components/Catalogue.test.tsx`.
+
+### Validation and outcome
+
+`npm --prefix frontend run typecheck`, `npm --prefix frontend test` (Vitest: 14 files, 53/53 tests passed), and `npm --prefix frontend run build` (`next build`) all passed. A repository search under `frontend/src` and `frontend/e2e` confirmed no remaining references to `.segmented`, `.device-list`, `.device-card.list`, or `layout=`.
+
+## 170 — 2026-11-21 — Revert categories strip to original native scrollbar
+
+### Exact input prompt
+
+```text
+REvert to the old scrollbar without the icons
+```
+
+### Change summary
+
+Reverted Entry 168's custom categories scrollbar rail (`.chips-rail`) and left/right chevron icon buttons (`.chips-controls`) from `frontend/src/components/Catalogue.tsx` and `frontend/src/app/globals.css`, restoring the original native thin horizontal `.chips` scrollbar styled with the unified `oklab` palette tokens. Updated unit and E2E tests in `frontend/src/components/Catalogue.test.tsx` and `frontend/e2e/flows.spec.ts` to remove the chevron/rail assertions and assert that those controls are no longer rendered.
+
+### Validation and outcome
+
+`npm --prefix frontend run typecheck`, `npm --prefix frontend test` (Vitest: 14 files, 52/52 tests passed), `npm --prefix frontend run build` (`next build`), and `npm --prefix frontend run e2e` (Playwright: 16/16 tests passed against `fake/loan-api.mjs`) all passed. A repository search across `frontend/src` and `frontend/e2e` confirmed no remaining `.chips-controls`, `.chips-nav-btn`, or rendered `.chips-rail` references.
+
+## 171 — 2026-11-21 — Main-page addition inquiry
+
+### Exact input prompt
+
+```text
+So, I want to create something in the main page of the campus device hub, so this project, the resource center.
+```
+
+### Change summary
+
+Paused repository inspection at the user's follow-up request (entry 172) before specifying the feature in entry 173. No project files changed apart from `AI_LOG.md`.
+
+### Validation and outcome
+
+Superseded by entries 172–173; no code changes or tests run for this initial prompt.
+
+## 172 — 2026-11-21 — Scope plan request before repository inspection
+
+### Exact input prompt
+
+```text
+Before you look into it, let's draft a plan so you have a clear scope of what you are looking into.
+```
+
+### Change summary
+
+Deferred codebase edits until the user clarified the main-page target (light/dark navbar toggle screen transition in entry 173). No project files changed apart from `AI_LOG.md`.
+
+### Validation and outcome
+
+Superseded by entry 173 once the target scope was defined; no code changes run for this scoping turn.
+
+## 173 — 2026-11-21 — Smooth out light/dark mode screen transition animation
+
+### Exact input prompt
+
+```text
+So I was thinking about, can you see in the navbar the toggle of the light and dark mode? Right now they make a cute animation, but the screen turns dark and white really fast and in a very hassle way. So I want to smooth out this animation to make a white into dark into a smooth, smoother animation.
+```
+
+### Change summary
+
+Updated `frontend/src/components/ThemeToggle.tsx` and `frontend/src/app/globals.css` to smoothly reveal theme switches across the viewport via the View Transitions API (`600ms` radial `clip-path` expansion from the navbar toggle button using `flushSync`, with `storage` sync and sequence-guarded cleanup), plus a `450ms` CSS surface/color fade fallback when `startViewTransition` is unavailable and instant updates under `prefers-reduced-motion: reduce`. Added unit and E2E coverage in `frontend/src/components/ThemeToggle.test.tsx` and `frontend/e2e/flows.spec.ts`.
+
+### Validation and outcome
+
+`npm --prefix frontend run typecheck`, `npm --prefix frontend test` (Vitest: 14 files, 55/55 tests), `npm --prefix frontend run build`, `npm --prefix frontend audit --omit=dev` (0 vulnerabilities), `npm --prefix frontend run e2e` (Playwright: 17/17 tests against `fake/loan-api.mjs`), and `serena memories check` all passed. Serena MCP `initial_instructions` timed out (`context deadline exceeded`), so `.serena/memories/` markdown files were read directly per `AGENTS.md`.
+
+## 174 — 2026-11-21 — Slower, smoother theme transition velocity and redesigned sun/moon icon
+
+### Exact input prompt
+
+```text
+Can you please make the animation smoother? So I'm talking about the velocity of the transition. Please also alter the icon, make a new one from scratch, but with the same concept of the sun and the moon. 
+```
+
+### Change summary
+
+Adjusted the theme transition velocity in `frontend/src/components/ThemeToggle.tsx` and `frontend/src/app/globals.css` (`850ms` radial view transition and `750ms` CSS fade fallback using symmetrical `cubic-bezier(0.37, 0, 0.63, 1)` easing). Replaced the `#moon-mask` SVG in `ThemeToggle.tsx` with a two-layer sun (core, halo, eight rays) and crescent-moon-with-two-stars icon animated solely with compositor `transform` and `opacity` properties, and updated unit tests in `frontend/src/components/ThemeToggle.test.tsx`.
+
+### Validation and outcome
+
+`npm --prefix frontend run typecheck`, `npm --prefix frontend test` (Vitest: 14 files, 56/56 tests), `npm --prefix frontend run build`, `npm --prefix frontend run e2e` (Playwright: 17/17 tests against `fake/loan-api.mjs`), and `git diff --check` on `ThemeToggle.tsx`, `ThemeToggle.test.tsx`, and `globals.css` all passed.
+
+## 175 — 2026-11-26 — Commit and push pending work
+
+### Exact input prompt
+
+```text
+pls commit
+```
+
+### Change summary
+
+Committed the pending work in logical groups (Loan staff inventory API, theme transition, remaining web changes, Stage 2 MVP plan, activity log) and pushed to `origin/feat/catalogue-filters-and-rebrand`.
+
+### Validation and outcome
+
+`make check` passed through catalogue/release checks, Rust fmt/clippy/tests, frontend typecheck, Vitest (56/56), build, audit (0 vulnerabilities), Playwright (17/17) and `terraform fmt`, then failed at `infra-validate ENV=test` because Azure CLI MFA had expired; Terraform validation did not complete (no infra files changed). `make backend-test-postgres` passed (12/12). Intermediate commits were not built individually.
+
