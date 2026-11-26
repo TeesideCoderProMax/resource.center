@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,7 +17,8 @@ use crate::application::{
     TransactionAction,
 };
 use crate::domain::{
-    AuthenticatedActor, DeviceModelSummary, DomainError, LockedModel, Reservation, Role,
+    AuthenticatedActor, CreateDeviceModelInput, DeviceModelSummary, DeviceUnitSummary, DomainError,
+    LockedModel, NewDeviceUnitInput, Reservation, Role, StaffInventoryModel,
 };
 
 const PG_ENTRA_RESOURCE: &str = "https://ossrdbms-aad.database.windows.net";
@@ -582,6 +584,68 @@ impl LoanStorePort for PostgresAdapter {
         })
     }
 
+    fn staff_inventory(&self) -> BoxFuture<'_, Result<Vec<StaffInventoryModel>, ApplicationError>> {
+        Box::pin(async move {
+            let (client, _permit) = self.connect_client().await?;
+            let model_rows = client
+                .query(
+                    "SELECT id, name, category, description, loan_duration_days, total_units, available_units, image_url, image_alt, specifications::text
+                     FROM loan.device_models
+                     ORDER BY category ASC, name ASC",
+                    &[],
+                )
+                .await
+                .map_err(|e| ApplicationError::Persistence(format!("list staff inventory models failed: {e}")))?;
+            let unit_rows = client
+                .query(
+                    "SELECT unit_id, model_id, serial_number, status
+                     FROM loan.device_units
+                     ORDER BY model_id ASC, unit_id ASC",
+                    &[],
+                )
+                .await
+                .map_err(|e| {
+                    ApplicationError::Persistence(format!("list staff inventory units failed: {e}"))
+                })?;
+
+            let mut units_by_model: HashMap<String, Vec<DeviceUnitSummary>> = HashMap::new();
+            for row in unit_rows {
+                let model_id: String = row.get(1);
+                units_by_model
+                    .entry(model_id)
+                    .or_default()
+                    .push(DeviceUnitSummary {
+                        unit_id: row.get(0),
+                        serial_number: row.get(2),
+                        status: row.get(3),
+                    });
+            }
+
+            let models = model_rows
+                .into_iter()
+                .map(|r| {
+                    let id: String = r.get(0);
+                    let units = units_by_model.remove(&id).unwrap_or_default();
+                    StaffInventoryModel {
+                        id,
+                        name: r.get(1),
+                        category: r.get(2),
+                        description: r.get(3),
+                        loan_duration_days: r.get(4),
+                        total_units: r.get(5),
+                        available_units: r.get(6),
+                        image_url: r.get(7),
+                        image_alt: r.get(8),
+                        specifications: serde_json::from_str(&r.get::<_, String>(9))
+                            .expect("database specification constraint"),
+                        units,
+                    }
+                })
+                .collect();
+            Ok(models)
+        })
+    }
+
     fn reservations(
         &self,
         subject: Option<String>,
@@ -609,6 +673,17 @@ impl LoanStorePort for PostgresAdapter {
 
 fn pg_error(error: tokio_postgres::Error) -> ApplicationError {
     ApplicationError::Persistence(error.to_string())
+}
+
+fn map_pg_unique_or_err(error: tokio_postgres::Error, duplicate_msg: &str) -> ApplicationError {
+    if error
+        .as_db_error()
+        .is_some_and(|db| db.code().code() == "23505")
+    {
+        ApplicationError::Domain(DomainError::AlreadyExists(duplicate_msg.to_string()))
+    } else {
+        pg_error(error)
+    }
 }
 
 fn reservation_from_row(row: &tokio_postgres::Row) -> Reservation {
@@ -755,6 +830,314 @@ impl LoanTransactionPort for PostgresLoanTransaction<'_> {
                     .map_err(|e| ApplicationError::Persistence(e.to_string()))?;
                 self.tx.execute("INSERT INTO loan.outbox_events (event_id,event_type,contract_version,occurred_at,correlation_id,payload) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (event_id) DO NOTHING", &[&e.event_id, &e.event_type, &(e.version as i32), &e.occurred_at, &e.correlation_id, &payload]).await.map_err(pg_error)?;
             }
+            Ok(())
+        })
+    }
+    fn insert_model_with_units(
+        &mut self,
+        input: CreateDeviceModelInput,
+        now: chrono::DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<StaffInventoryModel, ApplicationError>> {
+        Box::pin(async move {
+            let exists: bool = self
+                .tx
+                .query_one(
+                    "SELECT EXISTS(SELECT 1 FROM loan.device_models WHERE id = $1)",
+                    &[&input.id],
+                )
+                .await
+                .map_err(pg_error)?
+                .get(0);
+            if exists {
+                return Err(ApplicationError::Domain(DomainError::AlreadyExists(
+                    format!("device model '{}' already exists", input.id),
+                )));
+            }
+            let total_units = input.units.len() as i32;
+            let available_units = input
+                .units
+                .iter()
+                .filter(|u| u.status == "AVAILABLE")
+                .count() as i32;
+            let specs_json = serde_json::to_value(&input.specifications)
+                .map_err(|e| ApplicationError::Persistence(e.to_string()))?;
+            self.tx
+                .execute(
+                    "INSERT INTO loan.device_models (id, name, category, description, loan_duration_days, total_units, available_units, image_url, image_alt, specifications, updated_at)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+                    &[
+                        &input.id,
+                        &input.name,
+                        &input.category,
+                        &input.description,
+                        &input.loan_duration_days,
+                        &total_units,
+                        &available_units,
+                        &input.image_url,
+                        &input.image_alt,
+                        &specs_json,
+                        &now,
+                    ],
+                )
+                .await
+                .map_err(|e| map_pg_unique_or_err(e, "device model ID already exists"))?;
+
+            let mut units = Vec::with_capacity(input.units.len());
+            for (idx, u) in input.units.into_iter().enumerate() {
+                let unit_id = format!("campus-{}-{:03}", input.id, idx + 1);
+                self.tx
+                    .execute(
+                        "INSERT INTO loan.device_units (unit_id, model_id, serial_number, status, updated_at)
+                         VALUES ($1, $2, $3, $4, $5)",
+                        &[&unit_id, &input.id, &u.serial_number, &u.status, &now],
+                    )
+                    .await
+                    .map_err(|e| {
+                        map_pg_unique_or_err(e, "a unit with this serial number already exists")
+                    })?;
+                units.push(DeviceUnitSummary {
+                    unit_id,
+                    serial_number: u.serial_number,
+                    status: u.status,
+                });
+            }
+
+            Ok(StaffInventoryModel {
+                id: input.id,
+                name: input.name,
+                category: input.category,
+                description: input.description,
+                loan_duration_days: input.loan_duration_days,
+                total_units,
+                available_units,
+                image_url: Some(input.image_url),
+                image_alt: Some(input.image_alt),
+                specifications: input.specifications,
+                units,
+            })
+        })
+    }
+    fn delete_model(&mut self, model_id: String) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            let active_units: bool = self
+                .tx
+                .query_one(
+                    "SELECT EXISTS(SELECT 1 FROM loan.device_units WHERE model_id = $1 AND status IN ('RESERVED', 'COLLECTED'))",
+                    &[&model_id],
+                )
+                .await
+                .map_err(pg_error)?
+                .get(0);
+            if active_units {
+                return Err(ApplicationError::Domain(DomainError::ResourceInUse(
+                    "cannot remove a model while units are reserved or collected".into(),
+                )));
+            }
+            let has_reservations: bool = self
+                .tx
+                .query_one(
+                    "SELECT EXISTS(SELECT 1 FROM loan.reservations WHERE model_id = $1)",
+                    &[&model_id],
+                )
+                .await
+                .map_err(pg_error)?
+                .get(0);
+            if has_reservations {
+                return Err(ApplicationError::Domain(DomainError::ResourceInUse(
+                    "cannot remove a model with past loan records; move its units to maintenance instead".into(),
+                )));
+            }
+            self.tx
+                .execute(
+                    "DELETE FROM loan.availability_subscriptions WHERE model_id = $1",
+                    &[&model_id],
+                )
+                .await
+                .map_err(pg_error)?;
+            self.tx
+                .execute(
+                    "DELETE FROM loan.device_units WHERE model_id = $1",
+                    &[&model_id],
+                )
+                .await
+                .map_err(pg_error)?;
+            self.tx
+                .execute("DELETE FROM loan.device_models WHERE id = $1", &[&model_id])
+                .await
+                .map_err(pg_error)?;
+            Ok(())
+        })
+    }
+    fn insert_unit(
+        &mut self,
+        model_id: String,
+        input: NewDeviceUnitInput,
+        now: chrono::DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<DeviceUnitSummary, ApplicationError>> {
+        Box::pin(async move {
+            let unit_id = format!(
+                "unit-{model_id}-{}",
+                &Uuid::new_v4().simple().to_string()[..8]
+            );
+            self.tx
+                .execute(
+                    "INSERT INTO loan.device_units (unit_id, model_id, serial_number, status, updated_at)
+                     VALUES ($1, $2, $3, $4, $5)",
+                    &[&unit_id, &model_id, &input.serial_number, &input.status, &now],
+                )
+                .await
+                .map_err(|e| {
+                    map_pg_unique_or_err(e, "a unit with this serial number already exists")
+                })?;
+            let avail_delta: i32 = if input.status == "AVAILABLE" { 1 } else { 0 };
+            self.tx
+                .execute(
+                    "UPDATE loan.device_models
+                     SET total_units = total_units + 1,
+                         available_units = available_units + $2,
+                         updated_at = $3
+                     WHERE id = $1",
+                    &[&model_id, &avail_delta, &now],
+                )
+                .await
+                .map_err(pg_error)?;
+            Ok(DeviceUnitSummary {
+                unit_id,
+                serial_number: input.serial_number,
+                status: input.status,
+            })
+        })
+    }
+    fn lock_unit(
+        &mut self,
+        unit_id: String,
+    ) -> BoxFuture<'_, Result<(LockedModel, DeviceUnitSummary), ApplicationError>> {
+        Box::pin(async move {
+            let row = self
+                .tx
+                .query_opt(
+                    "SELECT model_id FROM loan.device_units WHERE unit_id = $1",
+                    &[&unit_id],
+                )
+                .await
+                .map_err(pg_error)?
+                .ok_or_else(|| ApplicationError::NotFound(format!("device unit {unit_id}")))?;
+            let model = self.lock_model(row.get(0)).await?;
+            let unit_row = self
+                .tx
+                .query_opt(
+                    "SELECT unit_id, serial_number, status FROM loan.device_units WHERE unit_id = $1 FOR UPDATE",
+                    &[&unit_id],
+                )
+                .await
+                .map_err(pg_error)?
+                .ok_or_else(|| ApplicationError::NotFound(format!("device unit {unit_id}")))?;
+            Ok((
+                model,
+                DeviceUnitSummary {
+                    unit_id: unit_row.get(0),
+                    serial_number: unit_row.get(1),
+                    status: unit_row.get(2),
+                },
+            ))
+        })
+    }
+    fn update_unit_status(
+        &mut self,
+        model_id: String,
+        unit_id: String,
+        from_status: String,
+        to_status: String,
+        now: chrono::DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            self.tx
+                .execute(
+                    "UPDATE loan.device_units SET status = $2, updated_at = $3 WHERE unit_id = $1",
+                    &[&unit_id, &to_status, &now],
+                )
+                .await
+                .map_err(pg_error)?;
+            let delta: i32 = match (from_status.as_str(), to_status.as_str()) {
+                ("MAINTENANCE", "AVAILABLE") => 1,
+                ("AVAILABLE", "MAINTENANCE") => -1,
+                _ => 0,
+            };
+            if delta != 0 {
+                self.tx
+                    .execute(
+                        "UPDATE loan.device_models
+                         SET available_units = available_units + $2,
+                             updated_at = $3
+                         WHERE id = $1",
+                        &[&model_id, &delta, &now],
+                    )
+                    .await
+                    .map_err(pg_error)?;
+            }
+            Ok(())
+        })
+    }
+    fn mark_subscribers_notified(
+        &mut self,
+        model_id: String,
+        now: chrono::DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            self.tx
+                .execute(
+                    "UPDATE loan.availability_subscriptions
+                     SET status = 'NOTIFIED', notified_at = $2
+                     WHERE model_id = $1 AND status = 'ACTIVE'",
+                    &[&model_id, &now],
+                )
+                .await
+                .map_err(pg_error)?;
+            Ok(())
+        })
+    }
+    fn delete_unit(
+        &mut self,
+        model_id: String,
+        unit_id: String,
+        was_available: bool,
+        now: chrono::DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            let has_reservations: bool = self
+                .tx
+                .query_one(
+                    "SELECT EXISTS(SELECT 1 FROM loan.reservations WHERE unit_id = $1)",
+                    &[&unit_id],
+                )
+                .await
+                .map_err(pg_error)?
+                .get(0);
+            if has_reservations {
+                return Err(ApplicationError::Domain(DomainError::ResourceInUse(
+                    "cannot remove a unit with past loan records; move it to maintenance instead"
+                        .into(),
+                )));
+            }
+            self.tx
+                .execute(
+                    "DELETE FROM loan.device_units WHERE unit_id = $1",
+                    &[&unit_id],
+                )
+                .await
+                .map_err(pg_error)?;
+            let avail_dec: i32 = if was_available { 1 } else { 0 };
+            self.tx
+                .execute(
+                    "UPDATE loan.device_models
+                     SET total_units = total_units - 1,
+                         available_units = available_units - $2,
+                         updated_at = $3
+                     WHERE id = $1",
+                    &[&model_id, &avail_dec, &now],
+                )
+                .await
+                .map_err(pg_error)?;
             Ok(())
         })
     }

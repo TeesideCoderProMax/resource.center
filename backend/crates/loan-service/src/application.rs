@@ -12,8 +12,10 @@ use uuid::Uuid;
 
 use crate::domain::{
     compute_due_at, deterministic_event_id, ensure_can_reserve, ensure_can_subscribe, ensure_staff,
-    ensure_student_or_staff, AuthenticatedActor, DeviceModelSummary, DomainError, LockedModel,
-    Reservation, Role,
+    ensure_student_or_staff, validate_create_model_input, validate_new_unit_input,
+    validate_unit_status_target, AuthenticatedActor, CreateDeviceModelInput, DeviceModelSummary,
+    DeviceUnitSummary, DomainError, LockedModel, NewDeviceUnitInput, Reservation, Role,
+    StaffInventoryModel,
 };
 
 #[derive(Debug, Error)]
@@ -152,6 +154,39 @@ pub trait LoanRepositoryPort: Send + Sync {
         reservation_id: Uuid,
         correlation_id: String,
     ) -> BoxFuture<'_, Result<ReturnReceipt, ApplicationError>>;
+    fn list_staff_inventory(
+        &self,
+        actor: AuthenticatedActor,
+    ) -> BoxFuture<'_, Result<Vec<StaffInventoryModel>, ApplicationError>>;
+    fn create_device_model(
+        &self,
+        actor: AuthenticatedActor,
+        input: CreateDeviceModelInput,
+    ) -> BoxFuture<'_, Result<StaffInventoryModel, ApplicationError>>;
+    fn delete_device_model(
+        &self,
+        actor: AuthenticatedActor,
+        model_id: String,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>>;
+    fn add_device_unit(
+        &self,
+        actor: AuthenticatedActor,
+        model_id: String,
+        input: NewDeviceUnitInput,
+        correlation_id: String,
+    ) -> BoxFuture<'_, Result<DeviceUnitSummary, ApplicationError>>;
+    fn set_unit_status(
+        &self,
+        actor: AuthenticatedActor,
+        unit_id: String,
+        status: String,
+        correlation_id: String,
+    ) -> BoxFuture<'_, Result<DeviceUnitSummary, ApplicationError>>;
+    fn delete_device_unit(
+        &self,
+        actor: AuthenticatedActor,
+        unit_id: String,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>>;
 }
 
 /// Port for the Loan-owned outbox publisher job.
@@ -198,6 +233,30 @@ pub fn build_collection_outbox_event(
     }
 }
 
+/// Helper to construct availability notifications for waiting subscribers.
+pub fn build_availability_outbox_events(
+    transition_key: &str,
+    waiting_subscriber_emails: &[String],
+    device_model: &str,
+    occurred_at: DateTime<Utc>,
+    correlation_id: &str,
+) -> Vec<NotificationRequestV1> {
+    let recipients: std::collections::BTreeSet<_> = waiting_subscriber_emails.iter().collect();
+    recipients
+        .into_iter()
+        .map(|subscriber| NotificationRequestV1 {
+            event_id: deterministic_event_id(transition_key, subscriber),
+            event_type: EVENT_TYPE_AVAILABILITY_REQUESTED.to_string(),
+            version: CONTRACT_VERSION_V1,
+            occurred_at,
+            correlation_id: correlation_id.to_string(),
+            recipient: subscriber.clone(),
+            device_model: device_model.to_string(),
+            synthetic_probe: None,
+        })
+        .collect()
+}
+
 /// Helper to construct the return confirmation outbox event plus availability notifications
 /// for eligible subscribed students in the same atomic PostgreSQL transaction.
 pub fn build_return_outbox_events(
@@ -219,19 +278,13 @@ pub fn build_return_outbox_events(
         device_model: device_model.to_string(),
         synthetic_probe: None,
     });
-    let recipients: std::collections::BTreeSet<_> = waiting_subscriber_emails.iter().collect();
-    for subscriber in recipients {
-        events.push(NotificationRequestV1 {
-            event_id: deterministic_event_id(&format!("availability:{reservation_id}"), subscriber),
-            event_type: EVENT_TYPE_AVAILABILITY_REQUESTED.to_string(),
-            version: CONTRACT_VERSION_V1,
-            occurred_at,
-            correlation_id: correlation_id.to_string(),
-            recipient: subscriber.clone(),
-            device_model: device_model.to_string(),
-            synthetic_probe: None,
-        });
-    }
+    events.extend(build_availability_outbox_events(
+        &format!("availability:{reservation_id}"),
+        waiting_subscriber_emails,
+        device_model,
+        occurred_at,
+        correlation_id,
+    ));
     events
 }
 
@@ -344,6 +397,7 @@ pub type TransactionAction<T> = Box<
 pub trait LoanStorePort: Send + Sync {
     fn readiness(&self) -> BoxFuture<'_, Result<(), ApplicationError>>;
     fn catalogue(&self) -> BoxFuture<'_, Result<Vec<DeviceModelSummary>, ApplicationError>>;
+    fn staff_inventory(&self) -> BoxFuture<'_, Result<Vec<StaffInventoryModel>, ApplicationError>>;
     /// None is staff scope; Some(subject) MUST filter in storage, before returning rows.
     fn reservations(
         &self,
@@ -398,6 +452,42 @@ pub trait LoanTransactionPort: Send {
     fn append_outbox(
         &mut self,
         events: Vec<NotificationRequestV1>,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>>;
+    fn insert_model_with_units(
+        &mut self,
+        input: CreateDeviceModelInput,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<StaffInventoryModel, ApplicationError>>;
+    fn delete_model(&mut self, model_id: String) -> BoxFuture<'_, Result<(), ApplicationError>>;
+    fn insert_unit(
+        &mut self,
+        model_id: String,
+        input: NewDeviceUnitInput,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<DeviceUnitSummary, ApplicationError>>;
+    fn lock_unit(
+        &mut self,
+        unit_id: String,
+    ) -> BoxFuture<'_, Result<(LockedModel, DeviceUnitSummary), ApplicationError>>;
+    fn update_unit_status(
+        &mut self,
+        model_id: String,
+        unit_id: String,
+        from_status: String,
+        to_status: String,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>>;
+    fn mark_subscribers_notified(
+        &mut self,
+        model_id: String,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>>;
+    fn delete_unit(
+        &mut self,
+        model_id: String,
+        unit_id: String,
+        was_available: bool,
+        now: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<(), ApplicationError>>;
 }
 
@@ -563,6 +653,181 @@ impl<S: LoanStorePort> LoanRepositoryPort for S {
                     tx.save_return(reservation).await?;
                     tx.append_outbox(events).await?;
                     Ok(receipt)
+                })
+            }))
+            .await
+        })
+    }
+    fn list_staff_inventory(
+        &self,
+        actor: AuthenticatedActor,
+    ) -> BoxFuture<'_, Result<Vec<StaffInventoryModel>, ApplicationError>> {
+        Box::pin(async move {
+            ensure_staff(&actor)?;
+            self.staff_inventory().await
+        })
+    }
+    fn create_device_model(
+        &self,
+        actor: AuthenticatedActor,
+        input: CreateDeviceModelInput,
+    ) -> BoxFuture<'_, Result<StaffInventoryModel, ApplicationError>> {
+        Box::pin(async move {
+            ensure_staff(&actor)?;
+            let validated = validate_create_model_input(input)?;
+            let now = self.now();
+            self.transact(Box::new(move |tx| {
+                Box::pin(async move { tx.insert_model_with_units(validated, now).await })
+            }))
+            .await
+        })
+    }
+    fn delete_device_model(
+        &self,
+        actor: AuthenticatedActor,
+        model_id: String,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            ensure_staff(&actor)?;
+            let model_id = model_id.trim().to_string();
+            if model_id.is_empty() {
+                return Err(DomainError::InvalidInput("modelId must not be empty").into());
+            }
+            self.transact(Box::new(move |tx| {
+                Box::pin(async move {
+                    tx.lock_model(model_id.clone()).await?;
+                    tx.delete_model(model_id).await
+                })
+            }))
+            .await
+        })
+    }
+    fn add_device_unit(
+        &self,
+        actor: AuthenticatedActor,
+        model_id: String,
+        input: NewDeviceUnitInput,
+        correlation_id: String,
+    ) -> BoxFuture<'_, Result<DeviceUnitSummary, ApplicationError>> {
+        Box::pin(async move {
+            ensure_staff(&actor)?;
+            let model_id = model_id.trim().to_string();
+            if model_id.is_empty() {
+                return Err(DomainError::InvalidInput("modelId must not be empty").into());
+            }
+            let validated = validate_new_unit_input(input)?;
+            let now = self.now();
+            let stock_key = self.new_id();
+            self.transact(Box::new(move |tx| {
+                Box::pin(async move {
+                    let model = tx.lock_model(model_id.clone()).await?;
+                    let unit = tx.insert_unit(model.id.clone(), validated, now).await?;
+                    if unit.status == "AVAILABLE" && model.available_units == 0 {
+                        let subscribers = tx.active_subscribers(model.id.clone()).await?;
+                        if !subscribers.is_empty() {
+                            tx.mark_subscribers_notified(model.id.clone(), now).await?;
+                            let events = build_availability_outbox_events(
+                                &format!("availability:stock:{stock_key}"),
+                                &subscribers,
+                                &model.name,
+                                now,
+                                &correlation_id,
+                            );
+                            tx.append_outbox(events).await?;
+                        }
+                    }
+                    Ok(unit)
+                })
+            }))
+            .await
+        })
+    }
+    fn set_unit_status(
+        &self,
+        actor: AuthenticatedActor,
+        unit_id: String,
+        status: String,
+        correlation_id: String,
+    ) -> BoxFuture<'_, Result<DeviceUnitSummary, ApplicationError>> {
+        Box::pin(async move {
+            ensure_staff(&actor)?;
+            let unit_id = unit_id.trim().to_string();
+            if unit_id.is_empty() {
+                return Err(DomainError::InvalidInput("unitId must not be empty").into());
+            }
+            let target = validate_unit_status_target(&status)?;
+            let now = self.now();
+            let stock_key = self.new_id();
+            self.transact(Box::new(move |tx| {
+                Box::pin(async move {
+                    let (model, unit) = tx.lock_unit(unit_id.clone()).await?;
+                    if unit.status == "RESERVED" || unit.status == "COLLECTED" {
+                        return Err(DomainError::InvalidTransition {
+                            from: unit.status,
+                            to: target,
+                        }
+                        .into());
+                    }
+                    if unit.status == target {
+                        return Ok(unit);
+                    }
+                    tx.update_unit_status(
+                        model.id.clone(),
+                        unit.unit_id.clone(),
+                        unit.status.clone(),
+                        target.clone(),
+                        now,
+                    )
+                    .await?;
+                    if unit.status == "MAINTENANCE"
+                        && target == "AVAILABLE"
+                        && model.available_units == 0
+                    {
+                        let subscribers = tx.active_subscribers(model.id.clone()).await?;
+                        if !subscribers.is_empty() {
+                            tx.mark_subscribers_notified(model.id.clone(), now).await?;
+                            let events = build_availability_outbox_events(
+                                &format!("availability:stock:{stock_key}"),
+                                &subscribers,
+                                &model.name,
+                                now,
+                                &correlation_id,
+                            );
+                            tx.append_outbox(events).await?;
+                        }
+                    }
+                    Ok(DeviceUnitSummary {
+                        status: target,
+                        ..unit
+                    })
+                })
+            }))
+            .await
+        })
+    }
+    fn delete_device_unit(
+        &self,
+        actor: AuthenticatedActor,
+        unit_id: String,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            ensure_staff(&actor)?;
+            let unit_id = unit_id.trim().to_string();
+            if unit_id.is_empty() {
+                return Err(DomainError::InvalidInput("unitId must not be empty").into());
+            }
+            let now = self.now();
+            self.transact(Box::new(move |tx| {
+                Box::pin(async move {
+                    let (model, unit) = tx.lock_unit(unit_id).await?;
+                    if unit.status == "RESERVED" || unit.status == "COLLECTED" {
+                        return Err(DomainError::ResourceInUse(
+                            "cannot remove a unit that is currently reserved or out on loan".into(),
+                        )
+                        .into());
+                    }
+                    tx.delete_unit(model.id, unit.unit_id, unit.status == "AVAILABLE", now)
+                        .await
                 })
             }))
             .await

@@ -563,3 +563,68 @@ async fn postgres_tests_pool_does_not_reuse_open_transaction() {
         "borrowed connection was still inside an earlier transaction"
     );
 }
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL; run make backend-test-postgres"]
+async fn postgres_tests_staff_inventory_crud_and_maintenance() {
+    let pg = database("phase_staff_inventory").await;
+    pg.run_migrations(false).await.unwrap();
+
+    let created = pg
+        .create_device_model(
+            staff(),
+            crate::domain::CreateDeviceModelInput {
+                id: "pg-test-cam".into(),
+                name: "PG Test Camera".into(),
+                category: "Camera".into(),
+                description: "PostgreSQL inventory test camera".into(),
+                loan_duration_days: 7,
+                image_url: "/catalogue/canon-eos-r50.webp".into(),
+                image_alt: "PG Test Camera".into(),
+                specifications: vec![crate::domain::DeviceSpecification {
+                    label: "Sensor".into(),
+                    value: "APS-C".into(),
+                }],
+                units: vec![crate::domain::NewDeviceUnitInput {
+                    serial_number: "PG-CAM-001".into(),
+                    status: "MAINTENANCE".into(),
+                }],
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.total_units, 1);
+    assert_eq!(created.available_units, 0);
+    let unit_id = created.units[0].unit_id.clone();
+
+    pg.subscribe_availability(student("wait-pg"), "pg-test-cam".into())
+        .await
+        .unwrap();
+    let updated = pg
+        .set_unit_status(
+            staff(),
+            unit_id.clone(),
+            "AVAILABLE".into(),
+            "corr-inv".into(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.status, "AVAILABLE");
+
+    let inv = pg.list_staff_inventory(staff()).await.unwrap();
+    assert_eq!(inv[0].available_units, 1);
+
+    pg.set_unit_status(
+        staff(),
+        unit_id.clone(),
+        "MAINTENANCE".into(),
+        "corr-inv2".into(),
+    )
+    .await
+    .unwrap();
+    pg.delete_device_unit(staff(), unit_id).await.unwrap();
+    pg.delete_device_model(staff(), "pg-test-cam".into())
+        .await
+        .unwrap();
+    assert!(pg.list_staff_inventory(staff()).await.unwrap().is_empty());
+}
