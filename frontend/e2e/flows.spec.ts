@@ -20,7 +20,7 @@ test("public catalogue renders signed out", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Devices" })).toBeVisible();
   // Role queries skip hidden nodes, e.g. streamed HTML React has not swapped in yet.
-  await expect(page.getByRole("link", { name: "Dell Latitude 7440" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dell Latitude 7440" }).getByRole("link")).toBeVisible();
   await expect(page.getByRole("button", { name: "Reserve" })).toHaveCount(0);
 });
 
@@ -116,13 +116,74 @@ test("loan bag reserves several devices and reports each result", async ({ page,
   await expect(page.getByRole("cell", { name: "RESERVED" })).toHaveCount(2);
 });
 
-test("staff admin shows telemetry and live inventory", async ({ page, context }) => {
+test("staff admin shows dashboard tree navigation and dedicated live inventory", async ({ page, context }) => {
   await seed({ modelId: "dell-latitude-7440", sub: "auth0|student-1", email: "student1@campus.test" });
   await signIn(context, "staff");
   await page.goto("/staff");
+  await expect(page).toHaveURL(/\/staff\/dashboard$/);
   await expect(page.getByRole("region", { name: "Desk summary" })).toContainText("Awaiting collection");
   await expect(page.getByRole("heading", { name: "Collection queue" })).toBeVisible();
+
+  const side = page.getByRole("complementary", { name: "Staff sections" });
+  await expect(side.getByRole("link", { name: /Collection queue/ })).toBeVisible();
+  await expect(side.getByRole("link", { name: "Loans" })).toBeVisible();
+  await expect(side.getByRole("link", { name: /Overdue/ })).toBeVisible();
+
+  await side.getByRole("button", { name: /Collapse dashboard sections/i }).click();
+  await expect(side.getByRole("link", { name: "Loans" })).toBeHidden();
+  await side.getByRole("button", { name: /Expand dashboard sections/i }).click();
+  await expect(side.getByRole("link", { name: "Loans" })).toBeVisible();
+
+  await side.getByRole("link", { name: /Inventory/ }).click();
+  await expect(page).toHaveURL(/\/staff\/inventory$/);
   await expect(page.getByRole("table", { name: "Equipment inventory" })).toContainText("Canon EOS R50");
+});
+
+test("staff inventory adds equipment with mandatory fields, toggles maintenance and removes items", async ({ page, context }) => {
+  await signIn(context, "staff");
+  await page.goto("/staff/inventory");
+
+  await page.getByRole("button", { name: "Add equipment" }).click();
+  const dialog = page.locator("dialog[open]");
+  await expect(dialog).toBeVisible();
+
+  // Submitting before completing mandatory fields stays open and shows an alert
+  await dialog.getByRole("button", { name: "Save equipment" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Complete all mandatory fields");
+
+  await dialog.getByLabel(/Equipment name/i).fill("Sony FX3 Kit");
+  await dialog.getByLabel(/Category/i).fill("Camera");
+  await dialog.getByLabel(/Description/i).fill("Full-frame cinema camera.");
+  await dialog.getByLabel(/Image URL or \/catalogue\/ path/i).click();
+  await dialog.getByRole("textbox", { name: /^Image URL/i }).fill("/catalogue/canon-eos-r50.webp");
+  await dialog.getByLabel(/Label 1/i).fill("Sensor");
+  await dialog.getByLabel(/Value 1/i).fill("Full-frame");
+
+  await dialog.getByRole("button", { name: "Save equipment" }).click();
+  await expect(page.getByRole("status")).toContainText("Added Sony FX3 Kit");
+
+  const table = page.getByRole("table", { name: "Equipment inventory" });
+  await expect(table).toContainText("Sony FX3 Kit");
+
+  await page.getByRole("button", { name: "Move to maintenance" }).click();
+  await expect(page.getByRole("status")).toContainText(/Moved campus-sony-fx3-kit-001 .* to maintenance/);
+
+  await page.getByRole("button", { name: "Set available" }).click();
+  await expect(page.getByRole("status")).toContainText(/Returned campus-sony-fx3-kit-001 .* to available/);
+
+  await page.getByLabel(/New unit serial number/i).fill("FX3-EXTRA-002");
+  await page.getByRole("button", { name: "Add unit" }).click();
+  await expect(page.getByRole("status")).toContainText("FX3-EXTRA-002");
+
+  const addedRow = page.locator("li", { hasText: "FX3-EXTRA-002" });
+  await addedRow.getByRole("button", { name: "Remove" }).click();
+  await addedRow.getByRole("button", { name: "Confirm remove" }).click();
+  await expect(page.getByRole("status")).toContainText(/Removed unit/);
+
+  const modelRow = page.locator("tr", { hasText: "Sony FX3 Kit" });
+  await modelRow.getByRole("button", { name: "Remove model" }).click();
+  await modelRow.getByRole("button", { name: "Confirm remove" }).click();
+  await expect(page.getByRole("status")).toContainText("Removed Sony FX3 Kit");
 });
 
 test("cross-origin POST is rejected by the proxy", async ({ page, context }) => {
@@ -169,12 +230,25 @@ test("chosen loan period controls the calendar and the recorded due date", async
   expect(Date.parse(rows[0].dueAt) - Date.parse(rows[0].reservedAt)).toBe(14 * 86400000);
 });
 
-test("catalogue images and loan controls fit a phone screen", async ({ page, context }) => {
+test("catalogue images, collapsible filters and loan controls fit a phone screen", async ({ page, context }) => {
   await signIn(context, "student");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await expect(page.getByRole("img", { name: "Dell Latitude 7440" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Loan period for Dell Latitude 7440" })).toHaveValue("1");
+
+  const filterToggle = page.getByRole("button", { name: /Filters/ });
+  const filterSearch = page.getByRole("searchbox", { name: "Search" });
+  await expect(filterToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(filterSearch).toBeHidden();
+  await filterToggle.click();
+  await expect(filterToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(filterSearch).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await filterToggle.click();
+  await expect(filterToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(filterSearch).toBeHidden();
+
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.goto("/devices/dell-latitude-7440");
   await expect(page.getByRole("heading", { name: "Loan details" })).toBeVisible();
@@ -182,5 +256,40 @@ test("catalogue images and loan controls fit a phone screen", async ({ page, con
   await page.screenshot({ path: "/tmp/rc-detail-mobile.png", fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
+  await expect(page.getByRole("searchbox", { name: "Search" })).toBeVisible();
   await page.screenshot({ path: "/tmp/rc-catalogue-desktop.png", fullPage: true });
+});
+
+test("navbar theme toggle runs a smooth view transition and respects reduced motion", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "no-preference" });
+  await page.goto("/");
+  const toggle = page.getByRole("button", { name: "Dark mode" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+  await page.evaluate(() => {
+    const w = window as Window & { __vtCalls?: number };
+    w.__vtCalls = 0;
+    const orig = document.startViewTransition.bind(document);
+    document.startViewTransition = (cb) => {
+      w.__vtCalls = (w.__vtCalls ?? 0) + 1;
+      return orig(cb);
+    };
+  });
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe("dark");
+  expect(await page.evaluate(() => (window as Window & { __vtCalls?: number }).__vtCalls)).toBe(1);
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.themeTransition)).toBeUndefined();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe("light");
+  expect(await page.evaluate(() => (window as Window & { __vtCalls?: number }).__vtCalls)).toBe(2);
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.themeTransition)).toBeUndefined();
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  expect(await page.evaluate(() => (window as Window & { __vtCalls?: number }).__vtCalls)).toBe(2);
 });

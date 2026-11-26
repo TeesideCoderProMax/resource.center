@@ -11,6 +11,9 @@ describe("observability", () => {
 
   it("templates IDs out of routes", () => {
     expect(routeTemplate("reservations/0b6f3c1e-1111-4222-8333-944455556666/collect")).toBe("reservations/{id}/collect");
+    expect(routeTemplate("staff/inventory/models/sony-fx3")).toBe("staff/inventory/models/{id}");
+    expect(routeTemplate("staff/inventory/models/sony-fx3/units")).toBe("staff/inventory/models/{id}/units");
+    expect(routeTemplate("staff/inventory/units/campus-sony-001")).toBe("staff/inventory/units/{id}");
     expect(routeTemplate("catalogue")).toBe("catalogue");
   });
 

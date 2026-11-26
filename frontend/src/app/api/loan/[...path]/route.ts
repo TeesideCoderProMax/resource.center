@@ -52,7 +52,7 @@ async function forward(req: NextRequest, path: string, correlation: string) {
   }
 
   let body: string | undefined;
-  if (req.method === "POST") {
+  if (req.method === "POST" || req.method === "PATCH") {
     body = sanitizeBody(path, await req.json().catch(() => ({})));
     if (body) headers["content-type"] = "application/json";
   }
@@ -75,3 +75,5 @@ async function forward(req: NextRequest, path: string, correlation: string) {
 
 export const GET = handle;
 export const POST = handle;
+export const PATCH = handle;
+export const DELETE = handle;

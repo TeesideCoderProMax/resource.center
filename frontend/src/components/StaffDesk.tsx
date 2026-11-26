@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { call, fmt } from "@/lib/api-client";
 import type { DeviceModelSummary, ReservationRow } from "@/lib/loan";
 import { categoryIcon, Icon, type IconName } from "./Icon";
 import { errorNotice, Notice, type NoticeValue } from "./Notice";
 import { isOverdue, ReservationTable, useReservations } from "./ReservationTable";
+import { StaffSidebar } from "./StaffSidebar";
 
 type Action = "collect" | "return";
 type Status = "OPEN" | ReservationRow["status"] | "ALL";
@@ -56,14 +57,41 @@ function StatCard({ icon, label, value, unit, foot, tone }: { icon: IconName; la
 }
 
 export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[] }) {
-  const { rows, error, load } = useReservations("/staff");
+  const { rows, error, load } = useReservations("/staff/dashboard");
   const [filter, setFilter] = useState("");
   const [status, setStatus] = useState<Status>("OPEN");
   const [pending, setPending] = useState<{ id: string; action: Action } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<NoticeValue>(null);
-  const [invQuery, setInvQuery] = useState("");
-  const [invCategory, setInvCategory] = useState("");
+  const [section, setSection] = useState("dashboard");
+
+  useEffect(() => {
+    const syncHash = () => {
+      const hash = window.location.hash.slice(1);
+      if (hash === "overdue") {
+        setStatus("OPEN");
+        setSection("overdue");
+        document.getElementById("loans")?.scrollIntoView?.();
+      } else if (hash === "queue" || hash === "loans" || hash === "dashboard") {
+        setSection(hash);
+      }
+    };
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
+
+    // Scroll-spy: the section nearest the top (below the sticky header) is active.
+    const ids = ["dashboard", "queue", "loans"];
+    const syncScroll = () => {
+      const atBottom = innerHeight + scrollY >= document.documentElement.scrollHeight - 4;
+      const top = atBottom ? ids.at(-1)! : ids.filter((id) => (document.getElementById(id)?.getBoundingClientRect().top ?? Infinity) <= 140).at(-1) ?? ids[0];
+      setSection((cur) => (cur === "overdue" && top === "loans" ? cur : top));
+    };
+    window.addEventListener("scroll", syncScroll, { passive: true });
+    return () => {
+      window.removeEventListener("hashchange", syncHash);
+      window.removeEventListener("scroll", syncScroll);
+    };
+  }, []);
 
   async function confirm(r: ReservationRow, action: Action) {
     if (busy) return;
@@ -75,7 +103,7 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
         ? { kind: "ok", text: `Collected ${r.unitId} at ${fmt(res.collectedAt ?? null)} for ${r.studentEmail}. Due back ${fmt(r.dueAt)}. Confirmation email queued.` }
         : { kind: "ok", text: `Returned ${r.unitId} at ${fmt(res.returnedAt ?? null)}. Return email queued; subscribers will be notified.` });
     } catch (e) {
-      const n = errorNotice(e, "/staff");
+      const n = errorNotice(e, "/staff/dashboard");
       // 409 InvalidTransition: someone else changed the row; the reload below shows its real state.
       setNotice(n?.hint === "refresh" ? { ...n, text: `${n.text} The list has been refreshed.` } : n);
     } finally {
@@ -94,11 +122,6 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
   const shown = all
     .filter((r) => status === "ALL" || (status === "OPEN" ? r.status !== "RETURNED" : r.status === status))
     .filter((r) => !q || [r.reservationId, r.unitId, r.modelId, r.studentEmail].some((v) => v.toLowerCase().includes(q)));
-  const iq = invQuery.trim().toLowerCase();
-  const inventory = catalogue
-    .filter((m) => !invCategory || m.category === invCategory)
-    .filter((m) => !iq || `${m.id} ${m.name} ${m.description}`.toLowerCase().includes(iq));
-  const categories = [...new Set(catalogue.map((m) => m.category))].sort();
 
   function actions(r: ReservationRow) {
     const action = actionFor(r);
@@ -120,23 +143,30 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
 
   return (
     <div className="admin-layout">
-      <aside className="admin-side glass" aria-label="Staff sections">
-        <div className="side-head"><Icon name="shield" /><div><strong className="block">Staff portal</strong><span className="muted small">Resource Center desk</span></div></div>
-        <ul>
-          <li><a href="#dashboard"><Icon name="dashboard" /> Dashboard</a></li>
-          <li><a href="#queue"><Icon name="clock" /> Collection queue {queue.length > 0 && <span className="count">{queue.length}</span>}</a></li>
-          <li><a href="#loans"><Icon name="swap" /> Loans</a></li>
-          <li><a href="#loans" onClick={() => setStatus("OPEN")}><Icon name="alert" /> Overdue {stats.overdue > 0 && <span className="count danger">{stats.overdue}</span>}</a></li>
-          <li><a href="#inventory"><Icon name="grid" /> Inventory</a></li>
-        </ul>
-      </aside>
+      <StaffSidebar
+        activePage="dashboard"
+        activeSection={section}
+        onSelectSection={(key) => {
+          if (key === "overdue") setStatus("OPEN");
+          setSection(key);
+        }}
+        queueCount={queue.length}
+        overdueCount={stats.overdue}
+        inventoryCount={catalogue.length || undefined}
+      />
 
       <div className="admin-main">
         <section aria-labelledby="staff-h" id="dashboard" className="page-head">
           <div>
-            <nav aria-label="Breadcrumb" className="crumbs"><Link href="/">Home</Link><span aria-hidden="true">›</span><span aria-current="page" className="accent">Staff Admin</span></nav>
+            <nav aria-label="Breadcrumbs" className="crumbs">
+              <ol>
+                <li><Link href="/"><Icon name="home" size={14} /> Catalog</Link></li>
+                <li><Link href="/staff/dashboard">Staff Admin</Link></li>
+                <li><Link href="/staff/dashboard" aria-current="page" className="accent">Dashboard</Link></li>
+              </ol>
+            </nav>
             <h1 id="staff-h">Staff desk: collection and return</h1>
-            <p className="muted">Hand devices over, record returns, chase overdue loans and check stock.</p>
+            <p className="muted">Hand devices over, record returns, chase overdue loans and track live desk queues.</p>
           </div>
           <div className="row-start">
             <button className="btn" onClick={() => load()}><Icon name="refresh" /> Refresh</button>
@@ -156,7 +186,7 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
         <Notice notice={notice} />
         <Notice notice={error} />
 
-        <section aria-labelledby="queue-h" id="queue">
+        <section aria-labelledby="queue-h" id="queue" className="glass panel-lg">
           <div className="row">
             <div><h2 id="queue-h" className="h-sm"><Icon name="clock" /> Collection queue</h2><p className="muted small">Reserved devices waiting for hand-over at the desk.</p></div>
             {queue.length > 0 && <span className="pill pill-accent">{queue.length} waiting</span>}
@@ -179,6 +209,7 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
         </section>
 
         <section aria-labelledby="loans-h" id="loans" className="glass panel-lg">
+          <span id="overdue" className="scroll-anchor" aria-hidden="true" />
           <h2 id="loans-h" className="h-sm"><Icon name="swap" /> Loans</h2>
           <div className="filters">
             <div>
@@ -198,49 +229,6 @@ export function StaffDesk({ catalogue = [] }: { catalogue?: DeviceModelSummary[]
           </div>
           {rows === null && !error ? <p className="muted">Loading…</p> : (
             <ReservationTable rows={shown} showStudent actions={actions} />
-          )}
-        </section>
-
-        <section aria-labelledby="inv-h" id="inventory" className="glass panel-lg">
-          <div className="row">
-            <div><h2 id="inv-h" className="h-sm"><Icon name="box" /> Equipment inventory</h2><p className="muted small">Live stock per model from the catalogue.</p></div>
-          </div>
-          <div className="filters">
-            <div className="grow">
-              <label htmlFor="inv-find" className="field-label">Filter models</label>
-              <input id="inv-find" type="search" placeholder="Model ID, name or description" value={invQuery} onChange={(e) => setInvQuery(e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="inv-cat" className="field-label">Category</label>
-              <select id="inv-cat" value={invCategory} onChange={(e) => setInvCategory(e.target.value)}>
-                <option value="">All categories</option>
-                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-          {catalogue.length === 0 ? <p className="muted small">Catalogue unavailable.</p> : (
-            <div className="table-wrap">
-              <table aria-label="Equipment inventory">
-                <thead><tr><th scope="col">Model ID</th><th scope="col">Equipment</th><th scope="col">Category</th><th scope="col">Stock</th><th scope="col">Status</th></tr></thead>
-                <tbody>
-                  {inventory.map((m) => {
-                    const pct = m.totalUnits ? Math.round((m.availableUnits / m.totalUnits) * 100) : 0;
-                    return (
-                      <tr key={m.id}>
-                        <td><span className="tag">{m.id}</span></td>
-                        <td><strong className="block">{m.name}</strong><span className="muted small">{m.description} · Up to {m.loanDurationDays} days</span></td>
-                        <td><span className="pill pill-plain"><Icon name={categoryIcon(m.category)} size={14} /> {m.category}</span></td>
-                        <td>
-                          <strong>{m.availableUnits}</strong> <span className="muted small">/ {m.totalUnits} available</span>
-                          <span className={`bar${m.availableUnits === 0 ? " danger" : m.availableUnits === 1 ? " warn" : ""}`}><span style={{ width: `${pct}%` }} /></span>
-                        </td>
-                        <td><span className={`pill ${m.availableUnits > 0 ? "pill-in" : "pill-out"}`}>{m.availableUnits > 0 ? "Available" : "Waitlist"}</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
           )}
         </section>
       </div>

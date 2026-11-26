@@ -3,8 +3,9 @@ use async_trait::async_trait;
 use chrono::Utc;
 use rc_shared::{redact_email, NotificationRequestV1};
 use serde::Serialize;
+use std::time::Duration;
 use thiserror::Error;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VersionedJobDocument {
@@ -396,6 +397,151 @@ impl<S: NotificationJobStorePort + ?Sized> NotificationJobStorePort for &S {
 
     async fn delete_job(&self, event_id: &str) -> Result<(), JobStoreError> {
         (**self).delete_job(event_id).await
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PeekLockedMessage {
+    pub body: String,
+    pub lock_location: String,
+    pub message_id: Option<String>,
+    pub delivery_count: Option<u32>,
+}
+
+/// Port for a peek-lock queue; the Service Bus REST adapter lives in infrastructure.
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to methods returning must-use futures"
+)]
+#[async_trait]
+pub trait QueueConsumerPort: Send + Sync {
+    async fn receive_peek_lock(
+        &self,
+        wait_seconds: u32,
+    ) -> Result<Option<PeekLockedMessage>, String>;
+    async fn renew_lock(&self, lock_location: &str) -> Result<(), String>;
+    async fn complete_message(&self, lock_location: &str) -> Result<(), String>;
+    async fn abandon_message(&self, lock_location: &str) -> Result<(), String>;
+}
+
+/// Receive, process and settle messages until shutdown (or an empty queue in drain-once
+/// mode). Returns the number of completed messages.
+pub async fn run_consumer_loop<C, S, E, F, Fut>(
+    consumer: &C,
+    processor: &NotificationProcessor<S, E>,
+    drain_once: bool,
+    shutdown: F,
+) -> Result<usize, String>
+where
+    C: QueueConsumerPort + ?Sized,
+    S: NotificationJobStorePort,
+    E: EmailDeliveryPort,
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = ()>,
+{
+    let mut processed_count = 0usize;
+    loop {
+        let wait_secs = if drain_once { 5 } else { 20 };
+        let receive_fut = consumer.receive_peek_lock(wait_secs);
+
+        let maybe_msg = tokio::select! {
+            _ = shutdown() => {
+                info!(processed_count = processed_count, "shutdown signal received while waiting for Service Bus message; exiting cleanly");
+                return Ok(processed_count);
+            }
+            res = receive_fut => {
+                match res {
+                    Ok(m) => m,
+                    Err(err) => {
+                        error!(error = %err, "error polling Service Bus queue");
+                        if drain_once {
+                            return Err(err);
+                        }
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                        continue;
+                    }
+                }
+            }
+        };
+
+        let Some(msg) = maybe_msg else {
+            if drain_once {
+                info!(
+                    processed_count = processed_count,
+                    "queue returned 204 No Content in drain-once mode; exiting"
+                );
+                return Ok(processed_count);
+            }
+            continue;
+        };
+
+        // Keep retries on this locked delivery, so waiting does not consume the
+        // broker delivery budget. Dropping either future cancels in-flight work.
+        let processing = processor.process_until_settled(&msg.body);
+        let renewals = async {
+            loop {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                match tokio::time::timeout(
+                    Duration::from_secs(10),
+                    consumer.renew_lock(&msg.lock_location),
+                )
+                .await
+                {
+                    Ok(Ok(())) => {}
+                    _ => break,
+                }
+            }
+        };
+        let result = tokio::select! {
+            biased;
+            _ = shutdown() => {
+                // Retain the message and Cosmos lease for recovery after expiry.
+                info!("shutdown: cancelled processing; retained work will recover");
+                return Ok(processed_count);
+            }
+            _ = renewals => {
+                warn!("broker lock renewal failed; cancelled processing");
+                continue;
+            }
+            result = processing => result,
+        };
+
+        match result {
+            MessageDisposition::Complete {
+                event_id,
+                duplicate_skipped,
+                final_status,
+            } => {
+                if let Err(err) = consumer.complete_message(&msg.lock_location).await {
+                    if drain_once {
+                        return Err(err);
+                    }
+                    // Redelivery is safe: the Cosmos job record stops a second send.
+                    error!(event_id = %event_id, error = %err, "failed to complete message; broker will redeliver");
+                    continue;
+                }
+                processed_count += 1;
+                info!(
+                    event_id = %event_id,
+                    duplicate_skipped = duplicate_skipped,
+                    final_status = ?final_status,
+                    delivery_count = ?msg.delivery_count,
+                    "settled (completed) Service Bus notification message"
+                );
+            }
+            MessageDisposition::Wait { .. } => {
+                unreachable!("wait handled inside processing loop")
+            }
+            MessageDisposition::Abandon { event_id, reason } => {
+                warn!(
+                    event_id = %event_id,
+                    reason = %reason,
+                    delivery_count = ?msg.delivery_count,
+                    "abandoning Service Bus message for retry or dead-letter"
+                );
+                let _ = consumer.abandon_message(&msg.lock_location).await;
+            }
+        }
     }
 }
 
@@ -908,5 +1054,148 @@ mod tests {
         let processor = NotificationProcessor::new(&store, &sender, 3);
         processor.process_request(&req).await.unwrap();
         assert_eq!(sender.calls.load(Ordering::SeqCst), 2);
+    }
+
+    struct FakeConsumer {
+        inbox: Mutex<std::collections::VecDeque<Result<Option<PeekLockedMessage>, String>>>,
+        completed: Mutex<Vec<String>>,
+        abandoned: Mutex<Vec<String>>,
+        fail_complete: bool,
+        complete_calls: AtomicUsize,
+    }
+
+    impl FakeConsumer {
+        fn new(inbox: Vec<Result<Option<PeekLockedMessage>, String>>, fail_complete: bool) -> Self {
+            Self {
+                inbox: Mutex::new(inbox.into()),
+                completed: Mutex::default(),
+                abandoned: Mutex::default(),
+                fail_complete,
+                complete_calls: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl QueueConsumerPort for FakeConsumer {
+        async fn receive_peek_lock(
+            &self,
+            _wait_seconds: u32,
+        ) -> Result<Option<PeekLockedMessage>, String> {
+            self.inbox.lock().unwrap().pop_front().unwrap_or(Ok(None))
+        }
+        async fn renew_lock(&self, _lock_location: &str) -> Result<(), String> {
+            Ok(())
+        }
+        async fn complete_message(&self, lock_location: &str) -> Result<(), String> {
+            self.complete_calls.fetch_add(1, Ordering::SeqCst);
+            if self.fail_complete {
+                return Err("complete failed".into());
+            }
+            self.completed.lock().unwrap().push(lock_location.into());
+            Ok(())
+        }
+        async fn abandon_message(&self, lock_location: &str) -> Result<(), String> {
+            self.abandoned.lock().unwrap().push(lock_location.into());
+            Ok(())
+        }
+    }
+
+    fn locked(body: String, lock: &str) -> Result<Option<PeekLockedMessage>, String> {
+        Ok(Some(PeekLockedMessage {
+            body,
+            lock_location: lock.into(),
+            message_id: None,
+            delivery_count: Some(1),
+        }))
+    }
+
+    fn valid_body(event_id: &str) -> String {
+        serde_json::to_string(&sample_request(event_id)).unwrap()
+    }
+
+    #[tokio::test]
+    async fn drain_once_completes_valid_message_and_stops_on_empty() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        let consumer = FakeConsumer::new(vec![locked(valid_body("e1"), "lock-1"), Ok(None)], false);
+        let processed =
+            run_consumer_loop(&consumer, &processor, true, std::future::pending::<()>).await;
+        assert_eq!(processed, Ok(1));
+        assert_eq!(
+            *consumer.completed.lock().unwrap(),
+            vec!["lock-1".to_string()]
+        );
+        assert!(consumer.abandoned.lock().unwrap().is_empty());
+        assert_eq!(sender.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn malformed_message_is_abandoned() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        let consumer = FakeConsumer::new(vec![locked("not json".into(), "lock-1")], false);
+        let processed =
+            run_consumer_loop(&consumer, &processor, true, std::future::pending::<()>).await;
+        assert_eq!(processed, Ok(0));
+        assert_eq!(
+            *consumer.abandoned.lock().unwrap(),
+            vec!["lock-1".to_string()]
+        );
+        assert!(consumer.completed.lock().unwrap().is_empty());
+        assert_eq!(sender.calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn drain_once_returns_error_on_poll_failure() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        let consumer = FakeConsumer::new(vec![Err("boom".into())], false);
+        let processed =
+            run_consumer_loop(&consumer, &processor, true, std::future::pending::<()>).await;
+        assert_eq!(processed, Err("boom".to_string()));
+    }
+
+    #[tokio::test]
+    async fn complete_failure_propagates() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        let consumer = FakeConsumer::new(vec![locked(valid_body("e1"), "lock-1")], true);
+        let processed =
+            run_consumer_loop(&consumer, &processor, true, std::future::pending::<()>).await;
+        assert_eq!(processed, Err("complete failed".to_string()));
+    }
+
+    #[tokio::test]
+    async fn shutdown_stops_the_loop() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        let consumer = FakeConsumer::new(vec![], false);
+        let processed = run_consumer_loop(&consumer, &processor, false, || async {}).await;
+        assert_eq!(processed, Ok(0));
+    }
+
+    #[tokio::test]
+    async fn complete_failure_does_not_stop_long_running_loop() {
+        let store = InMemoryCosmosStore::new();
+        let sender = CountingFakeSender::new(false);
+        let processor = NotificationProcessor::new(&store, &sender, 3);
+        let consumer = FakeConsumer::new(vec![locked(valid_body("e1"), "lock-1")], true);
+        let shutdown = || {
+            let done = consumer.complete_calls.load(Ordering::SeqCst) >= 1;
+            async move {
+                if !done {
+                    std::future::pending::<()>().await;
+                }
+            }
+        };
+        let processed = run_consumer_loop(&consumer, &processor, false, shutdown).await;
+        assert_eq!(processed, Ok(0));
+        assert_eq!(consumer.complete_calls.load(Ordering::SeqCst), 1);
     }
 }

@@ -3,20 +3,21 @@ use std::sync::Arc;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use uuid::Uuid;
 
-use crate::application::{ApplicationError, LoanRepositoryPort};
-use crate::domain::DomainError;
-use crate::infrastructure::{Auth0JwtVerifier, AuthVerifyError};
+use crate::application::{
+    AccessTokenVerifierPort, ApplicationError, AuthVerifyError, LoanRepositoryPort,
+};
+use crate::domain::{CreateDeviceModelInput, DomainError, NewDeviceUnitInput};
 
 #[derive(Clone)]
 pub struct AppState {
     pub repo: Arc<dyn LoanRepositoryPort>,
-    pub auth: Auth0JwtVerifier,
+    pub auth: Arc<dyn AccessTokenVerifierPort>,
     pub environment: String,
     pub service_version: String,
 }
@@ -55,6 +56,12 @@ pub struct CreateSubscriptionRequest {
     pub model_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetUnitStatusRequest {
+    pub status: String,
+}
+
 pub fn build_router(state: AppState, allowed_origins: &[String]) -> Router {
     let cors = build_cors_layer(allowed_origins);
 
@@ -70,6 +77,20 @@ pub fn build_router(state: AppState, allowed_origins: &[String]) -> Router {
         .route("/api/v1/reservations/{id}/collect", post(record_collection))
         .route("/api/v1/reservations/{id}/return", post(record_return))
         .route("/api/v1/subscriptions", post(create_subscription))
+        .route("/api/v1/staff/inventory", get(list_staff_inventory))
+        .route("/api/v1/staff/inventory/models", post(create_device_model))
+        .route(
+            "/api/v1/staff/inventory/models/{id}",
+            delete(delete_device_model),
+        )
+        .route(
+            "/api/v1/staff/inventory/models/{id}/units",
+            post(add_device_unit),
+        )
+        .route(
+            "/api/v1/staff/inventory/units/{unit_id}",
+            patch(set_unit_status).delete(delete_device_unit),
+        )
         .layer(cors)
         .with_state(state)
 }
@@ -88,7 +109,13 @@ fn build_cors_layer(allowed_origins: &[String]) -> CorsLayer {
 
     CorsLayer::new()
         .allow_origin(origin_policy)
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
         .allow_headers([
             axum::http::header::AUTHORIZATION,
             axum::http::header::CONTENT_TYPE,
@@ -216,7 +243,7 @@ async fn list_catalogue(State(state): State<AppState>, headers: HeaderMap) -> im
 
 async fn list_reservations(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let correlation_id = extract_correlation_id(&headers);
-    let actor = match authenticate_request(&state.auth, &headers).await {
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
         Ok(actor) => actor,
         Err(error) => return map_auth_error(error, &correlation_id).into_response(),
     };
@@ -232,7 +259,7 @@ async fn create_reservation(
     payload: Result<Json<CreateReservationRequest>, axum::extract::rejection::JsonRejection>,
 ) -> impl IntoResponse {
     let correlation_id = extract_correlation_id(&headers);
-    let actor = match authenticate_request(&state.auth, &headers).await {
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
         Ok(a) => a,
         Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
     };
@@ -281,7 +308,7 @@ async fn create_subscription(
     Json(payload): Json<CreateSubscriptionRequest>,
 ) -> impl IntoResponse {
     let correlation_id = extract_correlation_id(&headers);
-    let actor = match authenticate_request(&state.auth, &headers).await {
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
         Ok(a) => a,
         Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
     };
@@ -312,7 +339,7 @@ async fn record_collection(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let correlation_id = extract_correlation_id(&headers);
-    let actor = match authenticate_request(&state.auth, &headers).await {
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
         Ok(a) => a,
         Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
     };
@@ -344,7 +371,7 @@ async fn record_return(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let correlation_id = extract_correlation_id(&headers);
-    let actor = match authenticate_request(&state.auth, &headers).await {
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
         Ok(a) => a,
         Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
     };
@@ -370,8 +397,168 @@ async fn record_return(
     }
 }
 
+async fn list_staff_inventory(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let correlation_id = extract_correlation_id(&headers);
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
+        Ok(a) => a,
+        Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
+    };
+    match state.repo.list_staff_inventory(actor).await {
+        Ok(items) => with_correlation_header(
+            StatusCode::OK,
+            &correlation_id,
+            serde_json::json!({ "items": items, "correlationId": correlation_id }),
+        )
+        .into_response(),
+        Err(err) => map_app_error(err, &correlation_id).into_response(),
+    }
+}
+
+async fn create_device_model(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    payload: Result<Json<CreateDeviceModelInput>, axum::extract::rejection::JsonRejection>,
+) -> impl IntoResponse {
+    let correlation_id = extract_correlation_id(&headers);
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
+        Ok(a) => a,
+        Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
+    };
+    let payload = match payload {
+        Ok(Json(payload)) => payload,
+        Err(_) => {
+            return map_app_error(
+                ApplicationError::Domain(DomainError::InvalidInput(
+                    "all device model fields, specifications, and initial units are required",
+                )),
+                &correlation_id,
+            )
+            .into_response()
+        }
+    };
+    match state.repo.create_device_model(actor, payload).await {
+        Ok(model) => {
+            with_correlation_header(StatusCode::CREATED, &correlation_id, model).into_response()
+        }
+        Err(err) => map_app_error(err, &correlation_id).into_response(),
+    }
+}
+
+async fn delete_device_model(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let correlation_id = extract_correlation_id(&headers);
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
+        Ok(a) => a,
+        Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
+    };
+    match state.repo.delete_device_model(actor, id).await {
+        Ok(()) => with_correlation_header(
+            StatusCode::OK,
+            &correlation_id,
+            serde_json::json!({ "deleted": true, "correlationId": correlation_id }),
+        )
+        .into_response(),
+        Err(err) => map_app_error(err, &correlation_id).into_response(),
+    }
+}
+
+async fn add_device_unit(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    payload: Result<Json<NewDeviceUnitInput>, axum::extract::rejection::JsonRejection>,
+) -> impl IntoResponse {
+    let correlation_id = extract_correlation_id(&headers);
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
+        Ok(a) => a,
+        Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
+    };
+    let payload = match payload {
+        Ok(Json(payload)) => payload,
+        Err(_) => {
+            return map_app_error(
+                ApplicationError::Domain(DomainError::InvalidInput(
+                    "unit serialNumber and status are required",
+                )),
+                &correlation_id,
+            )
+            .into_response()
+        }
+    };
+    match state
+        .repo
+        .add_device_unit(actor, id, payload, correlation_id.clone())
+        .await
+    {
+        Ok(unit) => {
+            with_correlation_header(StatusCode::CREATED, &correlation_id, unit).into_response()
+        }
+        Err(err) => map_app_error(err, &correlation_id).into_response(),
+    }
+}
+
+async fn set_unit_status(
+    State(state): State<AppState>,
+    Path(unit_id): Path<String>,
+    headers: HeaderMap,
+    payload: Result<Json<SetUnitStatusRequest>, axum::extract::rejection::JsonRejection>,
+) -> impl IntoResponse {
+    let correlation_id = extract_correlation_id(&headers);
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
+        Ok(a) => a,
+        Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
+    };
+    let payload = match payload {
+        Ok(Json(payload)) => payload,
+        Err(_) => {
+            return map_app_error(
+                ApplicationError::Domain(DomainError::InvalidInput(
+                    "status must be AVAILABLE or MAINTENANCE",
+                )),
+                &correlation_id,
+            )
+            .into_response()
+        }
+    };
+    match state
+        .repo
+        .set_unit_status(actor, unit_id, payload.status, correlation_id.clone())
+        .await
+    {
+        Ok(unit) => with_correlation_header(StatusCode::OK, &correlation_id, unit).into_response(),
+        Err(err) => map_app_error(err, &correlation_id).into_response(),
+    }
+}
+
+async fn delete_device_unit(
+    State(state): State<AppState>,
+    Path(unit_id): Path<String>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let correlation_id = extract_correlation_id(&headers);
+    let actor = match authenticate_request(state.auth.as_ref(), &headers).await {
+        Ok(a) => a,
+        Err(resp) => return map_auth_error(resp, &correlation_id).into_response(),
+    };
+    match state.repo.delete_device_unit(actor, unit_id).await {
+        Ok(()) => with_correlation_header(
+            StatusCode::OK,
+            &correlation_id,
+            serde_json::json!({ "deleted": true, "correlationId": correlation_id }),
+        )
+        .into_response(),
+        Err(err) => map_app_error(err, &correlation_id).into_response(),
+    }
+}
+
 async fn authenticate_request(
-    verifier: &Auth0JwtVerifier,
+    verifier: &dyn AccessTokenVerifierPort,
     headers: &HeaderMap,
 ) -> Result<crate::domain::AuthenticatedActor, AuthVerifyError> {
     let auth_header = headers
@@ -433,6 +620,12 @@ fn map_app_error(err: ApplicationError, correlation_id: &str) -> impl IntoRespon
         ApplicationError::Domain(DomainError::InvalidInput(_)) => {
             (StatusCode::BAD_REQUEST, "InvalidInput")
         }
+        ApplicationError::Domain(DomainError::AlreadyExists(_)) => {
+            (StatusCode::CONFLICT, "AlreadyExists")
+        }
+        ApplicationError::Domain(DomainError::ResourceInUse(_)) => {
+            (StatusCode::CONFLICT, "ResourceInUse")
+        }
         ApplicationError::NotFound(_) => (StatusCode::NOT_FOUND, "NotFound"),
         ApplicationError::Persistence(_) | ApplicationError::Broker(_) => {
             (StatusCode::INTERNAL_SERVER_ERROR, "InternalError")
@@ -467,7 +660,7 @@ mod tests {
     async fn health_and_catalogue_endpoints_respond_with_correlation_id() {
         let state = AppState {
             repo: Arc::new(FakeStore::with_units(2)),
-            auth: Auth0JwtVerifier::from_env(),
+            auth: Arc::new(crate::test_support::FakeVerifier { configured: false }),
             environment: "test".into(),
             service_version: "0.1.0-test".into(),
         };
@@ -529,11 +722,108 @@ mod contract_tests {
     use serde_json::{json, Value};
     use tower::ServiceExt;
 
+    use crate::test_support::FakeVerifier;
+
     fn token(subject: &str, role: &str) -> String {
-        crate::auth::test_keys::sign(
-            &crate::auth::test_keys::claims(subject, &[role]),
-            crate::auth::test_keys::KID,
+        format!("{subject}:{role}")
+    }
+
+    fn app_with(store: Arc<FakeStore>, configured: bool) -> Router {
+        build_router(
+            AppState {
+                repo: store,
+                auth: Arc::new(FakeVerifier { configured }),
+                environment: "test".into(),
+                service_version: "test".into(),
+            },
+            &[],
         )
+    }
+
+    #[tokio::test]
+    async fn real_verifier_accepts_signed_student_token() {
+        use crate::auth::test_keys::{claims, sign, KID};
+        let app = build_router(
+            AppState {
+                repo: Arc::new(FakeStore::with_units(1)),
+                auth: Arc::new(crate::infrastructure::Auth0JwtVerifier::with_test_jwks()),
+                environment: "test".into(),
+                service_version: "test".into(),
+            },
+            &[],
+        );
+        let bearer = sign(&claims("s1", &["student"]), KID);
+        let (status, body) = request(
+            &app,
+            "GET",
+            "/api/v1/reservations",
+            Some(&bearer),
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, json!([]));
+        let mut tampered = bearer.clone();
+        let last = if tampered.pop() == Some('A') {
+            'B'
+        } else {
+            'A'
+        };
+        tampered.push(last);
+        let (status, body) = request(
+            &app,
+            "GET",
+            "/api/v1/reservations",
+            Some(&tampered),
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["error"], "InvalidToken");
+    }
+
+    #[tokio::test]
+    async fn health_reports_verifier_configuration() {
+        for configured in [true, false] {
+            let app = app_with(Arc::new(FakeStore::with_units(1)), configured);
+            let (status, body) = request(&app, "GET", "/health/live", None, json!(null)).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(body["auth0Configured"], json!(configured));
+        }
+    }
+
+    #[tokio::test]
+    async fn fake_verifier_errors_map_to_status() {
+        let app = app_with(Arc::new(FakeStore::with_units(1)), true);
+        let route = "/api/v1/reservations";
+        let (status, body) = request(&app, "GET", route, None, json!(null)).await;
+        assert_eq!(
+            (status, body["error"].clone()),
+            (StatusCode::UNAUTHORIZED, json!("Unauthorized"))
+        );
+        let (status, body) = request(&app, "GET", route, Some("garbage"), json!(null)).await;
+        assert_eq!(
+            (status, body["error"].clone()),
+            (StatusCode::UNAUTHORIZED, json!("InvalidToken"))
+        );
+        let (status, body) = request(&app, "GET", route, Some("keys-down"), json!(null)).await;
+        assert_eq!(
+            (status, body["error"].clone()),
+            (StatusCode::SERVICE_UNAVAILABLE, json!("AuthUnavailable"))
+        );
+        let app = app_with(Arc::new(FakeStore::with_units(1)), false);
+        let (status, body) = request(
+            &app,
+            "GET",
+            route,
+            Some(&token("a", "student")),
+            json!(null),
+        )
+        .await;
+        assert_eq!(
+            (status, body["error"].clone()),
+            (StatusCode::SERVICE_UNAVAILABLE, json!("AuthNotConfigured"))
+        );
     }
     async fn request(
         app: &Router,
@@ -563,15 +853,7 @@ mod contract_tests {
     #[tokio::test]
     async fn invalid_or_missing_periods_return_400_without_writes() {
         let store = Arc::new(FakeStore::with_units(1));
-        let app = build_router(
-            AppState {
-                repo: store.clone(),
-                auth: Auth0JwtVerifier::with_test_jwks(),
-                environment: "test".into(),
-                service_version: "test".into(),
-            },
-            &[],
-        );
+        let app = app_with(store.clone(), true);
         let owner = token("owner", "student");
         for body in [
             json!({"modelId":"model"}),
@@ -595,15 +877,7 @@ mod contract_tests {
     #[tokio::test]
     async fn authenticated_routes_due_date_errors_and_owner_reads() {
         let store = Arc::new(FakeStore::with_units(1));
-        let app = build_router(
-            AppState {
-                repo: store.clone(),
-                auth: Auth0JwtVerifier::with_test_jwks(),
-                environment: "test".into(),
-                service_version: "test".into(),
-            },
-            &[],
-        );
+        let app = app_with(store.clone(), true);
         let owner = token("owner", "student");
         let staff = token("staff", "staff");
         let other = token("other", "student");
@@ -726,5 +1000,201 @@ mod contract_tests {
             request(&app, "POST", &ret, Some(&staff), json!({})).await.0,
             StatusCode::CONFLICT
         );
+    }
+
+    #[tokio::test]
+    async fn staff_inventory_crud_maintenance_and_guards() {
+        let store = Arc::new(FakeStore::with_units(1));
+        let app = app_with(store.clone(), true);
+        let student = token("stud", "student");
+        let staff = token("staff", "staff");
+
+        // Student cannot read or mutate staff inventory
+        let (status, body) = request(
+            &app,
+            "GET",
+            "/api/v1/staff/inventory",
+            Some(&student),
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["error"], "ForbiddenRole");
+
+        let new_model = json!({
+            "id": "sony-fx3",
+            "name": "Sony FX3 Cinema Kit",
+            "category": "Camera",
+            "description": "Full-frame cinema camera.",
+            "loanDurationDays": 7,
+            "imageUrl": "data:image/webp;base64,UklGRh4AAABXRUJQVlA4",
+            "imageAlt": "Sony FX3 Cinema Kit",
+            "specifications": [{"label": "Sensor", "value": "Full-frame"}],
+            "units": [{"serialNumber": "FX3-001", "status": "MAINTENANCE"}]
+        });
+        let (status, _) = request(
+            &app,
+            "POST",
+            "/api/v1/staff/inventory/models",
+            Some(&student),
+            new_model.clone(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+
+        // Missing mandatory imageUrl fails validation
+        let (status, body) = request(
+            &app,
+            "POST",
+            "/api/v1/staff/inventory/models",
+            Some(&staff),
+            json!({
+                "id": "bad-model",
+                "name": "Bad",
+                "category": "Camera",
+                "description": "Missing image",
+                "loanDurationDays": 7,
+                "imageUrl": "",
+                "imageAlt": "Bad",
+                "specifications": [{"label": "A", "value": "B"}],
+                "units": [{"serialNumber": "SN-1", "status": "AVAILABLE"}]
+            }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["error"], "InvalidInput");
+
+        // Staff creates model starting in MAINTENANCE (0 available)
+        let (status, created) = request(
+            &app,
+            "POST",
+            "/api/v1/staff/inventory/models",
+            Some(&staff),
+            new_model,
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(created["totalUnits"], 1);
+        assert_eq!(created["availableUnits"], 0);
+        let unit_id = created["units"][0]["unitId"].as_str().unwrap().to_string();
+
+        // Student subscribes while 0 available
+        let (status, _) = request(
+            &app,
+            "POST",
+            "/api/v1/subscriptions",
+            Some(&student),
+            json!({"modelId": "sony-fx3"}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+
+        // Moving unit from MAINTENANCE -> AVAILABLE emits availability notification outbox event
+        let (status, updated) = request(
+            &app,
+            "PATCH",
+            &format!("/api/v1/staff/inventory/units/{unit_id}"),
+            Some(&staff),
+            json!({"status": "AVAILABLE"}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(updated["status"], "AVAILABLE");
+        assert_eq!(store.data.lock().await.outbox.len(), 1);
+
+        // Add second unit, reserve first, ensure maintenance & delete fail for reserved unit
+        let (status, added_unit) = request(
+            &app,
+            "POST",
+            "/api/v1/staff/inventory/models/sony-fx3/units",
+            Some(&staff),
+            json!({"serialNumber": "FX3-002", "status": "AVAILABLE"}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let second_unit = added_unit["unitId"].as_str().unwrap().to_string();
+
+        let (status, _) = request(
+            &app,
+            "POST",
+            "/api/v1/reservations",
+            Some(&student),
+            json!({"modelId": "sony-fx3", "loanDurationDays": 2}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+
+        let (status, body) = request(
+            &app,
+            "PATCH",
+            &format!("/api/v1/staff/inventory/units/{unit_id}"),
+            Some(&staff),
+            json!({"status": "MAINTENANCE"}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "InvalidTransition");
+
+        let (status, body) = request(
+            &app,
+            "DELETE",
+            &format!("/api/v1/staff/inventory/units/{unit_id}"),
+            Some(&staff),
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "ResourceInUse");
+
+        // Unreserved second unit can be moved to maintenance and removed
+        let (status, _) = request(
+            &app,
+            "PATCH",
+            &format!("/api/v1/staff/inventory/units/{second_unit}"),
+            Some(&staff),
+            json!({"status": "MAINTENANCE"}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+
+        let (status, _) = request(
+            &app,
+            "DELETE",
+            &format!("/api/v1/staff/inventory/units/{second_unit}"),
+            Some(&staff),
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+
+        // Fresh unloaned model can be created and deleted cleanly
+        let (status, _) = request(
+            &app,
+            "POST",
+            "/api/v1/staff/inventory/models",
+            Some(&staff),
+            json!({
+                "id": "temp-mic",
+                "name": "Temp Mic",
+                "category": "Audio",
+                "description": "Disposable test mic.",
+                "loanDurationDays": 3,
+                "imageUrl": "/catalogue/blue-yeti.webp",
+                "imageAlt": "Temp Mic",
+                "specifications": [{"label": "Type", "value": "USB"}],
+                "units": [{"serialNumber": "TEMP-1", "status": "AVAILABLE"}]
+            }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let (status, _) = request(
+            &app,
+            "DELETE",
+            "/api/v1/staff/inventory/models/temp-mic",
+            Some(&staff),
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
     }
 }

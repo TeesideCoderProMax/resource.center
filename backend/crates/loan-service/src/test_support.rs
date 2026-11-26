@@ -11,10 +11,24 @@ use uuid::Uuid;
 pub struct Data {
     pub available: i32,
     pub units: BTreeMap<String, String>,
+    pub models: BTreeMap<String, StaffInventoryModel>,
     pub reservations: BTreeMap<Uuid, Reservation>,
     pub subscriptions: BTreeMap<String, (AuthenticatedActor, SubscriptionReceipt)>,
     pub outbox: Vec<NotificationRequestV1>,
     pub fail_outbox: bool,
+}
+
+impl Data {
+    fn sync_legacy_model_fields(&mut self) {
+        if let Some(m) = self.models.get("model") {
+            self.available = m.available_units;
+            self.units = m
+                .units
+                .iter()
+                .map(|u| (u.unit_id.clone(), u.status.clone()))
+                .collect();
+        }
+    }
 }
 
 pub struct FakeStore {
@@ -23,12 +37,38 @@ pub struct FakeStore {
 }
 impl FakeStore {
     pub fn with_units(units: i32) -> Self {
+        let unit_map: BTreeMap<String, String> = (0..units)
+            .map(|i| (format!("unit-{i}"), "AVAILABLE".into()))
+            .collect();
+        let model_units: Vec<DeviceUnitSummary> = (0..units)
+            .map(|i| DeviceUnitSummary {
+                unit_id: format!("unit-{i}"),
+                serial_number: format!("SN-MODEL-{i}"),
+                status: "AVAILABLE".into(),
+            })
+            .collect();
+        let mut models = BTreeMap::new();
+        models.insert(
+            "model".into(),
+            StaffInventoryModel {
+                id: "model".into(),
+                name: "Test Laptop".into(),
+                category: "Laptop".into(),
+                description: "Test".into(),
+                loan_duration_days: 14,
+                total_units: units,
+                available_units: units,
+                image_url: None,
+                image_alt: None,
+                specifications: vec![],
+                units: model_units,
+            },
+        );
         Self {
             data: Mutex::new(Data {
                 available: units,
-                units: (0..units)
-                    .map(|i| (format!("unit-{i}"), "AVAILABLE".into()))
-                    .collect(),
+                units: unit_map,
+                models,
                 reservations: BTreeMap::new(),
                 subscriptions: BTreeMap::new(),
                 outbox: vec![],
@@ -48,18 +88,32 @@ impl LoanStorePort for FakeStore {
     fn catalogue(&self) -> BoxFuture<'_, Result<Vec<DeviceModelSummary>, ApplicationError>> {
         Box::pin(async {
             let data = self.data.lock().await;
-            Ok(vec![DeviceModelSummary {
-                id: "model".into(),
-                name: "Test Laptop".into(),
-                category: "Laptop".into(),
-                description: "Test".into(),
-                loan_duration_days: 14,
-                image_url: None,
-                image_alt: None,
-                specifications: vec![],
-                total_units: data.units.len() as i32,
-                available_units: data.available,
-            }])
+            let mut items: Vec<DeviceModelSummary> = data
+                .models
+                .values()
+                .map(|m| DeviceModelSummary {
+                    id: m.id.clone(),
+                    name: m.name.clone(),
+                    category: m.category.clone(),
+                    description: m.description.clone(),
+                    loan_duration_days: m.loan_duration_days,
+                    total_units: m.total_units,
+                    available_units: m.available_units,
+                    image_url: m.image_url.clone(),
+                    image_alt: m.image_alt.clone(),
+                    specifications: m.specifications.clone(),
+                })
+                .collect();
+            items.sort_by(|a, b| a.category.cmp(&b.category).then(a.name.cmp(&b.name)));
+            Ok(items)
+        })
+    }
+    fn staff_inventory(&self) -> BoxFuture<'_, Result<Vec<StaffInventoryModel>, ApplicationError>> {
+        Box::pin(async {
+            let data = self.data.lock().await;
+            let mut items: Vec<StaffInventoryModel> = data.models.values().cloned().collect();
+            items.sort_by(|a, b| a.category.cmp(&b.category).then(a.name.cmp(&b.name)));
+            Ok(items)
         })
     }
     fn reservations(
@@ -94,27 +148,29 @@ impl LoanStorePort for FakeStore {
 impl LoanTransactionPort for Data {
     fn lock_model(&mut self, id: String) -> BoxFuture<'_, Result<LockedModel, ApplicationError>> {
         Box::pin(async move {
-            if id != "model" {
-                return Err(ApplicationError::NotFound(id));
-            }
+            let m = self
+                .models
+                .get(&id)
+                .ok_or_else(|| ApplicationError::NotFound(id.clone()))?;
             Ok(LockedModel {
                 id,
-                name: "Test Laptop".into(),
-                available_units: self.available,
-                loan_duration_days: 14,
+                name: m.name.clone(),
+                available_units: m.available_units,
+                loan_duration_days: m.loan_duration_days,
             })
         })
     }
     fn available_unit(
         &mut self,
-        _: String,
+        model: String,
     ) -> BoxFuture<'_, Result<Option<String>, ApplicationError>> {
-        Box::pin(async {
-            Ok(self
-                .units
-                .iter()
-                .find(|(_, status)| status.as_str() == "AVAILABLE")
-                .map(|(id, _)| id.clone()))
+        Box::pin(async move {
+            Ok(self.models.get(&model).and_then(|m| {
+                m.units
+                    .iter()
+                    .find(|u| u.status == "AVAILABLE")
+                    .map(|u| u.unit_id.clone())
+            }))
         })
     }
     fn lock_reservation(
@@ -136,9 +192,14 @@ impl LoanTransactionPort for Data {
         r: Reservation,
     ) -> BoxFuture<'_, Result<(), ApplicationError>> {
         Box::pin(async move {
-            self.available -= 1;
-            self.units.insert(r.unit_id.clone(), "RESERVED".into());
+            if let Some(m) = self.models.get_mut(&r.model_id) {
+                m.available_units -= 1;
+                if let Some(u) = m.units.iter_mut().find(|u| u.unit_id == r.unit_id) {
+                    u.status = "RESERVED".into();
+                }
+            }
             self.reservations.insert(r.reservation_id, r);
+            self.sync_legacy_model_fields();
             Ok(())
         })
     }
@@ -148,9 +209,10 @@ impl LoanTransactionPort for Data {
         receipt: SubscriptionReceipt,
     ) -> BoxFuture<'_, Result<SubscriptionReceipt, ApplicationError>> {
         Box::pin(async move {
+            let key = format!("{}:{}", receipt.model_id, actor.subject);
             let entry = self
                 .subscriptions
-                .entry(actor.subject.clone())
+                .entry(key)
                 .or_insert((actor.clone(), receipt));
             entry.0.email = actor.email;
             Ok(entry.1.clone())
@@ -158,29 +220,42 @@ impl LoanTransactionPort for Data {
     }
     fn save_collection(&mut self, r: Reservation) -> BoxFuture<'_, Result<(), ApplicationError>> {
         Box::pin(async move {
-            self.units.insert(r.unit_id.clone(), "COLLECTED".into());
+            if let Some(m) = self.models.get_mut(&r.model_id) {
+                if let Some(u) = m.units.iter_mut().find(|u| u.unit_id == r.unit_id) {
+                    u.status = "COLLECTED".into();
+                }
+            }
             self.reservations.insert(r.reservation_id, r);
+            self.sync_legacy_model_fields();
             Ok(())
         })
     }
     fn active_subscribers(
         &mut self,
-        _: String,
+        model: String,
     ) -> BoxFuture<'_, Result<Vec<String>, ApplicationError>> {
-        Box::pin(async {
+        Box::pin(async move {
             Ok(self
                 .subscriptions
                 .values()
+                .filter(|(_, r)| r.model_id == model && r.status == "ACTIVE")
                 .map(|(a, _)| a.email.clone())
                 .collect())
         })
     }
     fn save_return(&mut self, r: Reservation) -> BoxFuture<'_, Result<(), ApplicationError>> {
         Box::pin(async move {
-            self.available += 1;
-            self.units.insert(r.unit_id.clone(), "AVAILABLE".into());
+            if let Some(m) = self.models.get_mut(&r.model_id) {
+                m.available_units += 1;
+                if let Some(u) = m.units.iter_mut().find(|u| u.unit_id == r.unit_id) {
+                    u.status = "AVAILABLE".into();
+                }
+            }
+            let model_id = r.model_id.clone();
             self.reservations.insert(r.reservation_id, r);
-            self.subscriptions.clear();
+            self.subscriptions
+                .retain(|_, (_, sub)| sub.model_id != model_id);
+            self.sync_legacy_model_fields();
             Ok(())
         })
     }
@@ -195,6 +270,215 @@ impl LoanTransactionPort for Data {
                 ));
             }
             self.outbox.extend(events);
+            Ok(())
+        })
+    }
+    fn insert_model_with_units(
+        &mut self,
+        input: CreateDeviceModelInput,
+        _now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<StaffInventoryModel, ApplicationError>> {
+        Box::pin(async move {
+            if self.models.contains_key(&input.id) {
+                return Err(ApplicationError::Domain(DomainError::AlreadyExists(
+                    format!("device model '{}' already exists", input.id),
+                )));
+            }
+            let existing_serials: std::collections::HashSet<String> = self
+                .models
+                .values()
+                .flat_map(|m| m.units.iter().map(|u| u.serial_number.to_ascii_lowercase()))
+                .collect();
+            for u in &input.units {
+                if existing_serials.contains(&u.serial_number.to_ascii_lowercase()) {
+                    return Err(ApplicationError::Domain(DomainError::AlreadyExists(
+                        "a unit with this serial number already exists".into(),
+                    )));
+                }
+            }
+            let total_units = input.units.len() as i32;
+            let available_units = input
+                .units
+                .iter()
+                .filter(|u| u.status == "AVAILABLE")
+                .count() as i32;
+            let units = input
+                .units
+                .into_iter()
+                .enumerate()
+                .map(|(idx, u)| DeviceUnitSummary {
+                    unit_id: format!("campus-{}-{:03}", input.id, idx + 1),
+                    serial_number: u.serial_number,
+                    status: u.status,
+                })
+                .collect();
+            let model = StaffInventoryModel {
+                id: input.id.clone(),
+                name: input.name,
+                category: input.category,
+                description: input.description,
+                loan_duration_days: input.loan_duration_days,
+                total_units,
+                available_units,
+                image_url: Some(input.image_url),
+                image_alt: Some(input.image_alt),
+                specifications: input.specifications,
+                units,
+            };
+            self.models.insert(input.id, model.clone());
+            self.sync_legacy_model_fields();
+            Ok(model)
+        })
+    }
+    fn delete_model(&mut self, model_id: String) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            let model = self
+                .models
+                .get(&model_id)
+                .ok_or_else(|| ApplicationError::NotFound(model_id.clone()))?;
+            if model
+                .units
+                .iter()
+                .any(|u| u.status == "RESERVED" || u.status == "COLLECTED")
+            {
+                return Err(ApplicationError::Domain(DomainError::ResourceInUse(
+                    "cannot remove a model while units are reserved or collected".into(),
+                )));
+            }
+            if self.reservations.values().any(|r| r.model_id == model_id) {
+                return Err(ApplicationError::Domain(DomainError::ResourceInUse(
+                    "cannot remove a model with past loan records; move its units to maintenance instead".into(),
+                )));
+            }
+            self.subscriptions
+                .retain(|_, (_, sub)| sub.model_id != model_id);
+            self.models.remove(&model_id);
+            self.sync_legacy_model_fields();
+            Ok(())
+        })
+    }
+    fn insert_unit(
+        &mut self,
+        model_id: String,
+        input: NewDeviceUnitInput,
+        _now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<DeviceUnitSummary, ApplicationError>> {
+        Box::pin(async move {
+            let serial_taken = self.models.values().any(|m| {
+                m.units
+                    .iter()
+                    .any(|u| u.serial_number.eq_ignore_ascii_case(&input.serial_number))
+            });
+            if serial_taken {
+                return Err(ApplicationError::Domain(DomainError::AlreadyExists(
+                    "a unit with this serial number already exists".into(),
+                )));
+            }
+            let model = self
+                .models
+                .get_mut(&model_id)
+                .ok_or_else(|| ApplicationError::NotFound(model_id.clone()))?;
+            let unit = DeviceUnitSummary {
+                unit_id: format!(
+                    "unit-{model_id}-{}",
+                    &Uuid::new_v4().simple().to_string()[..8]
+                ),
+                serial_number: input.serial_number,
+                status: input.status,
+            };
+            model.total_units += 1;
+            if unit.status == "AVAILABLE" {
+                model.available_units += 1;
+            }
+            model.units.push(unit.clone());
+            self.sync_legacy_model_fields();
+            Ok(unit)
+        })
+    }
+    fn lock_unit(
+        &mut self,
+        unit_id: String,
+    ) -> BoxFuture<'_, Result<(LockedModel, DeviceUnitSummary), ApplicationError>> {
+        Box::pin(async move {
+            let found = self.models.values().find_map(|m| {
+                m.units.iter().find(|u| u.unit_id == unit_id).map(|u| {
+                    (
+                        LockedModel {
+                            id: m.id.clone(),
+                            name: m.name.clone(),
+                            available_units: m.available_units,
+                            loan_duration_days: m.loan_duration_days,
+                        },
+                        u.clone(),
+                    )
+                })
+            });
+            found.ok_or_else(|| ApplicationError::NotFound(format!("device unit {unit_id}")))
+        })
+    }
+    fn update_unit_status(
+        &mut self,
+        model_id: String,
+        unit_id: String,
+        from_status: String,
+        to_status: String,
+        _now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            let model = self
+                .models
+                .get_mut(&model_id)
+                .ok_or(ApplicationError::NotFound(model_id))?;
+            if let Some(u) = model.units.iter_mut().find(|u| u.unit_id == unit_id) {
+                u.status = to_status.clone();
+            }
+            match (from_status.as_str(), to_status.as_str()) {
+                ("MAINTENANCE", "AVAILABLE") => model.available_units += 1,
+                ("AVAILABLE", "MAINTENANCE") => model.available_units -= 1,
+                _ => {}
+            }
+            self.sync_legacy_model_fields();
+            Ok(())
+        })
+    }
+    fn mark_subscribers_notified(
+        &mut self,
+        model_id: String,
+        _now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            for (_, sub) in self.subscriptions.values_mut() {
+                if sub.model_id == model_id && sub.status == "ACTIVE" {
+                    sub.status = "NOTIFIED".into();
+                }
+            }
+            Ok(())
+        })
+    }
+    fn delete_unit(
+        &mut self,
+        model_id: String,
+        unit_id: String,
+        was_available: bool,
+        _now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<(), ApplicationError>> {
+        Box::pin(async move {
+            if self.reservations.values().any(|r| r.unit_id == unit_id) {
+                return Err(ApplicationError::Domain(DomainError::ResourceInUse(
+                    "cannot remove a unit with past loan records; move it to maintenance instead"
+                        .into(),
+                )));
+            }
+            let model = self
+                .models
+                .get_mut(&model_id)
+                .ok_or(ApplicationError::NotFound(model_id))?;
+            model.units.retain(|u| u.unit_id != unit_id);
+            model.total_units -= 1;
+            if was_available {
+                model.available_units -= 1;
+            }
+            self.sync_legacy_model_fields();
             Ok(())
         })
     }
@@ -406,4 +690,46 @@ async fn selected_periods_set_due_dates_and_invalid_periods_leave_no_writes() {
         );
     }
     assert!(compute_due_at(store.now(), 4, 3).is_err());
+}
+
+/// Fake verifier: bearer `subject:role` authenticates; `keys-down` simulates a JWKS outage.
+pub struct FakeVerifier {
+    pub configured: bool,
+}
+
+impl AccessTokenVerifierPort for FakeVerifier {
+    fn is_configured(&self) -> bool {
+        self.configured
+    }
+
+    fn verify_bearer<'a>(
+        &'a self,
+        auth_header: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<AuthenticatedActor, AuthVerifyError>> {
+        Box::pin(async move {
+            if !self.configured {
+                return Err(AuthVerifyError::NotConfigured);
+            }
+            let token = auth_header
+                .and_then(|h| h.strip_prefix("Bearer "))
+                .filter(|t| !t.is_empty())
+                .ok_or(AuthVerifyError::MissingBearerToken)?;
+            if token == "keys-down" {
+                return Err(AuthVerifyError::KeysUnavailable("fake".into()));
+            }
+            let (subject, role) = token
+                .split_once(':')
+                .ok_or_else(|| AuthVerifyError::InvalidToken("fake".into()))?;
+            let role = match role {
+                "staff" => Role::Staff,
+                "student" => Role::Student,
+                _ => return Err(AuthVerifyError::InvalidToken("fake role".into())),
+            };
+            Ok(AuthenticatedActor {
+                subject: subject.into(),
+                email: format!("{subject}@example.invalid"),
+                roles: vec![role],
+            })
+        })
+    }
 }
